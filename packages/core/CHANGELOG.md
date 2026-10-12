@@ -1,5 +1,18 @@
 # @lightback/core
 
+## 0.2.0
+
+### Minor Changes
+
+- e9742b6: Restore bounded, redacted collector buffers and unfinished drafts after reload using session-scoped IndexedDB. Add expiry/schema handling, a storage opt-out, custom-editor recovery APIs, and explicit opt-in for privacy-safe screenshot/crop blobs. Clear drafts and old context after successful send or discard; keep the editor usable if storage is unavailable.
+
+  Restore widget notes and selections without resuming pending sends. Show recovered counts before the lazy UI loads and guard late screenshot jobs after discard or teardown. Exclude form values from inspection snapshots and persisted metadata. Support the compatible core 0.2 API in widget and React peer ranges, retaining memory-only operation with older core versions.
+
+### Patch Changes
+
+- 7d91479: Redact the complete payload, including page metadata, context, breadcrumbs and embedded URLs/JSON, and keep attachment filenames consistent with redacted references. Exclude editable contents from breadcrumb and inspection text. Omit redirected response bodies unless their final origin is verified as same-origin. Prevent late network completions from refilling cleared or destroyed clients, and preserve independent collectors when multiple clients are destroyed in any order.
+- 7d91479: Fix recovery and send races found by generated stateful tests: clear wins over a pending database open, recovered timestamps are sorted before applying smaller buffer limits, metadata-only recovery drops orphaned crop references, and tiny string limits preserve recovery field names. Cancel widget sends discarded or destroyed while waiting for image jobs and ignore late transport callbacks for invalidated widgets.
+
 ## Unreleased
 
 ### Added
