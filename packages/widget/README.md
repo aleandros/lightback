@@ -44,3 +44,7 @@ Omit `hideTrigger` for a lightweight pill that loads the UI on first click. Coll
 ESM defers `lightback-ui.js` using a `new URL(..., import.meta.url)` asset, tested in Vite production. Deploy the emitted asset. Native import retries use a fresh URL. CommonJS delegates splitting to the consuming bundler. Keep eager imports out of the initial graph to retain the savings.
 
 For script tags, serve `dist/lightback-lazy.iife.js` and `dist/lightback-ui.js` together, then use `Lightback.mountLazyWidget({ client })`. The bootstrap includes core; `widgetUrl` overrides the UI URL if needed. Load one standalone bootstrap per page. Imports are SSR-safe; mounting requires a browser DOM.
+
+## Session recovery (unreleased)
+
+With the new core/widget versions, redacted collector buffers and unfinished reports recover after reload in the same tab. Recovery uses IndexedDB plus a sessionStorage key, defaults to a 30-minute expiry since the last checkpoint and a 5 MiB budget, and clears on successful send or Discard. Set `persistence: false` on `createLightback()` to opt out of recovery storage. Screenshot/crop blobs require `persistence: { attachments: true }` and a capturer that masks sensitive pixels first. Storage failures leave the editor usable in memory. The restored report never resumes a pending send automatically. See the [recovery guide](https://aleandros.github.io/lightback/guide/customization#restore-work-after-reload) for retention, cleanup, limits and custom-editor APIs.

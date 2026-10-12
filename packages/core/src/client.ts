@@ -13,6 +13,8 @@ import { describeElement } from './inspect';
 import { describeRegion, type RegionOptions } from './region';
 import { fetchTransport } from './transport';
 import { uid } from './format';
+import { createPersistence, type RecoveryState } from './persistence';
+import { scrubRecovery, isRecoveredSelection } from './recovery-redact';
 
 const DEFAULT_LIMITS: Limits = { console: 200, errors: 50, network: 100, breadcrumbs: 100, string: 2000 };
 
@@ -29,6 +31,16 @@ export interface Draft {
 export interface LightbackClient {
   readonly options: LightbackOptions;
   readonly redact: RedactOptions;
+  /** Resolves once session recovery has finished (also resolves if storage is unavailable). */
+  readonly ready: Promise<void>;
+  /** Recovered/current draft, defensively copied. Await ready before the first read. */
+  getDraft(): Draft | null;
+  /** Checkpoint a custom editor's draft; the built-in widget calls this automatically. */
+  saveDraft(draft: Draft): void;
+  /** Flush pending recovery writes. Best effort; unavailable storage never rejects. */
+  flushPersistence(): Promise<void>;
+  /** Clear the draft and captured buffers, in memory and in recovery storage. */
+  clearPersistence(): Promise<void>;
   setContext(context: Record<string, unknown>): void;
   getContext(): Record<string, unknown>;
   addBreadcrumb(message: string, data?: Record<string, unknown>): void;
@@ -63,10 +75,14 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
   const redact = mergeRedact(options.redact);
   const capture = { console: true, errors: true, network: true, breadcrumbs: true, networkBodies: false, ...options.capture };
 
-  const consoleBuf = new RingBuffer<ConsoleEntry>(limits.console);
-  const errorBuf = new RingBuffer<ErrorEntry>(limits.errors);
-  const networkBuf = new RingBuffer<NetworkEntry>(limits.network);
-  const breadcrumbBuf = new RingBuffer<Breadcrumb>(limits.breadcrumbs);
+  let persistence: ReturnType<typeof createPersistence> | undefined;
+  let savedDraft: Draft | null = null;
+  let draftChanged = false;
+  const changed = () => persistence?.schedule();
+  const consoleBuf = new RingBuffer<ConsoleEntry>(limits.console, changed);
+  const errorBuf = new RingBuffer<ErrorEntry>(limits.errors, changed);
+  const networkBuf = new RingBuffer<NetworkEntry>(limits.network, changed);
+  const breadcrumbBuf = new RingBuffer<Breadcrumb>(limits.breadcrumbs, changed);
   let context: Record<string, unknown> = { ...options.context };
 
   const isIgnored = (el: Element) => el.closest(`[${IGNORE_ATTR}]`) !== null;
@@ -92,9 +108,61 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
 
   const scrub = (s: string) => redactString(s, redact);
 
+  const clean = <T>(value: T): T => scrubRecovery(value, redact, limits.string) as T;
+  const cleanDraft = (draft: Draft): Draft => {
+    const { attachments, ...metadata } = draft;
+    const result = clean(metadata);
+    return {
+      ...result,
+      selections: result.selections.slice(0, 50),
+      attachments: attachments.slice(0, 51).filter((a) => a && typeof a.name === 'string' && a.blob instanceof Blob).map((a) => ({
+        name: clean(a.name), type: clean(a.blob.type), size: a.blob.size, blob: a.blob,
+      })),
+    };
+  };
+  const snapshot = (): RecoveryState => ({
+    console: consoleBuf.toArray().map(clean), errors: errorBuf.toArray().map(clean),
+    network: networkBuf.toArray().map(clean), breadcrumbs: breadcrumbBuf.toArray().map(clean),
+    draft: savedDraft ? cleanDraft(savedDraft) : null,
+  });
+  const merge = <T extends { t: number }>(buffer: RingBuffer<T>, previous: T[], enabled: boolean, valid: (entry: T) => boolean) => {
+    if (!enabled) return;
+    const entries = [...previous.filter((entry) => entry && Number.isFinite(entry.t) && valid(entry)), ...buffer.toArray()].sort((a, b) => a.t - b.t);
+    buffer.clear();
+    for (const entry of entries) buffer.push(entry);
+  };
+  persistence = createPersistence(options.persistence, snapshot, (state) => {
+    merge(consoleBuf, state.console.slice(-limits.console).map(clean), capture.console, (e) => typeof e.message === 'string' && ['log', 'info', 'warn', 'error', 'debug'].includes(e.level));
+    merge(errorBuf, state.errors.slice(-limits.errors).map(clean), capture.errors, (e) => typeof e.message === 'string' && ['error', 'unhandledrejection'].includes(e.kind));
+    merge(networkBuf, state.network.slice(-limits.network).map(clean).map((entry) => capture.networkBodies ? entry : { ...entry, requestBody: undefined, responseBody: undefined }), capture.network,
+      (e) => typeof e.url === 'string' && typeof e.method === 'string' && ['fetch', 'xhr'].includes(e.kind));
+    merge(breadcrumbBuf, state.breadcrumbs.slice(-limits.breadcrumbs).map(clean), capture.breadcrumbs, (e) => typeof e.message === 'string' && typeof e.type === 'string');
+    if (!draftChanged && state.draft) {
+      const draft = cleanDraft(state.draft);
+      draft.selections = draft.selections.filter(isRecoveredSelection);
+      if (!options.persistence || !options.persistence.attachments) draft.attachments = [];
+      savedDraft = draft;
+    }
+    changed(); // Re-checkpoint under the current capture, redaction and attachment policy.
+  });
+
   const client: LightbackClient = {
     options,
     redact,
+    ready: persistence.ready,
+    getDraft: () => savedDraft ? cleanDraft(savedDraft) : null,
+    saveDraft(draft) {
+      draftChanged = true;
+      savedDraft = cleanDraft(draft);
+      changed();
+    },
+    flushPersistence: () => persistence!.flush(),
+    clearPersistence() {
+      draftChanged = true;
+      savedDraft = null;
+      consoleBuf.clear(); errorBuf.clear(); networkBuf.clear(); breadcrumbBuf.clear();
+      return persistence!.clear();
+    },
     setContext(next) {
       context = { ...context, ...next };
     },
@@ -142,6 +210,7 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
       };
     },
     async send(draft) {
+      await client.ready;
       let payload = client.buildPayload(draft);
       if (options.beforeSend) {
         const result = await options.beforeSend(payload);
@@ -156,10 +225,12 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
       } else {
         throw new Error('Lightback: provide either `endpoint` or `send`');
       }
+      await client.clearPersistence();
       return payload;
     },
     destroy() {
       for (const u of undo.splice(0)) u();
+      persistence!.destroy();
     },
   };
   return client;

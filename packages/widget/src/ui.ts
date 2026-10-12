@@ -88,6 +88,12 @@ class Widget implements WidgetHandle {
   private opts: WidgetOptions;
   private strings: WidgetStrings;
 
+  private destroyed = false;
+  private revision = 0;
+  private restoring = false;
+  private recovered = false;
+  private recovery: Promise<void>;
+  private recoveryIntent: 'pick' | null = null;
   private text = '';
   private selections: ElementSelection[] = [];
   /** Live DOM element for each selection (the container for regions), to re-anchor pins on scroll. */
@@ -137,6 +143,7 @@ class Widget implements WidgetHandle {
       this.text = (e.target as HTMLTextAreaElement).value;
       this.refreshReview();
       this.renderPill();
+      this.persistDraft();
     });
     this.q<HTMLDetailsElement>('[data-ref=review]').addEventListener('toggle', () => this.refreshReview());
     const list = this.q('[data-ref=selections]');
@@ -146,6 +153,11 @@ class Widget implements WidgetHandle {
     pins.addEventListener('mouseover', (e) => this.onSelectionHover(e));
     pins.addEventListener('mouseout', () => this.hideHighlight());
     const popText = this.q<HTMLTextAreaElement>('[data-ref=popText]');
+    popText.addEventListener('input', () => {
+      const selection = this.selections.find((s) => s.id === this.popoverFor);
+      if (selection) selection.note = popText.value || undefined;
+      this.persistDraft();
+    });
     popText.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -161,11 +173,23 @@ class Widget implements WidgetHandle {
     window.addEventListener('resize', this.relayout);
 
     if (!host.isConnected) document.body.appendChild(host);
+    const recoveryControls = this.root.querySelectorAll<HTMLTextAreaElement>('textarea');
+    recoveryControls.forEach((control) => { control.disabled = true; });
+    const revision = this.revision;
+    this.recovery = Promise.resolve(this.client.ready).then(() => {
+      if (this.destroyed) return;
+      if (revision === this.revision) this.restoreDraft();
+      this.recovered = true;
+      recoveryControls.forEach((control) => { control.disabled = false; });
+      if (!this.q('[data-ref=panel]').hidden && !this.root.activeElement) this.q<HTMLTextAreaElement>('[data-ref=text]').focus();
+      if (this.recoveryIntent === 'pick') this.startPicking();
+    });
   }
 
   /* ---------- public ---------- */
 
   open(): void {
+    this.recoveryIntent = null;
     this.stopPicking();
     this.q('.lb-pill').hidden = true;
     this.q('.lb-panel').hidden = false;
@@ -174,6 +198,7 @@ class Widget implements WidgetHandle {
   }
 
   close(): void {
+    this.recoveryIntent = null;
     this.q('.lb-panel').hidden = true;
     this.q('.lb-pill').hidden = Boolean(this.opts.hideTrigger);
     this.renderPill();
@@ -186,6 +211,9 @@ class Widget implements WidgetHandle {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.revision++;
     this.cancelPending();
     this.stopPicking();
     for (const c of this.crops.values()) URL.revokeObjectURL(c.url);
@@ -321,6 +349,9 @@ class Widget implements WidgetHandle {
   };
 
   startPicking(): void {
+    if (!this.recovered) { this.recoveryIntent = 'pick'; return; }
+    if (this.destroyed) return;
+    this.recoveryIntent = null;
     if (this.picking) return;
     this.picking = true;
     this.q('.lb-panel').hidden = true;
@@ -393,6 +424,7 @@ class Widget implements WidgetHandle {
     this.updateCount();
     this.openPopover(desc.id);
     this.cropJobs.set(desc.id, this.cropSelection(desc).catch(() => {}));
+    this.persistDraft();
   }
 
   private removeSelection(id: string): void {
@@ -406,6 +438,7 @@ class Widget implements WidgetHandle {
     this.renderPins();
     this.renderSelections();
     this.updateCount();
+    this.persistDraft();
   }
 
   private updateCount(): void {
@@ -535,6 +568,7 @@ class Widget implements WidgetHandle {
     const sel = this.selections.find((s) => s.id === this.popoverFor);
     const value = this.q<HTMLTextAreaElement>('[data-ref=popText]').value.trim();
     if (sel) sel.note = value || undefined;
+    this.persistDraft();
     this.closePopover();
     this.renderSelections();
   }
@@ -571,11 +605,16 @@ class Widget implements WidgetHandle {
 
   /** Full-page capture for the current pick session. Also becomes the attached screenshot. */
   private async captureBase(): Promise<BaseShot | null> {
+    const generation = this.captureGeneration;
     try {
       const page = { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight };
       const blob = await this.rawCapture();
       if (!blob) return null;
       const bitmap = await decodeScreenshot(blob);
+      if (this.destroyed || generation !== this.captureGeneration) {
+        if ('close' in bitmap) bitmap.close();
+        return null;
+      }
       this.setScreenshot(blob);
       return { blob, bitmap, page };
     } catch (err) {
@@ -587,7 +626,7 @@ class Widget implements WidgetHandle {
   /** Cut a padded crop of the selection out of the base capture and outline the selected rect. */
   private async cropSelection(sel: ElementSelection): Promise<void> {
     const base = await this.base;
-    if (!base || !this.selections.includes(sel)) return;
+    if (this.destroyed || !base || !this.selections.includes(sel)) return;
     const pad = this.opts.cropPadding ?? 16;
     const r = sel.region ? sel.region.docRect : sel.docRect;
     const sx = base.bitmap.width / base.page.width;
@@ -610,20 +649,24 @@ class Widget implements WidgetHandle {
     if (sel.kind === 'region') ctx.setLineDash([6 * sx, 4 * sx]);
     ctx.strokeRect(r.x * sx - x0, r.y * sy - y0, r.width * sx, r.height * sy);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    if (!blob || !this.selections.includes(sel)) return;
+    if (this.destroyed || !blob || !this.selections.includes(sel)) return;
     const prev = this.crops.get(sel.id);
     if (prev) URL.revokeObjectURL(prev.url);
     this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob) });
     this.renderSelections();
+    this.persistDraft();
   }
 
   private async takeScreenshot(): Promise<void> {
+    await this.recovery;
+    if (this.destroyed) return;
     if (!this.opts.screenshot) return;
     const btn = this.q<HTMLButtonElement>('[data-ref=shotBtn]');
     btn.disabled = true;
+    const generation = this.captureGeneration;
     try {
       const blob = await this.rawCapture();
-      this.setScreenshot(blob);
+      if (!this.destroyed && generation === this.captureGeneration) this.setScreenshot(blob);
     } catch (err) {
       this.setStatus(this.strings.screenshotFailed(err instanceof Error ? err.message : String(err)), true);
       this.opts.onError?.(err);
@@ -641,6 +684,36 @@ class Widget implements WidgetHandle {
     if (this.screenshotUrl) this.q<HTMLImageElement>('[data-ref=shotImg]').src = this.screenshotUrl;
     this.q('[data-ref=shotBtn]').textContent = blob ? this.strings.retakeScreenshot : this.strings.screenshot;
     this.refreshReview();
+    this.persistDraft();
+  }
+
+  private captureGeneration = 0;
+
+  private persistDraft(): void {
+    if (this.destroyed || this.restoring) return;
+    this.revision++;
+    this.client.saveDraft?.(this.draft());
+  }
+
+  private restoreDraft(): void {
+    const draft = this.client.getDraft?.();
+    if (!draft) return;
+    this.restoring = true;
+    try {
+      this.text = draft.text;
+      this.q<HTMLTextAreaElement>('[data-ref=text]').value = this.text;
+      this.selections = draft.selections;
+      for (const selection of this.selections) {
+        const crop = draft.attachments.find((a) => a.name === selection.crop);
+        if (crop) this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob) });
+        // Coordinates remain the captured coordinates; a selector may now point at different content.
+      }
+      this.setScreenshot(draft.attachments.find((a) => a.name === 'screenshot.png')?.blob ?? null);
+      this.renderSelections();
+      this.renderPins();
+      this.updateCount();
+      this.renderPill();
+    } finally { this.restoring = false; }
   }
 
   /* ---------- send ---------- */
@@ -705,6 +778,8 @@ class Widget implements WidgetHandle {
   }
 
   private async send(): Promise<void> {
+    await this.recovery;
+    if (this.destroyed) return;
     if (this.sending) return;
     if (!this.text.trim() && this.selections.length === 0) {
       this.setStatus(this.strings.emptyDraft, true);
@@ -739,6 +814,12 @@ class Widget implements WidgetHandle {
   }
 
   private reset(): void {
+    this.revision++;
+    this.captureGeneration++;
+    this.restoring = true;
+    this.cancelPending();
+    this.closePopover();
+    void this.client.clearPersistence?.();
     this.text = '';
     this.q<HTMLTextAreaElement>('[data-ref=text]').value = '';
     this.selections = [];
@@ -752,6 +833,7 @@ class Widget implements WidgetHandle {
     this.renderSelections();
     this.setStatus('');
     this.renderPill();
+    this.restoring = false;
   }
 
   /* ---------- rendering ---------- */
@@ -771,7 +853,7 @@ class Widget implements WidgetHandle {
         const note = s.note ? `<div class="lb-note">💬 ${esc(s.note)}</div>` : `<div class="lb-note empty">${esc(this.strings.noComment)}</div>`;
         const crop = this.crops.get(s.id);
         const thumb = crop ? `<img class="lb-thumb" src="${crop.url}" alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
-        return `<div class="lb-sel" data-id="${s.id}">
+        return `<div class="lb-sel" data-id="${esc(s.id)}">
   <div class="lb-sel-head"><span class="lb-badge${s.kind === 'region' ? ' region' : ''}">${i + 1}</span><span class="lb-chain" title="${esc(s.components.join(' < '))}">${chain} ${kind}</span><button class="lb-icon" type="button" data-action="sel-edit" aria-label="${esc(this.strings.editComment)}" title="${esc(this.strings.editComment)}">✎</button><button class="lb-icon" type="button" data-action="sel-remove" aria-label="${esc(this.strings.removeSelection)}">✕</button></div>
   <code class="lb-selector">${esc(s.selector)}</code>
   ${source}

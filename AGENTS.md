@@ -45,7 +45,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 1. `pnpm build` succeeds (9 module/declaration builds plus the standalone IIFE).
 2. `pnpm typecheck` is clean.
 3. `pnpm test` passes (core and widget).
-4. `pnpm e2e` passes all five suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
+4. `pnpm e2e` passes all six suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
 5. README and the relevant `docs/*.md` describe the new behaviour. A feature that is not in README does not exist for users.
 6. New UI hooks have a `data-action` or `data-ref` attribute and the e2e suites use those, never visible text.
 
@@ -78,7 +78,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 - Picker is mouse/pointer only; no keyboard navigation of elements.
 - No shadow-root or iframe piercing into the host app's own shadow trees.
 - Eager and lazy widget entries are available; React defaults to lazy. ESM lazy builds need URL asset support; CommonJS splitting depends on the host bundler.
-- Drafts do not survive a reload; buffers do not either.
+- Drafts and buffers recover through session-scoped IndexedDB (default maximum age 30 minutes); screenshot persistence requires an explicit opt-in and a privacy-safe capturer. Browser session restore or tab duplication can preserve/copy the session key.
 - React 19 `_debugStack` parsing exists but has no fixture; React 18 `_debugSource` is what the tests cover.
 - The base screenshot is captured once at pick start. Selections made after the page changes will crop a stale image.
 - `modern-screenshot` is the playground's capturer; the packages do not depend on it. Any `() => Promise<Blob>` works.

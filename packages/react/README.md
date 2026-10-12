@@ -26,3 +26,7 @@ Imports and client creation are SSR-safe. Create a browser client at application
 Supports evergreen browsers from the last two years, Safari 15.4+, and Node 18+ for imports. Built to ES2020.
 
 [Full documentation and examples](https://github.com/aleandros/lightback#readme). MIT licensed.
+
+## Session recovery (unreleased)
+
+With the new core/widget versions, redacted collector buffers and unfinished reports recover after reload in the same tab. Recovery uses IndexedDB plus a sessionStorage key, defaults to a 30-minute expiry since the last checkpoint and a 5 MiB budget, and clears on successful send or Discard. Set `persistence: false` on `createLightback()` to opt out of recovery storage. Screenshot/crop blobs require `persistence: { attachments: true }` and a capturer that masks sensitive pixels first. Storage failures leave the editor usable in memory. The restored report never resumes a pending send automatically. See the [recovery guide](https://aleandros.github.io/lightback/guide/customization#restore-work-after-reload) for retention, cleanup, limits and custom-editor APIs.

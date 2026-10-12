@@ -41,7 +41,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@lightback/core": "workspace:>=0.0.1 <0.2.0"
+    "@lightback/core": "workspace:>=0.0.1 <0.3.0"
   },
   "devDependencies": {
     "@lightback/core": "workspace:*"

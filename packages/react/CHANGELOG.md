@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Support core session recovery through the default lazy widget, including recovered trigger counts and editable reports after reload. Widen the core peer range for the compatible 0.2 API.
+
 ### Changed
 
 - Load the widget UI on first interaction by default. `LightbackProvider` initially mounts a lightweight trigger, and `useLightbackWidget()` exposes a lazy handle with promise-returning `open()` and `startPicking()` methods. Preserve mount-time customization, SSR safety and cleanup during loading.

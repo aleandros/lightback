@@ -161,7 +161,20 @@ export interface RedactOptions {
   replacement: string;
 }
 
+export interface PersistenceOptions {
+  /** Storage namespace. Use a different key for each app/client on the same origin. */
+  key?: string;
+  /** Recovery expiry after the last checkpoint, in milliseconds. Default and maximum: 30 minutes. */
+  maxAge?: number;
+  /** Maximum stored snapshot size, including blobs. Default: 5 MiB. Oversized attachments are omitted. */
+  maxBytes?: number;
+  /** Persist screenshot blobs. Off by default: the capturer must mask sensitive pixels first. */
+  attachments?: boolean;
+}
+
 export interface LightbackOptions {
+  /** Session recovery is on by default. Set false to avoid all recovery storage access. */
+  persistence?: false | PersistenceOptions;
   /** URL that receives submissions. Ignored if `send` is provided. */
   endpoint?: string;
   /** Fully custom transport. */

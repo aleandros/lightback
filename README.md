@@ -68,7 +68,7 @@ The standalone script includes core and exposes `window.Lightback`. Widget `0.1.
 
 `pnpm build`, `pnpm typecheck`, `pnpm test` and `pnpm check:packages` validate builds, source types, unit tests, and the actual tarballs (ESM, CommonJS, IIFE, licenses, READMEs and strict type resolution).
 
-`pnpm e2e` runs the five browser suites against `pnpm dev` using system Chrome. To use a Playwright engine:
+`pnpm e2e` runs the six browser suites against `pnpm dev` using system Chrome. To use a Playwright engine:
 
 ```sh
 pnpm --filter e2e exec playwright-core install chromium firefox webkit
@@ -162,6 +162,34 @@ For script tags, serve **both** `dist/lightback-lazy.iife.js` and `dist/lightbac
 ```
 
 The lazy script includes core and resolves the UI relative to its own script URL. Use `widgetUrl` to override that location (required for an inline bootstrap); cross-origin UI hosts must allow module CORS. Load one standalone entry per page. `mountWidget()` and `lightback.iife.js` remain the eager alternatives. `pnpm check:packages` measures and guards the initial standalone gzip reduction.
+
+## Restore work after reload
+
+Session recovery is enabled by default in the unreleased core/widget changes. Lightback checkpoints bounded console, errors, network and breadcrumb buffers, the report text, selections and selection notes to IndexedDB. A random sessionStorage key scopes recovery to the current tab and origin. The lazy trigger shows recovered selection counts without downloading the editor. Restored reports are editable; picking and pending-send timers never restart automatically.
+
+```ts
+const lightback = createLightback({
+  endpoint: '/api/feedback',
+  persistence: {
+    key: 'my-app',       // use a different namespace for each client on the origin
+    maxAge: 15 * 60_000, // expiry since last checkpoint; default/maximum 30 minutes
+    maxBytes: 5 * 1024 * 1024, // default 5 MiB per snapshot
+    attachments: false, // default; opt in only with a capturer that masks sensitive pixels
+  },
+});
+// Or disable all recovery storage access:
+createLightback({ endpoint: '/api/feedback', persistence: false });
+```
+
+Text and metadata are redacted before storage using the configured rules. Inspection HTML and form-value props are omitted, and form controls are excluded from inspected ancestor text. Draft recovery keeps at most 50 selections; strings are capped by `limits.string` and collector counts by their buffer limits. App context is supplied fresh by the host and is not persisted. `beforeSend` runs only when sending, so put storage redaction rules in `redact`.
+
+Screenshot and crop blobs are **not persisted by default**. Set `persistence.attachments: true` to retain them in IndexedDB after your screenshot capturer has masked input values and sensitive content. Text redaction cannot scrub pixels. Oversized attachments are omitted from recovery, with their crop references removed; an oversized metadata snapshot is deleted. These recovery bounds do not remove attachments from the current live report.
+
+Successful send and Discard clear the stored draft and the old collector buffers. A failed or vetoed send retains them. `await lightback.clearPersistence()` also clears both, for example on logout before destroying the client. Collection continues until `destroy()`. Disabling persistence avoids reading or writing recovery storage; it does not erase old records, which expire normally.
+
+Checkpoints are coalesced over 100 ms, with best-effort flushes on hiding the page and teardown. A browser crash or immediate navigation can lose the last uncommitted edit or unfinished capture. Storage denial, quota errors or a blocked database leave the widget usable in memory; failed writes invalidate the session key so an older snapshot cannot return. Records have a separate schema version and expire 30 minutes after their last checkpoint by default. Expired/incompatible records are removed the next time recovery storage opens. Closing a tab normally loses its session key; browser session restore or tab duplication may preserve/copy sessionStorage, so the expiry still applies. IndexedDB records can remain physically stored until that cleanup or the user clears site data.
+
+For a custom editor, `await lightback.ready` before reading `lightback.getDraft()`, checkpoint edits with `lightback.saveDraft(draft)`, and use `await lightback.flushPersistence()` before navigation you control. The built-in widget does this automatically. Use one client/editor per persistence key. Recovery is separate from the public demo's IndexedDB inbox of already-sent reports.
 
 ## Customize and translate
 

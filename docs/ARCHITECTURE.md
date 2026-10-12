@@ -36,6 +36,16 @@ screenshot + crops (widget) ─────────────────�
 | `prompt.ts` | `toPromptContext(payload)` renders bounded markdown: note, selections (kind, note, crop, components with sources, selector, text, attrs, props, rect, region children), errors, network, console, breadcrumbs, env, context, attachments. This is what a model should read; keep it in step with `types.ts`. |
 | `transport.ts` | `fetchTransport`. JSON when there are no attachments, otherwise multipart with a `payload` field and one file field per attachment (`screenshot.png`, `selection-N.png`). |
 
+### Session recovery
+
+`persistence.ts` owns the version-1 IndexedDB `lightback-recovery` / `sessions` store. `sessionStorage["lightback:session:<key>"]` contains only a random record key; the default namespace is `default`. Core starts collectors immediately, then `client.ready` reads recovery data and merges the old events with new startup events in timestamp order, bounded by current ring limits and capture options. Context is always supplied fresh by the host. `RingBuffer` changes schedule a 100 ms checkpoint, and asynchronously completed network bodies notify it again. A generation counter and serialized write queue ensure clear beats pending reads/writes.
+
+`recovery-redact.ts` scrubs every persisted metadata string and secret-named field, including embedded URL parameters and JSON bodies, before truncating. It omits inspection HTML and form-value fields. Drafts keep at most 50 selections. Blob attachments are stored as binary ArrayBuffers and reconstructed on recovery to avoid native Blob write failures in WebKit environments. Encoded bytes are cached per Blob so page-hide checkpoints do not re-read backing files that navigation may revoke. They require `persistence.attachments: true` and a privacy-safe capturer; default recovery stores metadata only. The default snapshot budget is 5 MiB. Oversized attachments and their references are omitted; oversized metadata deletes the checkpoint.
+
+Records expire after the last checkpoint (default/maximum 30 minutes, configurable shorter). Reads purge expired, incompatible or malformed records. Expired records from closed tabs are physically removed on the next storage open; browser-restored/duplicated sessions can retain/copy the tab key. Denial, quota failure, blocked opens and missing storage fall back to memory; write errors invalidate the session key to prevent stale recovery. `persistence: false` makes no recovery storage calls. This database is independent of the demo inbox. The recovery schema is separate from payload version 1.
+
+`getDraft`, `saveDraft`, `flushPersistence` and `clearPersistence` support custom editors. Successful sends clear the stored draft and all four collector buffers; failed/vetoed sends retain them. Widget Discard calls the same clear API. Destroy flushes best-effort and unregisters listeners. The widget checkpoints each note input and selection/attachment change, guards late screenshot work after discard/destroy, and restores object URLs after recovery without resuming picking or send timers. The lazy shell reads only draft metadata to show the count, leaving the UI deferred. Older core clients without recovery APIs still mount with memory-only behavior.
+
 ### Selection shape
 
 ```ts
@@ -114,10 +124,11 @@ Pages: Dashboard (stat cards with `data-testid`, invoice table, Export modal, Ch
 
 ## E2E (`e2e`)
 
-Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the local default; `BROWSER=chromium|firefox|webkit` selects a Playwright engine and bypasses the Chrome channel/executable override. `lib.mjs` provides `launch(suite)` returning `page`, `assert`, `received()`, `reset()`, `finish()`, plus `W` (the shadow-root prefix) and `BASE_URL`. `run.mjs` runs the five suites in sequence and exits non-zero on failure; it excludes the screenshot generator. The crop suite disables `createImageBitmap` to exercise the image/canvas fallback.
+Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the local default; `BROWSER=chromium|firefox|webkit` selects a Playwright engine and bypasses the Chrome channel/executable override. `lib.mjs` provides `launch(suite)` returning `page`, `assert`, `received()`, `reset()`, `finish()`, plus `W` (the shadow-root prefix) and `BASE_URL`. `run.mjs` runs the six suites in sequence and exits non-zero on failure; it excludes the screenshot generator. The crop suite disables `createImageBitmap` to exercise the image/canvas fallback.
 
 | Suite | Covers |
 | --- | --- |
+| `session-recovery.mjs` | Real IndexedDB recovery of text, selection notes, blobs and context across reloads; deletion on send/discard, tab isolation and pending-send cancellation. |
 | `lazy-loading.mjs` | Deferred React/neutral/standalone loading, first interaction, real import failure and retry, host identity and teardown. |
 | `smoke.mjs` | Noise generation, panel flow, full payload assertions (redaction, bodies, breadcrumbs, context), inbox overlays. |
 | `region-source-props.mjs` | Inline popover, drag over a modal resolving to the modal, source location and props in payload and inbox. |

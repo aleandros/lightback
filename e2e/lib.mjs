@@ -16,7 +16,8 @@ export async function launch(suiteName) {
   if (!engine && process.env.CHROME) launchOpts.executablePath = process.env.CHROME;
   else if (!engine) launchOpts.channel = 'chrome';
   const browser = await ({ chromium, firefox, webkit }[engine || 'chromium']).launch(launchOpts);
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await context.newPage();
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') console.log('[browser console.error]', m.text().slice(0, 160)); });
