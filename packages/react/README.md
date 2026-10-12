@@ -17,7 +17,9 @@ export function Feedback({ children }) {
 }
 ```
 
-`useLightback()` returns the client. `useLightbackWidget()` returns the mounted handle, or null before mount. Use `widget={false}` for your own UI. Widget options are read on mount; `context` is merged whenever it changes.
+`useLightback()` returns the client. `useLightbackWidget()` returns a lazy handle, or null before the mounting effect runs. The provider initially mounts only a lightweight trigger; the UI loads on first interaction. Call `await handle.open()` or `await handle.startPicking()` from custom triggers, and set `widget={{ hideTrigger: true }}` to hide the built-in pill. Load failures call `onError` and can be retried by invoking the action again. Use `widget={false}` for your own UI. Widget options are read on mount; `context` is merged whenever it changes.
+
+The ESM widget UI is a separate URL asset; the bundler must emit it (tested in Vite). Keep the emitted asset when deploying. CommonJS splitting depends on your bundler. The provider cleans up its widget even when unmounted during loading; the application owns the client lifetime.
 
 Imports and client creation are SSR-safe. Create a browser client at application startup to collect browser activity; do not share per-user server context between requests.
 

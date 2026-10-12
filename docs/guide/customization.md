@@ -1,6 +1,6 @@
 # Customization
 
-Everything below is set on `mountWidget()` or, in React, on the `widget` prop of `LightbackProvider`.
+Everything below is set on `mountWidget()` or `mountLazyWidget()` or, in React, on the `widget` prop of `LightbackProvider`.
 
 ::: info Release availability
 `strings`, `theme`, `hideTrigger` and styling parts are available in `@lightback/widget` starting with **0.1.1**.
@@ -55,7 +55,7 @@ Dark mode flips `--lb-bg`, `--lb-fg`, `--lb-muted`, `--lb-border` and `--lb-surf
 
 ## Your own trigger
 
-`mountWidget()` returns a handle. Call it from any button:
+`mountWidget()` and `mountLazyWidget()` return a handle. The lazy handle loads UI on first `open()` or `startPicking()`; both methods return promises. Call it from any button:
 
 ```ts
 const widget = mountWidget({ client: lightback, screenshot, hideTrigger: true });
@@ -64,7 +64,7 @@ document.querySelector('#report-bug')!.addEventListener('click', () => widget.st
 document.querySelector('#feedback')!.addEventListener('click', () => widget.open());
 ```
 
-In React, `useLightbackWidget()` returns the same handle. `hideTrigger: true` keeps the pill hidden after closing, cancelling, discarding, or sending. Your buttons can reopen the widget at any time.
+In React, `useLightbackWidget()` returns the lazy handle once the mounting effect runs. `hideTrigger: true` keeps the pill hidden after closing, cancelling, discarding, or sending. Your buttons can reopen the widget at any time.
 
 ## Screenshot capturer
 

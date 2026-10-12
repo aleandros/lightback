@@ -30,3 +30,17 @@ Pass `strings: Partial<WidgetStrings>` to translate labels and status messages; 
 Use `theme: 'light' | 'dark' | 'auto'` (default `auto`), `hideTrigger: true` with your own `handle.open()` / `handle.startPicking()` buttons, and CSS `::part(pill)`, `::part(panel)`, `::part(popover)`, `::part(pending)` when the `--lb-*` variables are insufficient. Options are read at mount time.
 
 See the [guides](https://github.com/aleandros/lightback/tree/main/docs/guide) for examples and the payload reference.
+
+## Lazy loading
+
+```ts
+import { mountLazyWidget } from '@lightback/widget/lazy';
+const widget = mountLazyWidget({ client, hideTrigger: true });
+await widget.open(); // or startPicking(); rejection calls onError and can be retried
+```
+
+Omit `hideTrigger` for a lightweight pill that loads the UI on first click. Collectors run from client creation. Strings, themes and CSS customization carry through on the same host. Concurrent calls share a load and apply the latest action. Close cancels pending activation; destroy prevents late mounting without destroying the client.
+
+ESM defers `lightback-ui.js` using a `new URL(..., import.meta.url)` asset, tested in Vite production. Deploy the emitted asset. Native import retries use a fresh URL. CommonJS delegates splitting to the consuming bundler. Keep eager imports out of the initial graph to retain the savings.
+
+For script tags, serve `dist/lightback-lazy.iife.js` and `dist/lightback-ui.js` together, then use `Lightback.mountLazyWidget({ client })`. The bootstrap includes core; `widgetUrl` overrides the UI URL if needed. Load one standalone bootstrap per page. Imports are SSR-safe; mounting requires a browser DOM.

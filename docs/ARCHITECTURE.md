@@ -54,9 +54,17 @@ interface ElementSelection {
 
 ## `@lightback/widget`
 
-A `<lightback-widget>` host with a Shadow DOM. It is created directly without registering a custom-element class, so repeated mounts do not collide in the registry. `index.ts` holds the HTML template, the `Widget` class and all behaviour; `styles.ts` holds the CSS.
+A `<lightback-widget>` host with a Shadow DOM. It is created directly without registering a custom-element class, so repeated mounts do not collide in the registry. `index.ts` is the eager public entry; `ui.ts` holds the HTML template, the `Widget` class and all behaviour; `styles.ts` holds the CSS.
 
 `WidgetOptions` accepts a partial `strings` table merged over `defaultStrings` (`strings.ts`), a forced light/dark or automatic theme via `data-theme`, and `hideTrigger`. Translation text is escaped wherever inserted into HTML. `triggerLabel` remains an alias; `strings.pillOpen` wins. The pill, panel, popover and pending surfaces expose matching CSS parts. Options are read at mount time.
+
+### Lazy entry
+
+`@lightback/widget/lazy` exports `mountLazyWidget()`. `lazy-controller.ts` mounts only a styled, translated pill using `shell.ts`, retains a stable host and coalesces pending open/pick intents. Options are snapshotted at mount. Closing cancels activation; destroying guards late resolution. Failures leave the trigger usable, call `onError`, and reject the action promise (with an internal rejection handler for void-style event callers). Core collectors remain active throughout the download.
+
+The ESM build references a self-contained `lightback-ui.js` URL asset. Bundlers such as Vite emit it via `new URL(..., import.meta.url)`. Failed native imports are cached by browsers, so subsequent attempts use a fresh query parameter. Bundling UI dependencies into this asset avoids retaining failed dependency URLs. CommonJS uses a deferred `require` chunk and delegates network splitting to the consuming bundler. Source development uses the dev server's transformed `ui.ts`; production playground builds consume the built lazy package. `pnpm build:site` builds packages first so URL assets exist on a clean checkout.
+
+The lazy standalone bootstrap (`lightback-lazy.iife.js`) includes core and the controller; it resolves `lightback-ui.js` beside its own script URL, with a `widgetUrl` override. The eager entry and IIFE remain available. Both paths reuse the UI class, styles and strings. Payload version stays 1.
 
 ### Surfaces
 
@@ -83,7 +91,7 @@ Entering pick mode with a `screenshot` capturer configured (and `autoScreenshot 
 
 ## `@lightback/react`
 
-`LightbackProvider({ client, widget, context })` mounts the widget once, pushes `context` through `setContext` on change, and exposes `useLightback()` (the client) and `useLightbackWidget()` (the handle). Nothing else.
+`LightbackProvider({ client, widget, context })` mounts a lazy widget handle once, pushes `context` through `setContext` on change, and exposes `useLightback()` (the client) and `useLightbackWidget()` (the handle). Nothing else.
 
 ## Playground (`examples/playground`)
 
@@ -106,10 +114,11 @@ Pages: Dashboard (stat cards with `data-testid`, invoice table, Export modal, Ch
 
 ## E2E (`e2e`)
 
-Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the local default; `BROWSER=chromium|firefox|webkit` selects a Playwright engine and bypasses the Chrome channel/executable override. `lib.mjs` provides `launch(suite)` returning `page`, `assert`, `received()`, `reset()`, `finish()`, plus `W` (the shadow-root prefix) and `BASE_URL`. `run.mjs` runs the four suites in sequence and exits non-zero on failure; it excludes the screenshot generator. The crop suite disables `createImageBitmap` to exercise the image/canvas fallback.
+Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the local default; `BROWSER=chromium|firefox|webkit` selects a Playwright engine and bypasses the Chrome channel/executable override. `lib.mjs` provides `launch(suite)` returning `page`, `assert`, `received()`, `reset()`, `finish()`, plus `W` (the shadow-root prefix) and `BASE_URL`. `run.mjs` runs the five suites in sequence and exits non-zero on failure; it excludes the screenshot generator. The crop suite disables `createImageBitmap` to exercise the image/canvas fallback.
 
 | Suite | Covers |
 | --- | --- |
+| `lazy-loading.mjs` | Deferred React/neutral/standalone loading, first interaction, real import failure and retry, host identity and teardown. |
 | `smoke.mjs` | Noise generation, panel flow, full payload assertions (redaction, bodies, breadcrumbs, context), inbox overlays. |
 | `region-source-props.mjs` | Inline popover, drag over a modal resolving to the modal, source location and props in payload and inbox. |
 | `pill-pins-crops.mjs` | Pill actions, removing via popover and pin, Cancel keeps draft, auto screenshot and crops; `helpers/customization.mjs` checks translations, themes, hidden trigger and CSS parts. |

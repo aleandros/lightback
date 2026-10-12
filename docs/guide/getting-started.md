@@ -21,14 +21,14 @@ Create the client once, as early as possible, so the buffers have recent context
 ```ts
 // lightback.ts
 import { createLightback } from '@lightback/core';
-import { mountWidget } from '@lightback/widget';
+import { mountLazyWidget } from '@lightback/widget/lazy';
 
 export const lightback = createLightback({
   endpoint: '/api/feedback',
   context: { release: import.meta.env.VITE_RELEASE },
 });
 
-const widget = mountWidget({
+const widget = mountLazyWidget({
   client: lightback,
   screenshot: () => import('modern-screenshot').then((m) => m.domToBlob(document.documentElement)),
 });
@@ -41,9 +41,7 @@ Import `lightback.ts` from your entry file. Install `modern-screenshot` for the 
 ```tsx
 import { LightbackProvider } from '@lightback/react';
 import { createLightback } from '@lightback/core';
-import { domToBlob } from 'modern-screenshot';
-
-const screenshot = () => domToBlob(document.documentElement);
+const screenshot = () => import('modern-screenshot').then((m) => m.domToBlob(document.documentElement));
 // In the React integration, let the provider mount the widget.
 const lightback = createLightback({ endpoint: '/api/feedback' });
 
@@ -52,13 +50,23 @@ const lightback = createLightback({ endpoint: '/api/feedback' });
 </LightbackProvider>
 ```
 
-`context` is pushed into every report whenever it changes. `useLightback()` returns the client, `useLightbackWidget()` the widget handle.
+`context` is pushed into every report whenever it changes. `useLightback()` returns the client, `useLightbackWidget()` the lazy widget handle. The provider mounts only the trigger; clicking it or calling `await widget.open()` / `await widget.startPicking()` loads the editor and picker. `widget={false}` disables the widget entirely.
 
 ### SSR and script tags
 
-All packages can be imported on Node 18+; `createLightback()` leaves server globals untouched and returns empty browser environment defaults. Create the browser client at app startup, and call `mountWidget()` only after the DOM is ready (for example in a client effect). The React provider mounts in an effect itself; do not also mount a second widget manually. DOM inspection APIs throw a clear error on the server.
+All packages can be imported on Node 18+; `createLightback()` leaves server globals untouched and returns empty browser environment defaults. Create the browser client at app startup, and call `mountLazyWidget()` (or the eager `mountWidget()`) only after the DOM is ready (for example in a client effect). The React provider mounts in an effect itself; do not also mount a second widget manually. DOM inspection APIs throw a clear error on the server.
 
 For a bundler-free integration, serve the built `packages/widget/dist/lightback.iife.js` and call `Lightback.createLightback({ endpoint: '/api/feedback' })`, then `Lightback.mountWidget({ client })`. Core is included in that script. Supported browsers are evergreen releases from the last two years and Safari 15.4+; builds target ES2020.
+
+### Loading and retries
+
+The lazy handle exists immediately, with a stable `element` for host styling. All widget options are forwarded to the UI when it loads, including translations, themes, screenshots and `hideTrigger`. For a custom trigger, set `hideTrigger: true` and call `open()` or `startPicking()`; await the returned promise if your app needs to wait for readiness. A rejected load calls `onError`; invoking the action again retries. The built-in trigger displays `strings.loading` and `strings.loadFailed` and stays clickable.
+
+Repeated interactions share one download, then apply the latest requested action once. `close()` cancels pending activation. `destroy()` removes the trigger and prevents a pending download from mounting UI. Neither destroys the client, so collection continues until you call `client.destroy()`.
+
+The ESM package defers a self-contained `lightback-ui.js` asset. Your bundler must copy `new URL('./asset.js', import.meta.url)` assets (the production Vite demo tests this). Deploy the emitted asset alongside the app. CommonJS delegates splitting to your bundler. Avoid also importing the eager entry if you want the initial JavaScript reduction.
+
+For a lazy script-tag install, serve `dist/lightback-lazy.iife.js` and `dist/lightback-ui.js` together, then call `Lightback.mountLazyWidget({ client })`. The bootstrap includes core and locates the UI relative to its script URL; `widgetUrl` overrides the location. Serve the UI as JavaScript, with module CORS headers if cross-origin. Load either the eager or lazy standalone bootstrap, not both. Failed native imports use a fresh query parameter on retry.
 
 ## First report
 

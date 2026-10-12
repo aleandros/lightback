@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { LightbackClient } from '@lightback/core';
-import { mountWidget, type WidgetHandle, type WidgetOptions } from '@lightback/widget';
+import { mountLazyWidget, type LazyWidgetHandle, type WidgetOptions } from '@lightback/widget/lazy';
+type WidgetHandle = LazyWidgetHandle;
 
 interface Ctx {
   client: LightbackClient;
@@ -12,7 +13,7 @@ const LightbackContext = createContext<Ctx | null>(null);
 export interface LightbackProviderProps {
   /** Create it once outside React with `createLightback()` so collectors start at page load. */
   client: LightbackClient;
-  /** Mount the drop-in widget. `false` to bring your own UI. */
+  /** Mount a lightweight trigger; load the widget UI on first interaction. `false` to bring your own UI. */
   widget?: boolean | Omit<WidgetOptions, 'client'>;
   /** Context merged into the client whenever it changes (user, session, flags...). */
   context?: Record<string, unknown>;
@@ -24,7 +25,7 @@ export function LightbackProvider({ client, widget = true, context, children }: 
 
   useEffect(() => {
     if (!widget) return;
-    const h = mountWidget({ client, ...(typeof widget === 'object' ? widget : {}) });
+    const h = mountLazyWidget({ client, ...(typeof widget === 'object' ? widget : {}) });
     setHandle(h);
     return () => {
       h.destroy();
@@ -47,7 +48,7 @@ export function useLightback(): LightbackClient {
   return ctx.client;
 }
 
-/** The mounted widget, or null before mount / when `widget={false}`. */
+/** The lazy widget handle, or null before the effect mounts / when `widget={false}`. */
 export function useLightbackWidget(): WidgetHandle | null {
   const ctx = useContext(LightbackContext);
   if (!ctx) throw new Error('useLightbackWidget must be used inside <LightbackProvider>');

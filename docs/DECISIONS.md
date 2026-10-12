@@ -73,3 +73,9 @@ Reuse the playground at `/lightback/demo/`, with an explicitly selected build mo
 ## 18. GitHub issues own the backlog and handoff
 
 [Backlog #19](https://github.com/aleandros/lightback/issues/19) holds the agreed ordering and links to actionable issues. Product work and AI integration improvements have separate lanes. Scope, acceptance criteria, progress and handoff notes belong on issues; source documentation continues to explain architecture and shipped behavior. The former roadmap and handoff files are stable pointers for existing links.
+
+## 19. A lightweight trigger and a retryable UI asset
+
+Keep client creation early, and split the UI at its mount boundary. The neutral integration opts into `@lightback/widget/lazy`; React uses it by default. A stable host preserves CSS customizations and ignores widget breadcrumbs before and after activation. Concurrent actions share a load; the latest intent wins, and close/destroy cancels pending activation.
+
+Native browser imports cache failed URLs, so resetting a promise alone does not retry. ESM and the lazy standalone script load a self-contained UI asset with a fresh query parameter on retry; the production demo verifies Vite's URL asset emission and a real failed download. This duplicates a small amount of core helper code in the deferred asset but avoids cached failed dependency graphs. CommonJS retains a deferred module boundary for its consuming bundler. The eager entry remains available for integrations that need synchronous mounting or cannot emit URL assets.

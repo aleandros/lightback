@@ -1,50 +1,13 @@
+import { shellStyles } from './shell';
+
 export const styles = /* css */ `
-:host {
-  --lb-accent: #4f46e5;
-  --lb-accent-contrast: #fff;
-  --lb-bg: #ffffff;
-  --lb-fg: #111827;
-  --lb-muted: #6b7280;
-  --lb-border: #e5e7eb;
-  --lb-surface: #f9fafb;
-  --lb-danger: #dc2626;
-  --lb-radius: 12px;
-  --lb-shadow: 0 10px 30px rgba(0,0,0,.18);
-  all: initial;
-  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: var(--lb-fg);
-  position: fixed;
-  z-index: 2147483000;
-  bottom: 20px;
-  right: 20px;
-}
-:host([data-position="bottom-left"]) { right: auto; left: 20px; }
-:host([data-theme="dark"]) {
-  --lb-bg: #111827; --lb-fg: #f3f4f6; --lb-muted: #9ca3af; --lb-border: #374151; --lb-surface: #1f2937;
-}
-@media (prefers-color-scheme: dark) {
-  :host([data-theme="auto"]) {
-    --lb-bg: #111827; --lb-fg: #f3f4f6; --lb-muted: #9ca3af; --lb-border: #374151; --lb-surface: #1f2937;
-  }
-}
-* { box-sizing: border-box; }
-button { font: inherit; cursor: pointer; }
-[hidden] { display: none !important; }
+${shellStyles}
 /* Stacking inside the host: pins live on the page, chrome goes above them. */
 .lb-pins { z-index: 1; }
 .lb-highlight, .lb-drag { z-index: 2; }
 .lb-pickbar { z-index: 3; }
 .lb-popover { z-index: 4; }
 .lb-panel, .lb-pill { z-index: 5; position: relative; }
-.lb-panel, .lb-pill {
-  display: inline-flex; align-items: stretch; background: var(--lb-bg); color: var(--lb-fg);
-  border: 1px solid var(--lb-border); border-radius: 999px; box-shadow: var(--lb-shadow); overflow: hidden; padding: 3px;
-}
-.lb-pill-btn { background: transparent; border: 0; color: var(--lb-fg); padding: 8px 14px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
-.lb-pill-btn:hover { background: var(--lb-surface); }
-.lb-pill-btn[data-ref=pillOpen] { background: var(--lb-accent); color: var(--lb-accent-contrast); }
-.lb-pill-btn[data-ref=pillOpen]:hover { filter: brightness(1.08); }
-.lb-pill-sep { width: 1px; background: var(--lb-border); margin: 6px 3px; }
 .lb-panel { position: absolute; }
 .lb-pending { z-index: 5; }
 .lb-toast { z-index: 6; }

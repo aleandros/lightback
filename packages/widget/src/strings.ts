@@ -1,6 +1,8 @@
 /** English UI defaults. Functions let hosts choose their own plural rules. */
 export const defaultStrings = {
   feedback: "Feedback",
+  loading: "Loading feedback…",
+  loadFailed: "Could not load feedback. Try again.",
   pillPick: "⌖ Point at something",
   pillOpen: "✎ Write feedback",
   pillReview: "✎ Review & send",

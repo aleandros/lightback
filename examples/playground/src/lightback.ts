@@ -1,7 +1,6 @@
 import { createLightback } from '@lightback/core';
 import { isDemo } from './mode';
 import { saveSubmission } from './submissions';
-import { domToBlob } from 'modern-screenshot';
 
 /** Created at module load so console/network/error buffers start filling before React mounts. */
 export const lightback = createLightback({
@@ -15,10 +14,10 @@ export const lightback = createLightback({
 });
 
 export const screenshot = () =>
-  domToBlob(document.documentElement, {
+  import('modern-screenshot').then(({ domToBlob }) => domToBlob(document.documentElement, {
     type: 'image/png',
     scale: Math.min(window.devicePixelRatio, 2),
     // Match the dimensions the core reports in payload.page.size so docRects map 1:1.
     width: document.documentElement.scrollWidth,
     height: document.documentElement.scrollHeight,
-  });
+  }));

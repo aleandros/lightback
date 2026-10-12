@@ -68,7 +68,7 @@ The standalone script includes core and exposes `window.Lightback`. Widget `0.1.
 
 `pnpm build`, `pnpm typecheck`, `pnpm test` and `pnpm check:packages` validate builds, source types, unit tests, and the actual tarballs (ESM, CommonJS, IIFE, licenses, READMEs and strict type resolution).
 
-`pnpm e2e` runs the four browser suites against `pnpm dev` using system Chrome. To use a Playwright engine:
+`pnpm e2e` runs the five browser suites against `pnpm dev` using system Chrome. To use a Playwright engine:
 
 ```sh
 pnpm --filter e2e exec playwright-core install chromium firefox webkit
@@ -134,6 +134,34 @@ React:
   <App />
 </LightbackProvider>
 ```
+
+## Load the UI on first interaction
+
+Keep `createLightback()` at app startup so collectors are warm, and mount a lightweight trigger after the DOM is ready:
+
+```ts
+import { mountLazyWidget } from '@lightback/widget/lazy';
+
+const widget = mountLazyWidget({ client: lightback, screenshot });
+// Custom triggers can use hideTrigger: true and call:
+await widget.open(); // or await widget.startPicking()
+```
+
+React's `LightbackProvider` uses this lazy path by default. `useLightbackWidget()` returns the handle after the mounting effect, before the editor downloads. All widget options, strings, themes and CSS parts still apply. The trigger shows loading/failure status; clicking again retries. Host API calls return a promise and report failures through `onError`. Concurrent calls share one load and the latest action wins. `close()` cancels pending activation; `destroy()` prevents late mounting and leaves the client running.
+
+ESM builds load a separate `lightback-ui.js` asset with a fresh URL on retry. Vite's production demo verifies asset emission and first-click loading. Bundlers must support `new URL('./asset.js', import.meta.url)` assets; preserve that asset when deploying. CommonJS leaves deferred module loading to your bundler; configure splitting there if you need separate downloads. Importing the eager widget entry elsewhere still includes the full UI.
+
+For script tags, serve **both** `dist/lightback-lazy.iife.js` and `dist/lightback-ui.js` in the same directory:
+
+```html
+<script src="/vendor/lightback-lazy.iife.js"></script>
+<script>
+  const client = Lightback.createLightback({ endpoint: '/api/feedback' });
+  const widget = Lightback.mountLazyWidget({ client });
+</script>
+```
+
+The lazy script includes core and resolves the UI relative to its own script URL. Use `widgetUrl` to override that location (required for an inline bootstrap); cross-origin UI hosts must allow module CORS. Load one standalone entry per page. `mountWidget()` and `lightback.iife.js` remain the eager alternatives. `pnpm check:packages` measures and guards the initial standalone gzip reduction.
 
 ## Customize and translate
 
