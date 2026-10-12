@@ -24,6 +24,7 @@ try {
     assert.equal(client.buildPayload({ text: 'packed' }).note.text, 'packed');
     client.destroy();
     assert.equal(typeof widget.mountWidget, 'function');
+    assert.equal(widget.defaultStrings.send, 'Send');
     assert.throws(() => widget.mountWidget({ client }), /requires a browser DOM/);
     assert.equal(typeof react.LightbackProvider, 'function');
     assert.equal(typeof react.useLightback, 'function');
@@ -46,7 +47,7 @@ try {
   const standalone = join(scratch, 'node_modules/@lightback/widget/dist/lightback.iife.js');
   const context = {};
   runInNewContext(readFileSync(standalone, 'utf8'), context);
-  assert.deepEqual(Object.keys(context.Lightback).sort(), ['createLightback', 'mountWidget']);
+  assert.deepEqual(Object.keys(context.Lightback).sort(), ['createLightback', 'defaultStrings', 'mountWidget']);
   context.Lightback.createLightback().destroy();
   console.log('Packed ESM, CommonJS, standalone bundle, metadata and type resolution passed.');
 } finally {

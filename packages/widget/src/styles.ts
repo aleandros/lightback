@@ -19,8 +19,11 @@ export const styles = /* css */ `
   right: 20px;
 }
 :host([data-position="bottom-left"]) { right: auto; left: 20px; }
+:host([data-theme="dark"]) {
+  --lb-bg: #111827; --lb-fg: #f3f4f6; --lb-muted: #9ca3af; --lb-border: #374151; --lb-surface: #1f2937;
+}
 @media (prefers-color-scheme: dark) {
-  :host {
+  :host([data-theme="auto"]) {
     --lb-bg: #111827; --lb-fg: #f3f4f6; --lb-muted: #9ca3af; --lb-border: #374151; --lb-surface: #1f2937;
   }
 }

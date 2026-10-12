@@ -25,6 +25,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm check:packages
+      - run: pnpm --filter docs build
+      - run: git diff --exit-code -- docs/guide/payload.md docs/guide/strings-reference.md
 
   browsers:
     runs-on: ubuntu-latest

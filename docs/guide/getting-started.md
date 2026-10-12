@@ -6,6 +6,8 @@ Lightback adds a feedback widget to your web app. Users point at the thing they 
 
 ```bash
 pnpm add @lightback/core @lightback/widget
+# Optional screenshots:
+pnpm add modern-screenshot
 # React users:
 pnpm add @lightback/react
 ```
@@ -14,7 +16,7 @@ Packages are ESM and CommonJS, with matching TypeScript types. Version `0.1.0` i
 
 ## Mount it
 
-Create the client once, as early as possible, so the buffers are already full of context when a user eventually reports.
+Create the client once, as early as possible, so the buffers have recent context when a user eventually reports.
 
 ```ts
 // lightback.ts
@@ -26,20 +28,22 @@ export const lightback = createLightback({
   context: { release: import.meta.env.VITE_RELEASE },
 });
 
-mountWidget({
+const widget = mountWidget({
   client: lightback,
   screenshot: () => import('modern-screenshot').then((m) => m.domToBlob(document.documentElement)),
 });
 ```
 
-Import `lightback.ts` from your entry file. The screenshot capturer is optional and injectable: pass any function that returns a `Promise<Blob>` of the page.
+Import `lightback.ts` from your entry file. Install `modern-screenshot` for the example above, or omit `screenshot` for reports without images. The capturer is optional and injectable: pass any function that returns a `Promise<Blob>` of the page.
 
 ### React
 
 ```tsx
 import { LightbackProvider } from '@lightback/react';
 import { createLightback } from '@lightback/core';
+import { domToBlob } from 'modern-screenshot';
 
+const screenshot = () => domToBlob(document.documentElement);
 // In the React integration, let the provider mount the widget.
 const lightback = createLightback({ endpoint: '/api/feedback' });
 
@@ -62,7 +66,7 @@ For a bundler-free integration, serve the built `packages/widget/dist/lightback.
 2. Click a button, or drag a rectangle over an area.
 3. Type a sentence in the comment box and press Enter.
 
-A "Sending feedback…" card gives five seconds to cancel or edit. Then the report posts to `/api/feedback` as `multipart/form-data` with a `payload` JSON field and one PNG per screenshot and crop. See [Backend](./backend.md) for the contract.
+A "Sending feedback…" card gives five seconds to cancel or edit. With a capturer configured, the report posts to `/api/feedback` as `multipart/form-data` with a `payload` JSON field and one PNG per screenshot and crop. Without images it sends JSON. See [Backend](./backend.md) for the contract.
 
 ## What arrived
 
@@ -87,6 +91,8 @@ The payload for that single click looks like this, trimmed:
 ```
 
 `toPromptContext(payload)` from `@lightback/core` renders the same report as markdown for a language model. Pair it with `screenshot.png` for a vision-capable model.
+
+Call `widget.destroy()` and `lightback.destroy()` when an integration is unmounted permanently. The React provider cleans up its widget; the application owns the client lifetime.
 
 ## Next
 

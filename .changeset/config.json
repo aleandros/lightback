@@ -9,7 +9,8 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "playground",
-    "e2e"
+    "e2e",
+    "docs"
   ],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true

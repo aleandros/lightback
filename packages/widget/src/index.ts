@@ -2,6 +2,8 @@ import {
   IGNORE_ATTR, shortSelector, toPromptContext,
   type Attachment, type ElementSelection, type FeedbackPayload, type LightbackClient, type Rect,
 } from '@lightback/core';
+import { defaultStrings, type WidgetStrings } from './strings';
+export { defaultStrings, type WidgetStrings } from './strings';
 import { styles } from './styles';
 import { decodeScreenshot } from './screenshot';
 
@@ -22,7 +24,11 @@ export interface WidgetOptions {
    */
   sendDelay?: number;
   position?: 'bottom-right' | 'bottom-left';
+  /** Legacy alias for strings.pillOpen; strings.pillOpen takes precedence. */
   triggerLabel?: string;
+  strings?: Partial<WidgetStrings>;
+  theme?: 'light' | 'dark' | 'auto';
+  hideTrigger?: boolean;
   /** CSS color for buttons and highlights. */
   accent?: string;
   onSent?: (payload: FeedbackPayload) => void;
@@ -46,56 +52,56 @@ interface BaseShot {
   page: { width: number; height: number };
 }
 
-const TEMPLATE = /* html */ `
-<div class="lb-pill" role="group" aria-label="Feedback">
-  <button class="lb-pill-btn" type="button" data-action="pick" data-ref="pillPick">⌖ Point at something</button>
+const template = (s: WidgetStrings) => /* html */ `
+<div class="lb-pill" part="pill" data-ref="pill" role="group" aria-label="${esc(s.feedback)}">
+  <button class="lb-pill-btn" type="button" data-action="pick" data-ref="pillPick">${esc(s.pillPick)}</button>
   <span class="lb-pill-sep"></span>
-  <button class="lb-pill-btn" type="button" data-action="open" data-ref="pillOpen">✎ Write feedback</button>
+  <button class="lb-pill-btn" type="button" data-action="open" data-ref="pillOpen">${esc(s.pillOpen)}</button>
 </div>
-<div class="lb-panel" hidden role="dialog" aria-label="Send feedback">
-  <header><strong>Send feedback</strong><button class="lb-icon" type="button" data-action="close" aria-label="Close">✕</button></header>
+<div class="lb-panel" part="panel" data-ref="panel" hidden role="dialog" aria-label="${esc(s.panelTitle)}">
+  <header><strong>${esc(s.panelTitle)}</strong><button class="lb-icon" type="button" data-action="close" aria-label="${esc(s.close)}">✕</button></header>
   <div class="lb-body">
-    <label>What happened?<textarea data-ref="text" placeholder="Describe the problem or idea. Point at elements to add context."></textarea></label>
+    <label>${esc(s.noteLabel)}<textarea data-ref="text" placeholder="${esc(s.notePlaceholder)}"></textarea></label>
     <div class="lb-actions">
-      <button class="lb-btn" type="button" data-action="pick">⌖ Point at something</button>
-      <button class="lb-btn" type="button" data-action="shot" data-ref="shotBtn" hidden>📷 Screenshot</button>
+      <button class="lb-btn" type="button" data-action="pick">${esc(s.pick)}</button>
+      <button class="lb-btn" type="button" data-action="shot" data-ref="shotBtn" hidden>${esc(s.screenshot)}</button>
     </div>
     <div class="lb-selections" data-ref="selections"></div>
-    <div class="lb-shot" data-ref="shot" hidden><img alt="Screenshot preview" data-ref="shotImg"><button class="lb-icon" type="button" data-action="shot-remove" aria-label="Remove screenshot">✕</button></div>
+    <div class="lb-shot" data-ref="shot" hidden><img alt="${esc(s.screenshotPreview)}" data-ref="shotImg"><button class="lb-icon" type="button" data-action="shot-remove" aria-label="${esc(s.removeScreenshot)}">✕</button></div>
     <details class="lb-review" data-ref="review">
-      <summary>Review what will be sent <span class="lb-counts" data-ref="counts"></span></summary>
-      <div class="lb-tabs"><button type="button" data-tab="prompt" class="active">Prompt</button><button type="button" data-tab="json">JSON</button></div>
+      <summary>${esc(s.reviewSummary)} <span class="lb-counts" data-ref="counts"></span></summary>
+      <div class="lb-tabs"><button type="button" data-tab="prompt" data-ref="tabPrompt" class="active">${esc(s.tabPrompt)}</button><button type="button" data-tab="json" data-ref="tabJson">${esc(s.tabJson)}</button></div>
       <pre class="lb-preview" data-ref="preview"></pre>
     </details>
   </div>
-  <footer><span class="lb-status" data-ref="status"></span><span class="lb-grow"></span><button class="lb-link danger" type="button" data-action="discard">Discard</button><button class="lb-btn lb-primary" type="button" data-action="send">Send</button></footer>
+  <footer><span class="lb-status" data-ref="status"></span><span class="lb-grow"></span><button class="lb-link danger" type="button" data-action="discard">${esc(s.discard)}</button><button class="lb-btn lb-primary" type="button" data-action="send">${esc(s.send)}</button></footer>
 </div>
 <div class="lb-pickbar" hidden>
-  <span class="lb-pick-hint">Click an element or drag an area</span>
-  <span class="lb-count" data-ref="count">0 selected</span>
-  <button class="lb-pick-btn" type="button" data-action="cancel-pick">Cancel</button>
-  <button class="lb-pick-btn lb-pick-done" type="button" data-action="done">Done</button>
+  <span class="lb-pick-hint">${esc(s.pickHint)}</span>
+  <span class="lb-count" data-ref="count">${esc(s.countSelected(0))}</span>
+  <button class="lb-pick-btn" type="button" data-action="cancel-pick">${esc(s.cancel)}</button>
+  <button class="lb-pick-btn lb-pick-done" type="button" data-action="done">${esc(s.done(0))}</button>
 </div>
 <div class="lb-highlight" hidden><div class="lb-tip"></div></div>
 <div class="lb-drag" hidden></div>
 <div class="lb-pins" data-ref="pins"></div>
-<div class="lb-popover" data-ref="popover" hidden>
+<div class="lb-popover" part="popover" data-ref="popover" hidden>
   <div class="lb-pop-head"><span class="lb-badge" data-ref="popBadge">1</span><strong data-ref="popTitle"></strong></div>
-  <textarea data-ref="popText" placeholder="What about this? (optional)"></textarea>
+  <textarea data-ref="popText" placeholder="${esc(s.popoverPlaceholder)}"></textarea>
   <div class="lb-pop-actions">
-    <button class="lb-link danger" type="button" data-action="pop-remove">Remove</button>
+    <button class="lb-link danger" type="button" data-action="pop-remove">${esc(s.remove)}</button>
     <span class="lb-grow"></span>
-    <button class="lb-btn" type="button" data-action="pop-more" title="Save and keep pointing">Add more</button>
-    <button class="lb-btn lb-primary" type="button" data-action="pop-send" title="Enter">Send</button>
+    <button class="lb-btn" type="button" data-action="pop-more" title="${esc(s.addMoreTitle)}">${esc(s.addMore)}</button>
+    <button class="lb-btn lb-primary" type="button" data-action="pop-send" title="${esc(s.sendTitle)}">${esc(s.send)}</button>
   </div>
-  <div class="lb-hint">Enter to send · Shift+Enter for a new line</div>
+  <div class="lb-hint">${esc(s.popoverHint)}</div>
 </div>
-<div class="lb-pending" data-ref="pending" hidden role="status">
+<div class="lb-pending" part="pending" data-ref="pending" hidden role="status">
   <div class="lb-pending-row">
-    <strong data-ref="pendingTitle">Sending feedback…</strong>
+    <strong data-ref="pendingTitle">${esc(s.sending)}</strong>
     <span class="lb-grow"></span>
-    <button class="lb-btn" type="button" data-action="pending-edit">Edit</button>
-    <button class="lb-btn" type="button" data-action="pending-cancel">Cancel</button>
+    <button class="lb-btn" type="button" data-action="pending-edit">${esc(s.edit)}</button>
+    <button class="lb-btn" type="button" data-action="pending-cancel">${esc(s.cancel)}</button>
   </div>
   <div class="lb-pending-summary" data-ref="pendingSummary"></div>
   <div class="lb-pending-bar"><i data-ref="pendingBar"></i></div>
@@ -113,6 +119,7 @@ class Widget implements WidgetHandle {
   private root: ShadowRoot;
   private client: LightbackClient;
   private opts: WidgetOptions;
+  private strings: WidgetStrings;
 
   private text = '';
   private selections: ElementSelection[] = [];
@@ -141,10 +148,12 @@ class Widget implements WidgetHandle {
 
   constructor(opts: WidgetOptions) {
     this.opts = opts;
+    this.strings = { ...defaultStrings, ...(opts.triggerLabel !== undefined ? { pillOpen: opts.triggerLabel } : {}), ...opts.strings };
     this.client = opts.client;
     this.autoShot = opts.autoScreenshot ?? Boolean(opts.screenshot);
     const host = document.createElement('lightback-widget');
     host.setAttribute(IGNORE_ATTR, '');
+    host.dataset.theme = opts.theme ?? 'auto';
     host.dataset.position = opts.position ?? 'bottom-right';
     if (opts.accent) host.style.setProperty('--lb-accent', opts.accent);
     this.element = host;
@@ -153,10 +162,10 @@ class Widget implements WidgetHandle {
     style.textContent = styles;
     this.root.appendChild(style);
     const wrap = document.createElement('div');
-    wrap.innerHTML = TEMPLATE;
+    wrap.innerHTML = template(this.strings);
     while (wrap.firstChild) this.root.appendChild(wrap.firstChild);
 
-    if (opts.triggerLabel) this.q('[data-ref=pillOpen]').textContent = opts.triggerLabel;
+    this.q('.lb-pill').hidden = Boolean(opts.hideTrigger);
     if (opts.screenshot) this.q('[data-ref=shotBtn]').hidden = false;
 
     this.root.addEventListener('click', (e) => this.onRootClick(e));
@@ -202,14 +211,14 @@ class Widget implements WidgetHandle {
 
   close(): void {
     this.q('.lb-panel').hidden = true;
-    this.q('.lb-pill').hidden = false;
+    this.q('.lb-pill').hidden = Boolean(this.opts.hideTrigger);
     this.renderPill();
   }
 
   private renderPill(): void {
     const n = this.selections.length;
-    this.q('[data-ref=pillPick]').textContent = n ? `⌖ Point at something (${n})` : '⌖ Point at something';
-    this.q('[data-ref=pillOpen]').textContent = n || this.text ? '✎ Review & send' : (this.opts.triggerLabel ?? '✎ Write feedback');
+    this.q('[data-ref=pillPick]').textContent = n ? this.strings.pillPickCount(n) : this.strings.pillPick;
+    this.q('[data-ref=pillOpen]').textContent = n || this.text ? this.strings.pillReview : this.strings.pillOpen;
   }
 
   destroy(): void {
@@ -245,7 +254,7 @@ class Widget implements WidgetHandle {
       case 'close': return this.close();
       case 'pick': return this.startPicking();
       case 'done': this.savePopover(); return this.open();
-      case 'cancel-pick': this.closePopover(); this.stopPicking(); this.q('.lb-pill').hidden = false; this.renderPill(); return;
+      case 'cancel-pick': this.closePopover(); this.stopPicking(); this.q('.lb-pill').hidden = Boolean(this.opts.hideTrigger); this.renderPill(); return;
       case 'shot': void this.takeScreenshot(); return;
       case 'shot-remove': return this.setScreenshot(null);
       case 'send': void this.send(); return;
@@ -253,7 +262,7 @@ class Widget implements WidgetHandle {
       case 'pop-send': this.savePopover(); return this.queueSend();
       case 'pop-remove': if (this.popoverFor) this.removeSelection(this.popoverFor); return;
       case 'pending-edit': this.cancelPending(); return this.open();
-      case 'pending-cancel': this.cancelPending(); this.q('.lb-pill').hidden = false; this.renderPill(); this.toast('Not sent. Your draft is kept.'); return;
+      case 'pending-cancel': this.cancelPending(); this.q('.lb-pill').hidden = Boolean(this.opts.hideTrigger); this.renderPill(); this.toast(this.strings.draftKept); return;
       case 'discard': this.reset(); return this.close();
       case 'sel-remove': if (selId) this.removeSelection(selId); return;
       case 'sel-edit': if (selId) this.openPopover(selId); return;
@@ -437,8 +446,8 @@ class Widget implements WidgetHandle {
 
   private updateCount(): void {
     const n = this.selections.length;
-    this.q('[data-ref=count]').textContent = `${n} selected`;
-    this.q('[data-action=done]').textContent = n ? `Done (${n})` : 'Done';
+    this.q('[data-ref=count]').textContent = this.strings.countSelected(n);
+    this.q('[data-action=done]').textContent = this.strings.done(n);
   }
 
   /* ---------- geometry ---------- */
@@ -514,7 +523,7 @@ class Widget implements WidgetHandle {
       pin.style.height = `${r.height}px`;
       // While dragging a new region the pins must not steal hit testing.
       pin.style.pointerEvents = this.dragging ? 'none' : 'auto';
-      pin.innerHTML = `<span class="lb-badge${sel.kind === 'region' ? ' region' : ''}">${i + 1}</span><button class="lb-pin-x" type="button" data-action="sel-remove" aria-label="Remove selection" title="Remove">✕</button>`;
+      pin.innerHTML = `<span class="lb-badge${sel.kind === 'region' ? ' region' : ''}">${i + 1}</span><button class="lb-pin-x" type="button" data-action="sel-remove" aria-label="${esc(this.strings.removeSelection)}" title="${esc(this.strings.remove)}">✕</button>`;
       pin.title = sel.note || this.labelFor(sel);
       box.appendChild(pin);
     });
@@ -576,7 +585,7 @@ class Widget implements WidgetHandle {
   private labelFor(sel: ElementSelection): string {
     const chain = sel.components.slice(0, 2).join(' ‹ ');
     const what = chain || `<${sel.tag}>`;
-    if (sel.kind === 'region') return `Area in ${what} · ${sel.region?.children.length ?? 0} elements`;
+    if (sel.kind === 'region') return `${this.strings.areaIn(what)} · ${this.strings.elementCount(sel.region?.children.length ?? 0)}`;
     return sel.text ? `${what} “${sel.text.slice(0, 30)}${sel.text.length > 30 ? '…' : ''}”` : what;
   }
 
@@ -652,7 +661,7 @@ class Widget implements WidgetHandle {
       const blob = await this.rawCapture();
       this.setScreenshot(blob);
     } catch (err) {
-      this.setStatus(`Screenshot failed: ${err instanceof Error ? err.message : String(err)}`, true);
+      this.setStatus(this.strings.screenshotFailed(err instanceof Error ? err.message : String(err)), true);
       this.opts.onError?.(err);
     } finally {
       btn.disabled = false;
@@ -666,7 +675,7 @@ class Widget implements WidgetHandle {
     const box = this.q('[data-ref=shot]');
     box.hidden = !blob;
     if (this.screenshotUrl) this.q<HTMLImageElement>('[data-ref=shotImg]').src = this.screenshotUrl;
-    this.q('[data-ref=shotBtn]').textContent = blob ? '📷 Retake screenshot' : '📷 Screenshot';
+    this.q('[data-ref=shotBtn]').textContent = blob ? this.strings.retakeScreenshot : this.strings.screenshot;
     this.refreshReview();
   }
 
@@ -724,23 +733,23 @@ class Widget implements WidgetHandle {
   private summary(): string {
     const n = this.selections.length;
     const bits: string[] = [];
-    if (n) bits.push(`${n} selection${n === 1 ? '' : 's'}`);
+    if (n) bits.push(this.strings.summarySelections(n));
     const note = this.text.trim() || this.selections.find((s) => s.note)?.note;
     if (note) bits.push(`“${note.length > 48 ? note.slice(0, 48) + '…' : note}”`);
-    if (this.screenshot) bits.push('📷 screenshot');
+    if (this.screenshot) bits.push(this.strings.summaryScreenshot);
     return bits.join(' · ');
   }
 
   private async send(): Promise<void> {
     if (this.sending) return;
     if (!this.text.trim() && this.selections.length === 0) {
-      this.setStatus('Add a note or select an element first.', true);
+      this.setStatus(this.strings.emptyDraft, true);
       return;
     }
     this.sending = true;
     const btn = this.q<HTMLButtonElement>('[data-action=send]');
     btn.disabled = true;
-    this.setStatus('Sending…');
+    this.setStatus(this.strings.sendingStatus);
     try {
       // Crops and the base screenshot may still be rendering if the user sent quickly.
       await this.base;
@@ -750,13 +759,13 @@ class Widget implements WidgetHandle {
         this.opts.onSent?.(payload);
         this.reset();
         this.close();
-        this.toast('Feedback sent. Thank you!');
+        this.toast(this.strings.sent);
       } else {
-        this.setStatus('Cancelled by beforeSend.', true);
+        this.setStatus(this.strings.cancelled, true);
         this.open();
       }
     } catch (err) {
-      this.setStatus(err instanceof Error ? err.message : String(err), true);
+      this.setStatus(this.strings.sendFailed(err instanceof Error ? err.message : String(err)), true);
       this.opts.onError?.(err);
       this.open(); // surface the error with the draft intact
     } finally {
@@ -790,16 +799,16 @@ class Widget implements WidgetHandle {
         const chain = s.components.length
           ? s.components.map(esc).join('<span class="sep">‹</span>')
           : `<span style="color:var(--lb-muted)">&lt;${esc(s.tag)}&gt;</span>`;
-        const kind = s.kind === 'region' ? `<span class="lb-kind">area · ${s.region?.children.length ?? 0} elements</span>` : '';
+        const kind = s.kind === 'region' ? `<span class="lb-kind">${esc(this.strings.area)} · ${esc(this.strings.elementCount(s.region?.children.length ?? 0))}</span>` : '';
         const source = s.source ? `<span class="lb-source">${esc(fmtSource(s.source))}</span>` : '';
         const children = s.kind === 'region' && s.region
           ? `<div class="lb-children">${s.region.children.slice(0, 8).map((c) => `<span class="lb-chip" title="${esc(c.selector)}">${esc(c.components[0] ?? c.tag)}${c.text ? ` “${esc(c.text.slice(0, 20))}”` : ''}</span>`).join('')}${s.region.children.length > 8 ? `<span class="lb-chip">+${s.region.children.length - 8}</span>` : ''}</div>`
           : '';
-        const note = s.note ? `<div class="lb-note">💬 ${esc(s.note)}</div>` : `<div class="lb-note empty">No comment</div>`;
+        const note = s.note ? `<div class="lb-note">💬 ${esc(s.note)}</div>` : `<div class="lb-note empty">${esc(this.strings.noComment)}</div>`;
         const crop = this.crops.get(s.id);
-        const thumb = crop ? `<img class="lb-thumb" src="${crop.url}" alt="Crop of selection ${i + 1}">` : '';
+        const thumb = crop ? `<img class="lb-thumb" src="${crop.url}" alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
         return `<div class="lb-sel" data-id="${s.id}">
-  <div class="lb-sel-head"><span class="lb-badge${s.kind === 'region' ? ' region' : ''}">${i + 1}</span><span class="lb-chain" title="${esc(s.components.join(' < '))}">${chain} ${kind}</span><button class="lb-icon" type="button" data-action="sel-edit" aria-label="Edit comment" title="Edit comment">✎</button><button class="lb-icon" type="button" data-action="sel-remove" aria-label="Remove">✕</button></div>
+  <div class="lb-sel-head"><span class="lb-badge${s.kind === 'region' ? ' region' : ''}">${i + 1}</span><span class="lb-chain" title="${esc(s.components.join(' < '))}">${chain} ${kind}</span><button class="lb-icon" type="button" data-action="sel-edit" aria-label="${esc(this.strings.editComment)}" title="${esc(this.strings.editComment)}">✎</button><button class="lb-icon" type="button" data-action="sel-remove" aria-label="${esc(this.strings.removeSelection)}">✕</button></div>
   <code class="lb-selector">${esc(s.selector)}</code>
   ${source}
   ${s.kind === 'element' && s.text ? `<div class="lb-text">“${esc(s.text.slice(0, 80))}”</div>` : ''}
@@ -815,7 +824,7 @@ class Widget implements WidgetHandle {
   private refreshReview(): void {
     const st = this.client.stats();
     this.q('[data-ref=counts]').textContent =
-      `${st.errors} errors · ${st.network} requests · ${st.console} logs · ${st.breadcrumbs} crumbs`;
+      this.strings.reviewCounts(st);
     const details = this.q<HTMLDetailsElement>('[data-ref=review]');
     if (!details.open) return;
     const payload = this.client.buildPayload(this.draft());

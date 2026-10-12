@@ -22,3 +22,11 @@ For script tags, serve `dist/lightback.iife.js` and call `Lightback.createLightb
 Supports evergreen browsers from the last two years, Safari 15.4+, and Node 18+ for imports. Built to ES2020.
 
 [Full documentation and examples](https://github.com/aleandros/lightback#readme). MIT licensed.
+
+## Customization
+
+Pass `strings: Partial<WidgetStrings>` to translate labels and status messages; omitted entries use exported `defaultStrings`. Dynamic counts are functions. `strings.pillOpen` takes precedence over the legacy `triggerLabel`.
+
+Use `theme: 'light' | 'dark' | 'auto'` (default `auto`), `hideTrigger: true` with your own `handle.open()` / `handle.startPicking()` buttons, and CSS `::part(pill)`, `::part(panel)`, `::part(popover)`, `::part(pending)` when the `--lb-*` variables are insufficient. Options are read at mount time.
+
+See the [guides](https://github.com/aleandros/lightback/tree/main/docs/guide) for examples and the payload reference.

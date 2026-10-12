@@ -57,3 +57,11 @@ ESM and CommonJS export conditions each point to their matching declaration form
 ## 14. Release only after the same checks used for pull requests
 
 The release workflow reuses the complete CI workflow before Changesets can publish. This duplicates CI on main, but ensures that browser and packed-package failures block a release. Changesets uses independent versions and public access. Lightback peer ranges cover the compatible 0.0.x and 0.1.x API; only out-of-range peer changes promote dependents to a major version. Initial npm creation and OIDC configuration must be completed before automated uploads can succeed.
+
+## 15. Public guides in VitePress, generated reference tables
+
+The private `docs` workspace keeps site dependencies out of the SDK. VitePress serves the existing Markdown with `/lightback/` as its project-page base. Internal architecture, decisions, roadmap and handoff stay in GitHub; they are excluded from the site. A small TypeScript AST script generates payload and UI-string reference tables from the source, avoiding a second API inventory or a full TypeDoc toolchain. See the [VitePress deployment guide](https://vitepress.dev/guide/deploy#github-pages).
+
+## 16. Translation functions and mount-time customization
+
+Every UI label and status has an English default in `strings.ts`; number-dependent messages are functions so the host owns plural rules. Host-supplied text is escaped at HTML boundaries. `strings.pillOpen` overrides `triggerLabel`; existing integrations keep working. Options are read at mount time. CSS variables remain the primary style contract, four surface parts allow larger changes, and explicit themes override system preference while `auto` keeps responding to it.

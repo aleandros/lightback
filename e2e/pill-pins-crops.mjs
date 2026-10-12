@@ -1,6 +1,7 @@
 // Pill direct actions, pin removal, Cancel keeps draft, auto screenshot and per-selection crops.
 import { launch, W, BASE_URL } from './lib.mjs';
 import fs from 'node:fs';
+import { checkCustomization } from './helpers/customization.mjs';
 
 const { page, OUT, assert, received, reset, finish } = await launch('pill-pins-crops');
 const pinCount = () => page.locator(W + '.lb-pin').count();
@@ -107,4 +108,5 @@ await page.waitForSelector('.inbox-list li.active');
 await page.waitForSelector('img.crop');
 await page.screenshot({ path: OUT + '4-inbox.png', fullPage: true });
 
+await checkCustomization(page, assert, BASE_URL);
 await finish();

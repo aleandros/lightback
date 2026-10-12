@@ -2,6 +2,7 @@ packages:
   - packages/*
   - examples/*
   - e2e
+  - docs
 
 onlyBuiltDependencies:
   - esbuild

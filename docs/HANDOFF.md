@@ -44,7 +44,7 @@ Local validation on 2026-10-12:
 - `actionlint` passed both workflows; `git diff --check` passed.
 - A Changesets version dry run in a temporary copy produced `0.1.0` for all three packages. Release PR #1 subsequently applied those versions and was merged; the initial changeset has been consumed. `pnpm version-packages` updates future versions and the lockfile.
 
-The next repository work is Track B, with Track C alongside it. The next package release will verify the remaining OIDC upload path.
+Tracks B/C repository implementation is now ready for review (see their progress records below). The next widget release will verify the remaining OIDC upload path.
 
 ### A1. Compatibility fixes (code changes, do first)
 
@@ -88,7 +88,7 @@ Publication record — 2026-10-12:
 - Created the three initial package tags and [GitHub release records](https://github.com/aleandros/lightback/releases) at the merged version commit. Future release records are handled by Changesets.
 - The initial upload was local, so it has no GitHub OIDC provenance. The successful post-merge release job does not prove an OIDC upload because `0.1.0` already exists. Verify that path on the next substantive release; do not republish `0.1.0`.
 
-Next repository work: Tracks B/C can proceed. Include a Changeset for the next package change, merge its Version Packages PR after CI, and verify npm publication, provenance and GitHub release creation.
+Next release work: the B/C implementation includes a widget patch Changeset. After review and merge, merge its Version Packages PR after CI and verify npm publication, provenance and GitHub release creation.
 
 The default `GITHUB_TOKEN` does not trigger new workflow runs when the bot opens its Version Packages PR. If branch protection requires checks on that PR, trigger CI manually on the version branch (CI supports `workflow_dispatch`) or configure a GitHub App token for the bot. Release still reruns every gate on main before publishing.
 
@@ -100,6 +100,22 @@ Done when: merging a Version Packages PR publishes to npm with provenance, with 
 
 Goal: a public page that shows the product in motion and hosts the guides from `docs/guide/`.
 
+### Progress — 2026-10-12
+
+Repository implementation is complete and locally validated; the public deployment is still pending.
+
+- [x] Private `docs` workspace using VitePress 1.6, `/lightback/` base, guide sidebar, local search, edit links and responsive landing page with existing screenshots.
+- [x] Internal architecture, decisions, roadmap and handoff excluded from the public build. The guides and generated references are public.
+- [x] Pages workflow on main/manual dispatch, plus docs build and generated-reference freshness checks in reusable CI.
+- [x] README live npm badge added; it renders `v0.1.0` and targets the correct widget package URL. Opening npm in automated Chrome reached an HTTP 403 challenge, so visual verification of the package page remains pending.
+- [x] All seven public pages, internal links, images and local search checked in production preview; desktop/mobile screenshots reviewed.
+- [ ] Activate repository Pages with GitHub Actions as its source, merge the implementation, and verify the public URL and subsequent automatic deployment. The Pages API returned 404 during the read-only check; no settings were changed.
+- [ ] Recheck the npm badge destination in a browser that can pass npm's challenge.
+
+Media currently uses the committed screenshots. Video clips and the optional static playground demo remain enhancements after the initial docs site ships.
+
+Local preview: `pnpm --filter docs dev`, or `pnpm --filter docs build` followed by `pnpm --filter docs preview` at `http://localhost:4173/lightback/`. Restart the preview server after rebuilding: its static asset index otherwise retains the previous hashed filenames.
+
 ### B1. Tooling decision
 
 Use **VitePress** with `docs/` as its root. Reasons: the repo is already Vite; Markdown in `docs/guide/` becomes pages without conversion; it supports a custom landing page via the `home` layout; it builds to static files GitHub Pages can serve. Install it in a new `docs/package.json` (workspace member `docs`) so its dependencies stay out of the packages.
@@ -108,7 +124,7 @@ Config lives in `docs/.vitepress/config.ts`. Set `base: '/lightback/'` (required
 
 ### B2. Landing page
 
-- [ ] Add an npm version badge near the top of the root `README.md` as part of the website/documentation work. Use a live badge for `@lightback/widget`, link it to `https://www.npmjs.com/package/@lightback/widget`, and verify that the badge renders and its link opens the package page.
+- [x] Add an npm version badge near the top of root `README.md`, using the live `@lightback/widget` badge linked to `https://www.npmjs.com/package/@lightback/widget`. Badge rendering verified; npm page verification is tracked above.
 
 `docs/index.md` with the `home` layout: tagline, three feature cards (point at anything, context a model can use, your backend), install snippet, and the hero image. Below the fold, a short gallery: pick → comment → sending → inbox.
 
@@ -128,25 +144,35 @@ Done when: the URL serves the landing page with media and the guides, and a docs
 
 Goal: someone who has never seen the repo can install Lightback, make it look like their app, point it at their own backend, and translate it.
 
-The pages exist as drafts in `docs/guide/`. They are written against the current code and clearly mark what is **Planned**, meaning the API is proposed but not implemented. Track C is both finishing the prose and implementing the small APIs the prose depends on.
+The guides now describe the implemented code, with release-availability notices for widget additions that are not in npm `0.1.0`. No **Planned** markers remain in the guides.
 
-### C1. Implement the APIs the docs promise
+### Progress — 2026-10-12
 
-1. **`strings` option** on `WidgetOptions`: a partial table of every user-visible string, merged over an exported `defaultStrings`. Replace every hard-coded string in the widget template and class with lookups. Dynamic strings take parameters (`countSelected(n)`, `doneWithCount(n)`). This is the whole i18n story; locale detection stays with the host app. See `docs/guide/texts-and-i18n.md` for the proposed key list.
-2. **`theme` option**: `'light' | 'dark' | 'auto'` (default `auto`, which is the current `prefers-color-scheme` behaviour). Implemented as `data-theme` on the host and a CSS selector alongside the existing media query.
-3. **`::part` names** on the pill, panel, popover and pending card so hosts can restyle beyond the CSS variables. Keep the variable list as the primary API; parts are the escape hatch.
-4. **`hideTrigger` option** (or `trigger: false`) so apps with their own button use `handle.open()` / `handle.startPicking()` only. The handle already exists; this just hides the pill.
-5. **`beforeSend` in the widget docs** is already in core; make sure the guide shows the veto and the mutate case.
+- [x] All widget UI labels, accessibility text, dynamic counts and status messages use `strings`, merged over exported `defaultStrings`. Translations are escaped at HTML boundaries. `strings.pillOpen` overrides the legacy `triggerLabel`; script-tag users also get `Lightback.defaultStrings`.
+- [x] `theme: 'light' | 'dark' | 'auto'`, `hideTrigger` through close/cancel/discard/send, and `pill`/`panel`/`popover`/`pending` CSS parts.
+- [x] Guide examples corrected: screenshot dependency install, actual system-font behavior, beforeSend veto and mutation, auth/multipart details, and provider-neutral model forwarding.
+- [x] Payload and full string references generated by `scripts/generate-reference.mjs` from TypeScript source; the docs build regenerates them and CI rejects drift.
+- [x] README, package README, architecture and decisions updated. `.changeset/quiet-lights-translate.md` requests a compatible widget patch; core and payload version stay unchanged.
+- [x] Local checks: package build, typecheck, 19 unit tests, all four system-Chrome suites (including new customization checks), docs build, packed-consumer/strict declaration checks, and `git diff --check` passed. The focused `BROWSER=webkit pnpm e2e pill-pins-crops` run also passed, including forced/automatic themes, translated counts and status, hidden-trigger cancellation, and CSS-part styling.
+- [ ] Publish the widget release, verify OIDC provenance (Track A), and replace the guides' release-availability notices with the released version. Serve the guides publicly through Track B.
+
+### C1. Implemented APIs (original checklist)
+
+1. [x] **`strings` option** on `WidgetOptions`: a partial table of every user-visible string, merged over an exported `defaultStrings`. Replace every hard-coded string in the widget template and class with lookups. Dynamic strings take parameters (`countSelected(n)`, `done(n)`). This is the whole i18n story; locale detection stays with the host app. See `docs/guide/texts-and-i18n.md` for the generated key list.
+2. [x] **`theme` option**: `'light' | 'dark' | 'auto'` (default `auto`, which is the current `prefers-color-scheme` behaviour). Implemented as `data-theme` on the host and a CSS selector alongside the existing media query.
+3. [x] **`::part` names** on the pill, panel, popover and pending card so hosts can restyle beyond the CSS variables. Keep the variable list as the primary API; parts are the escape hatch.
+4. [x] **`hideTrigger` option** (or `trigger: false`) so apps with their own button use `handle.open()` / `handle.startPicking()` only. The handle already exists; this just hides the pill.
+5. [x] **`beforeSend` in the widget docs** is already in core; make sure the guide shows the veto and the mutate case.
 
 Each one is small. Add a unit or e2e assertion per option.
 
-### C2. Finish the pages
+### C2. Finished pages
 
-- `docs/guide/getting-started.md`: install, mount, first report, what arrived.
-- `docs/guide/customization.md`: options table, CSS variables, theme, position, own trigger, parts.
-- `docs/guide/backend.md`: the endpoint contract, a Node handler, custom `send`, `beforeSend`, auth, storing attachments, forwarding to a model with `toPromptContext`.
-- `docs/guide/texts-and-i18n.md`: `strings`, the key list, a Spanish example, RTL note.
-- `docs/guide/payload.md`: field-by-field reference generated from `types.ts`. Consider `typedoc` with the markdown plugin to avoid hand-maintaining it.
+- [x] `docs/guide/getting-started.md`: install, mount, first report, what arrived.
+- [x] `docs/guide/customization.md`: options table, CSS variables, theme, position, own trigger, parts.
+- [x] `docs/guide/backend.md`: the endpoint contract, a Node handler, custom `send`, `beforeSend`, auth, storing attachments, forwarding to a model with `toPromptContext`.
+- [x] `docs/guide/texts-and-i18n.md`: `strings`, the key list, a Spanish example, RTL note.
+- [x] `docs/guide/payload.md`: field-by-field reference generated from `types.ts`. Generated with the TypeScript parser; `strings-reference.md` is generated alongside it.
 
 Done when: every **Planned** marker in `docs/guide/` is gone because the feature shipped, and the pages render on the website.
 

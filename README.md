@@ -1,5 +1,7 @@
 # Lightback
 
+[![npm version](https://img.shields.io/npm/v/@lightback/widget)](https://www.npmjs.com/package/@lightback/widget)
+
 ![Lightback: click an element, the comment box opens right there](docs/assets/hero.png)
 
 Framework-agnostic in-app feedback capture. Users pick the elements they are talking about, write a note, optionally attach a screenshot, and submit. The payload carries the context a developer or a model needs: component chain for each selected element, console output, errors, network requests, breadcrumbs, environment and whatever app context you attach. Nothing leaves the browser until the user sends; sending shows a cancel window, and the full preview is one click away.
@@ -15,6 +17,18 @@ Framework-agnostic in-app feedback capture. Users pick the elements they are tal
 | `e2e` | Playwright suites for Chromium, Firefox and WebKit. |
 
 ## Quick start
+
+```sh
+pnpm add @lightback/core @lightback/widget
+# Optional screenshots:
+pnpm add modern-screenshot
+```
+
+[Getting started](docs/guide/getting-started.md) walks through mounting the widget and receiving your first report. React apps can also add `@lightback/react`.
+
+## Try the playground
+
+From a clone of this repository:
 
 ```bash
 pnpm install
@@ -46,7 +60,7 @@ For a script-tag install, build and serve `packages/widget/dist/lightback.iife.j
 </script>
 ```
 
-The standalone script includes core and exposes `window.Lightback`. All three packages are available on npm at `0.1.0`. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.1.0/dist/lightback.iife.js` in the script tag above.
+The standalone script includes core and exposes `window.Lightback`. The next widget release also exposes `Lightback.defaultStrings` for script-tag translations. All three packages are available on npm at `0.1.0`. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.1.0/dist/lightback.iife.js` in the script tag above.
 
 ## Validation and releases
 
@@ -71,12 +85,15 @@ Regenerate these with `pnpm screenshots` while `pnpm dev` is running.
 
 ## Documentation
 
-User guides, drafted and partly ahead of the code (sections marked **Planned**):
+User guides (the customization additions are implemented in the source tree and will ship in the next widget release):
 
 - `docs/guide/getting-started.md`: install, mount, first report.
 - `docs/guide/customization.md`: options, CSS variables, theme, your own trigger, screenshot capturers.
 - `docs/guide/backend.md`: wire contract, a receiver in Node, custom `send`, `beforeSend`, triage with a model.
-- `docs/guide/texts-and-i18n.md`: the `strings` option and every label.
+- [Texts and i18n](docs/guide/texts-and-i18n.md): the `strings` option and every label.
+- [Payload reference](docs/guide/payload.md): generated from the public TypeScript types.
+
+Preview the website with `pnpm --filter docs dev`, or build and preview the production site with `pnpm --filter docs build` and `pnpm --filter docs preview`. The Pages workflow deploys `/lightback/` when changes land on main; repository Pages source must be set to GitHub Actions.
 
 For contributors and agents:
 
@@ -117,6 +134,19 @@ React:
 </LightbackProvider>
 ```
 
+## Customize and translate
+
+```ts
+mountWidget({
+  client: lightback,
+  theme: 'auto', // or 'light' / 'dark'
+  hideTrigger: false, // true when your app uses handle.open() / handle.startPicking()
+  strings: { send: 'Enviar', countSelected: (n) => `${n} seleccionados` },
+});
+```
+
+`strings` merges over exported `defaultStrings`; its functions let your app control plural rules. `strings.pillOpen` wins over the legacy `triggerLabel`. CSS variables remain the primary styling API, with `::part(pill)`, `::part(panel)`, `::part(popover)` and `::part(pending)` for larger changes. These additions are in the source tree for the next widget release; npm `0.1.0` does not include them yet.
+
 ## Payload
 
 The transport sends `application/json` when there are no attachments and `multipart/form-data` otherwise. In multipart, the `payload` field holds the JSON and each attachment is a file field named by its `name` (for example `screenshot.png`).
@@ -147,7 +177,7 @@ The floating pill offers the two entry points directly: **Point at something** s
 
 Pick mode has two gestures:
 
-- **Click an element.** A comment box opens right next to it, focused, with the component name as its title. Enter saves, Esc skips, clicking elsewhere saves and continues picking. A numbered pin stays on the element while the draft exists.
+- **Click an element.** A comment box opens right next to it, focused, with the component name as its title. Enter queues the send, Esc skips, clicking elsewhere saves and continues picking. A numbered pin stays on the element while the draft exists.
 - **Drag a rectangle.** The widget samples the browser's own hit testing on a grid inside the rectangle, so only elements that are actually visible and on top count. If a modal is open, the dragged area resolves to the modal, never to what sits behind its backdrop. The selection records the container (lowest common ancestor of what was hit, with surfaces the drag spilled onto discarded) and the largest visible elements fully inside the rectangle.
 
 Every selection has a numbered pin on the page with a remove button on hover. The top bar shows the count with **Cancel** (leave pick mode, keep the draft) and **Done** (open the panel). The comment box has **Remove**, **Add more** (save and keep pointing) and **Send**; Enter sends.
@@ -169,7 +199,7 @@ Default rules replace `authorization`, `cookie` and similar headers, common secr
 ## Roadmap
 
 - v0 (this): collectors, element and area picker with inline comments, source location and props, automatic screenshot and crops, optimistic send, transport, React wrapper, playground, browser suites.
-- Track A: compatibility fixes, standalone IIFE, CI and Changesets release workflow implemented; `0.1.0` published and trusted publishers configured; verification of the next automated upload remains. Website and customization/i18n APIs follow in Tracks B/C.
+- Track A: compatibility fixes, standalone IIFE, CI and Changesets release workflow implemented; `0.1.0` published and trusted publishers configured; verification of the next automated upload remains. Tracks B/C add a VitePress site, complete guides, and customization/i18n APIs; public deployment and the widget release remain to be verified.
 - v1: correlation and ranking in the prompt, a reference AI triage handler and payload JSON Schema, a Vite plugin that stamps `data-source` in production, screenshot annotations with blur, draft and buffer persistence, lazy widget.
 - v2: voice notes with a pluggable transcriber, video capture via `getDisplayMedia`, optional rrweb plugin with a rolling replay window, Vue and Svelte wrappers.
 

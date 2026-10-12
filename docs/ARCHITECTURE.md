@@ -56,6 +56,8 @@ interface ElementSelection {
 
 A `<lightback-widget>` host with a Shadow DOM. It is created directly without registering a custom-element class, so repeated mounts do not collide in the registry. `index.ts` holds the HTML template, the `Widget` class and all behaviour; `styles.ts` holds the CSS.
 
+`WidgetOptions` accepts a partial `strings` table merged over `defaultStrings` (`strings.ts`), a forced light/dark or automatic theme via `data-theme`, and `hideTrigger`. Translation text is escaped wherever inserted into HTML. `triggerLabel` remains an alias; `strings.pillOpen` wins. The pill, panel, popover and pending surfaces expose matching CSS parts. Options are read at mount time.
+
 ### Surfaces
 
 | Surface | Class | Purpose |
@@ -106,7 +108,7 @@ Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the
 | --- | --- |
 | `smoke.mjs` | Noise generation, panel flow, full payload assertions (redaction, bodies, breadcrumbs, context), inbox overlays. |
 | `region-source-props.mjs` | Inline popover, drag over a modal resolving to the modal, source location and props in payload and inbox. |
-| `pill-pins-crops.mjs` | Pill actions, removing via popover and pin, Cancel keeps draft, auto screenshot and crops. |
+| `pill-pins-crops.mjs` | Pill actions, removing via popover and pin, Cancel keeps draft, auto screenshot and crops; `helpers/customization.mjs` checks translations, themes, hidden trigger and CSS parts. |
 | `send-flow.mjs` | Popover Send and Enter, pending card Cancel/Edit, Add more, auto-send after delay with crops, Discard. |
 
 ## Invariants worth protecting
@@ -118,6 +120,10 @@ Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the
 
 ## Distribution and CI
 
-All module builds target ES2020, with separate `.d.ts` (ESM) and `.d.cts` (CommonJS) export conditions. The widget adds `lightback.iife.js`, bundling core and exposing `window.Lightback = { createLightback, mountWidget }`. Each tarball includes its own README and MIT license.
+All module builds target ES2020, with separate `.d.ts` (ESM) and `.d.cts` (CommonJS) export conditions. The widget adds `lightback.iife.js`, bundling core and exposing `window.Lightback = { createLightback, mountWidget, defaultStrings }`. Each tarball includes its own README and MIT license.
 
 `.github/workflows/ci.yml` validates build, types, tests, packed consumers and strict Are the Types Wrong checks, plus a Chromium/Firefox/WebKit matrix. It is reusable so `release.yml` requires the same gates before running Changesets. Publishing uses npm 11 through pnpm, OIDC and provenance. The initial `0.1.0` packages were published locally on 2026-10-12. Each package trusts `aleandros/lightback` / `release.yml` for future uploads; the first actual OIDC upload is still to be verified. Payload version stays 1.
+
+## Documentation site
+
+`docs` is a private VitePress workspace, with base `/lightback/`. The home page and `docs/guide/` are public; internal planning files are excluded. `scripts/generate-reference.mjs` uses the TypeScript parser to regenerate payload and string reference tables during the docs build. CI builds the site and rejects stale generated tables. `.github/workflows/pages.yml` builds and deploys the site on main, after Pages is configured to use Actions. Build output and VitePress cache are ignored.

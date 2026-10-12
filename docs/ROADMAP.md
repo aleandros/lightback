@@ -20,11 +20,13 @@ Status as of 2026-10-12. Items are ordered by agreed priority within each tier. 
 
 - Published `@lightback/core`, `@lightback/widget` and `@lightback/react` at `0.1.0`; configured trusted publishing for all three and merged release PR #1.
 
+- Tracks B/C repository implementation (2026-10-12): VitePress site, complete user guides, generated payload/string references, translations, theme, hidden trigger and CSS parts. Local validation complete; deployment and widget publication remain below.
+
 ## In flight (see `docs/HANDOFF.md` for steps)
 
 - Track A: verify the first actual OIDC upload on the next Version Packages PR. The `0.1.0` bootstrap is published, trusted publishers are configured, and GitHub CI/Release checks pass.
-- Track B: website at https://aleandros.github.io/lightback with screenshots, clips and the guides (VitePress on `docs/`).
-- Track C: user guides in `docs/guide/` plus the small widget APIs they promise (`strings`, `theme`, `hideTrigger`, `::part`).
+- Track B: activate GitHub Pages, merge and verify the VitePress site at https://aleandros.github.io/lightback/. Landing page, screenshots, guides and workflow are implemented. Clips/static demo can follow.
+- Track C: publish the implemented widget customization APIs and remove release-availability notices, then verify the guides publicly. The widget patch Changeset also supplies Track A’s first substantive OIDC upload.
 
 ## Next (agreed, not started)
 
