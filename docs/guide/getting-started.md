@@ -10,7 +10,7 @@ pnpm add @lightback/core @lightback/widget
 pnpm add @lightback/react
 ```
 
-Packages are ESM and CommonJS, with matching TypeScript types. Initial npm publication is pending; contributors can build from this repository in the meantime. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
+Packages are ESM and CommonJS, with matching TypeScript types. Version `0.1.0` is published on npm for all three packages. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
 
 ## Mount it
 

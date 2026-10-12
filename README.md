@@ -46,7 +46,7 @@ For a script-tag install, build and serve `packages/widget/dist/lightback.iife.j
 </script>
 ```
 
-The standalone script includes core and exposes `window.Lightback`. The package's `unpkg` and `jsdelivr` fields point to it for use after npm publication. First publication is still pending; see [the handoff](docs/HANDOFF.md#track-a-compatibility-ci-npm-publishing).
+The standalone script includes core and exposes `window.Lightback`. All three packages are available on npm at `0.1.0`. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.1.0/dist/lightback.iife.js` in the script tag above.
 
 ## Validation and releases
 
@@ -59,7 +59,7 @@ pnpm --filter e2e exec playwright-core install chromium firefox webkit
 BROWSER=webkit pnpm e2e # also chromium or firefox
 ```
 
-CI runs all three engines. Screenshot regeneration remains the separate `pnpm screenshots` command. Run `pnpm changeset` for package changes; the release workflow runs the CI gates, opens a Version Packages PR, and publishes merged versions with provenance after the npm bootstrap in the handoff. No npm token is stored in GitHub.
+CI runs all three engines. Screenshot regeneration remains the separate `pnpm screenshots` command. Run `pnpm changeset` for package changes; the release workflow runs the CI gates, opens a Version Packages PR, and is configured to publish subsequent merged versions with provenance through npm trusted publishing. The initial `0.1.0` release was published locally; the first automated upload remains to be verified. No npm token is stored in GitHub.
 
 ## In action
 
@@ -169,7 +169,7 @@ Default rules replace `authorization`, `cookie` and similar headers, common secr
 ## Roadmap
 
 - v0 (this): collectors, element and area picker with inline comments, source location and props, automatic screenshot and crops, optimistic send, transport, React wrapper, playground, browser suites.
-- Track A: compatibility fixes, standalone IIFE, CI and Changesets release workflow implemented; first npm publication and trusted-publisher setup pending. Website and customization/i18n APIs follow in Tracks B/C.
+- Track A: compatibility fixes, standalone IIFE, CI and Changesets release workflow implemented; `0.1.0` published and trusted publishers configured; verification of the next automated upload remains. Website and customization/i18n APIs follow in Tracks B/C.
 - v1: correlation and ranking in the prompt, a reference AI triage handler and payload JSON Schema, a Vite plugin that stamps `data-source` in production, screenshot annotations with blur, draft and buffer persistence, lazy widget.
 - v2: voice notes with a pluggable transcriber, video capture via `getDisplayMedia`, optional rrweb plugin with a rolling replay window, Vue and Svelte wrappers.
 

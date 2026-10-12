@@ -16,11 +16,13 @@ Status as of 2026-10-12. Items are ordered by agreed priority within each tier. 
 
 ## Done (2026-10-12)
 
-- Track A repository implementation: UUID/screenshot fallbacks, SSR-safe creation, repeated-mount coverage, ES2020 and standalone IIFE, proper ESM/CommonJS types. CI and Changesets release workflows are written; external release setup remains in flight. See `docs/HANDOFF.md`.
+- Track A repository implementation: UUID/screenshot fallbacks, SSR-safe creation, repeated-mount coverage, ES2020 and standalone IIFE, proper ESM/CommonJS types. CI and Changesets release workflows are implemented and passing. See `docs/HANDOFF.md`.
+
+- Published `@lightback/core`, `@lightback/widget` and `@lightback/react` at `0.1.0`; configured trusted publishing for all three and merged release PR #1.
 
 ## In flight (see `docs/HANDOFF.md` for steps)
 
-- Track A: verify GitHub workflows, confirm npm scope ownership, bootstrap packages and configure trusted publishers; prove the first automated release.
+- Track A: verify the first actual OIDC upload on the next Version Packages PR. The `0.1.0` bootstrap is published, trusted publishers are configured, and GitHub CI/Release checks pass.
 - Track B: website at https://aleandros.github.io/lightback with screenshots, clips and the guides (VitePress on `docs/`).
 - Track C: user guides in `docs/guide/` plus the small widget APIs they promise (`strings`, `theme`, `hideTrigger`, `::part`).
 
@@ -47,4 +49,4 @@ Status as of 2026-10-12. Items are ordered by agreed priority within each tier. 
 License is settled: the SDK packages are MIT (see `docs/DECISIONS.md` #12). A hosted backend, if built, is a separate codebase under its own terms.
 
 - Public API freeze point for `FeedbackPayload` v1. Decide before publishing to npm.
-- npm scope: `@lightback/*` is the working name; confirm availability before the first publish.
+- npm scope is settled: `@lightback/*`, owned by the `lightback` organization. Initial `0.1.0` packages published on 2026-10-12.

@@ -12,14 +12,15 @@ Goal: `@lightback/core`, `@lightback/widget` and `@lightback/react` publish to n
 
 ### Progress — 2026-10-12
 
-A1 and the repository work for A2/A3 are implemented. The first published release is still pending; Track A is not yet complete end-to-end.
+A1/A2 are implemented and verified. All three `0.1.0` packages are published and their trusted publishers are configured. Track A remains open only for proving an actual OIDC upload on the next package release.
 
 - [x] UUID fallbacks, SSR guards, image/canvas screenshot fallback, repeated-mount regression coverage.
 - [x] ES2020 module builds and standalone `dist/lightback.iife.js` exposing `window.Lightback`.
 - [x] Separate ESM/CommonJS declaration exports and package README/LICENSE files.
 - [x] CI workflow with four suites per browser engine, packed-consumer smoke checks and strict type resolution (no ignored rules).
 - [x] Changesets config, initial 0.1.0 changeset, and release workflow gated on reusable CI, with OIDC/provenance and GitHub releases.
-- [ ] Confirm npm scope ownership, bootstrap the three packages, configure trusted publishers, and prove an automated release.
+- [x] Confirmed organization ownership, published all three `0.1.0` packages, and configured trusted publishers for `aleandros/lightback` / `release.yml`.
+- [ ] Prove an actual OIDC upload and provenance on the next package release.
 - [x] Verified GitHub CI and Release on `main` (2026-10-12). All package and browser checks passed; Release succeeded on its second attempt after enabling Actions PR creation in repository settings.
 
 Implementation corrections to the original plan:
@@ -31,7 +32,7 @@ Implementation corrections to the original plan:
 - Release CI installs npm 11 explicitly (OIDC requires npm >=11.5.1 and Node >=22.14). pnpm 10.18 delegates publication of its rewritten tarball to npm. Provenance is enabled with `NPM_CONFIG_PROVENANCE=true`.
 - Internal peer ranges cover compatible 0.0.x and 0.1.x APIs. Changesets only promotes peers when a release leaves the range, avoiding accidental 1.0.0 wrapper releases during bootstrap.
 
-GitHub validation on 2026-10-12: [CI passed](https://github.com/aleandros/lightback/actions/runs/38265463883). The first [Release run](https://github.com/aleandros/lightback/actions/runs/38265464388) passed every check but failed to open its Version Packages PR with `GitHub Actions is not permitted to create or approve pull requests`. Enabled the repository's Actions PR-creation setting (`can_approve_pull_request_reviews=true`), preserving default workflow permissions as `read`. Rerunning the failed release job succeeded and created the release PR. npm bootstrap and trusted publishing remain outstanding.
+GitHub validation on 2026-10-12: [CI passed](https://github.com/aleandros/lightback/actions/runs/38265463883). The first [Release run](https://github.com/aleandros/lightback/actions/runs/38265464388) passed every check but failed to open its Version Packages PR with `GitHub Actions is not permitted to create or approve pull requests`. Enabled the repository's Actions PR-creation setting (`can_approve_pull_request_reviews=true`), preserving default workflow permissions as `read`. Rerunning the failed release job succeeded and created the release PR. The npm bootstrap and trusted-publisher setup subsequently completed; see the publication record below.
 
 Local validation on 2026-10-12:
 
@@ -41,9 +42,9 @@ Local validation on 2026-10-12:
 - The crop suite forces `createImageBitmap` off, verifying real PNG attachments through the fallback decoder.
 - `pnpm check:packages` passed for all three tarballs: strict type resolution with no ignored rules, ESM/CJS imports, SSR client creation, standalone global, metadata and license/README inclusion.
 - `actionlint` passed both workflows; `git diff --check` passed.
-- A Changesets version dry run in a temporary copy produced `0.1.0` for all three packages. The checkout itself remains at `0.0.1` with the initial changeset pending; `pnpm version-packages` updates versions and the lockfile when the release PR is created.
+- A Changesets version dry run in a temporary copy produced `0.1.0` for all three packages. Release PR #1 subsequently applied those versions and was merged; the initial changeset has been consumed. `pnpm version-packages` updates future versions and the lockfile.
 
-The next repository work after Track A validation is Track B, then Track C alongside it. The account prerequisites below need not block the website work.
+The next repository work is Track B, with Track C alongside it. The next package release will verify the remaining OIDC upload path.
 
 ### A1. Compatibility fixes (code changes, do first)
 
@@ -74,16 +75,20 @@ Done when: a PR that breaks any of build, types, unit tests, e2e on any engine, 
 - [x] `pnpm add -Dw @changesets/cli`, `pnpm changeset init`. Config: `"access": "public"`, `"baseBranch": "main"`, ignore `playground` and `e2e`, `"updateInternalDependencies": "patch"`. Independent versions per package.
 - [x] Add `publishConfig: { "access": "public" }` to the three package manifests. Copy `LICENSE` into each package's `files` (npm does not inherit the repo root file). Add `README.md` per package, or a `"readme"` pointer; the root README is not published.
 - [x] `.github/workflows/release.yml` on push to `main`: install, build, then `changesets/action` with `publish: pnpm changeset publish` and `version: pnpm version-packages`. It opens the "Version Packages" PR and publishes when that PR merges. Grant `permissions: { contents: write, pull-requests: write, id-token: write }`.
-- [ ] **npm trusted publishing (OIDC).** On npmjs.com, for each package, add the GitHub repository `aleandros/lightback` and workflow file `release.yml` as a trusted publisher. No `NPM_TOKEN` secret. Provenance attestations come for free; set `NPM_CONFIG_PROVENANCE=true` to be explicit.
+- [x] **npm trusted publishing (OIDC).** On npmjs.com, for each package, add the GitHub repository `aleandros/lightback` and workflow file `release.yml` as a trusted publisher. No `NPM_TOKEN` secret. Provenance attestations come for free; set `NPM_CONFIG_PROVENANCE=true` to be explicit.
 - [x] Tag releases `@lightback/core@x.y.z` (Changesets does this) and create a GitHub Release from the changelog.
 
-Blocked on: the `@lightback` npm scope. Check availability at npmjs.com/org/lightback. If taken, pick the name before step 2 because it appears in every import and in the website. The scope page returned HTTP 403 on 2026-10-12, so availability and ownership are unverified. Trusted publishing needs each package to exist. To bootstrap:
+Publication record — 2026-10-12:
 
-1. Confirm ownership of `@lightback` and npm publish access before changing names or uploading anything.
-2. Apply the initial changeset in the Version Packages PR (`pnpm changeset version`), refresh the lockfile with `pnpm install --lockfile-only`, review that all three versions are `0.1.0`, and run the full validation commands. Changesets status currently plans three minor bumps and no major bumps.
-3. Build and use `pnpm -r --filter './packages/*' pack --pack-destination /tmp/lightback-release` (create the directory first). Publish the three tarballs in core → widget → react order using `npm publish <tarball> --access public`. Publish tarballs, not raw workspace directories: pnpm rewrites the `workspace:` dependencies while packing.
-4. Configure each package's trusted publisher: GitHub owner `aleandros`, repository `lightback`, workflow filename `release.yml`. No `NPM_TOKEN` is needed. Allow GitHub Actions to create pull requests in repository settings.
-5. Push/merge the release setup, verify CI, and exercise a subsequent Version Packages PR to prove OIDC publication and GitHub release creation. The bootstrap publish itself is manual; until it is done, automatic publication can fail.
+- npm account `alxhawk` owns the `lightback` organization; account 2FA is enabled.
+- Built and validated the exact [release PR #1](https://github.com/aleandros/lightback/pull/1) head `96954b98d62b9e1d3aabd840e22165c672f72555` in an isolated checkout. Published core → widget → react at `0.1.0` from pnpm-generated tarballs, which rewrite workspace dependencies.
+- Registry `dist.integrity` values match the validated local tarballs for all three packages. Build, typecheck, 15 unit tests, and packed-consumer checks passed for the versioned artifacts.
+- Configured each npm trusted publisher for GitHub repository `aleandros/lightback`, workflow `release.yml`, allowing publication. npm confirmed creation for all three packages after interactive 2FA. No npm token is stored in GitHub.
+- [Release-branch CI](https://github.com/aleandros/lightback/actions/runs/38274305408) passed the package job and all three browser engines. PR #1 merged as `6513c0c86adce229a5f4e5033186202b5c460452`; [CI](https://github.com/aleandros/lightback/actions/runs/38282278297) and [Release](https://github.com/aleandros/lightback/actions/runs/38282278451) both passed on that merge.
+- Created the three initial package tags and [GitHub release records](https://github.com/aleandros/lightback/releases) at the merged version commit. Future release records are handled by Changesets.
+- The initial upload was local, so it has no GitHub OIDC provenance. The successful post-merge release job does not prove an OIDC upload because `0.1.0` already exists. Verify that path on the next substantive release; do not republish `0.1.0`.
+
+Next repository work: Tracks B/C can proceed. Include a Changeset for the next package change, merge its Version Packages PR after CI, and verify npm publication, provenance and GitHub release creation.
 
 The default `GITHUB_TOKEN` does not trigger new workflow runs when the bot opens its Version Packages PR. If branch protection requires checks on that PR, trigger CI manually on the version branch (CI supports `workflow_dispatch`) or configure a GitHub App token for the bot. Release still reruns every gate on main before publishing.
 
