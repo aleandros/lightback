@@ -45,3 +45,7 @@ Most reports are a single selection plus a sentence. The popover's Send (or Ente
 ## 11. E2E as plain Playwright scripts, not a test framework
 
 The suites are Node scripts with a tiny `assert` helper, run against the dev server with the system Chrome. This keeps the dev dependency to `playwright-core` with no browser download and makes the scripts readable as step-by-step walkthroughs of the UI. Revisit if the suite count grows past a handful.
+
+## 12. MIT for the SDK, separate terms for any hosted backend
+
+The client packages are the distribution channel: they get embedded in other people's web apps, so any copyleft (GPL, AGPL) or source-available non-compete license (BUSL, FSL, Elastic) would stop adoption cold. MIT it is. The intended business is a hosted backend that receives the payload; that is a separate codebase and can stay proprietary or use a non-compete license without touching the SDK. The payload format is deliberately open (backend-agnostic was a day-one requirement), so the moat is the backend, not the wire format. MIT grants no trademark rights, so the name stays protectable.

@@ -24,7 +24,7 @@ pnpm e2e    # browser suites; needs `pnpm dev` running and a system Chrome
 
 ## Documentation
 
-- `CLAUDE.md` is the entry point for agents and new contributors: commands, definition of done, conventions that are easy to break, where to look for a given task.
+- `AGENTS.md` is the entry point for agents and new contributors: commands, definition of done, conventions that are easy to break, where to look for a given task.
 - `docs/ARCHITECTURE.md` describes every module, the payload shape, the widget's surfaces and the send flow.
 - `docs/DECISIONS.md` records why things are shaped the way they are.
 - `docs/ROADMAP.md` lists what is done, what is agreed next, and open questions.

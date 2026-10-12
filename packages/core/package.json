@@ -2,6 +2,7 @@
   "name": "@lightback/core",
   "version": "0.0.1",
   "description": "Framework-agnostic feedback capture: console, errors, network, breadcrumbs, element inspection, payload building and transport.",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -14,10 +15,17 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aleandros/lightback.git",
+    "directory": "packages/core/package.json"
   }
 }

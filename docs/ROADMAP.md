@@ -35,6 +35,7 @@ Status as of 2026-10-11. Items are ordered by agreed priority within each tier. 
 
 ## Open questions
 
+License is settled: the SDK packages are MIT (see `docs/DECISIONS.md` #12). A hosted backend, if built, is a separate codebase under its own terms.
+
 - Public API freeze point for `FeedbackPayload` v1. Decide before publishing to npm.
-- License (none chosen yet).
 - npm scope: `@lightback/*` is the working name; confirm availability before the first publish.
