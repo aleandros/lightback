@@ -1,5 +1,11 @@
 # @lightback/widget
 
+## Unreleased
+
+### Changed
+
+- Add `mountLazyWidget()` through `@lightback/widget/lazy` and a lazy standalone script that load the editor and picker on first interaction while collectors keep running. Preserve custom triggers, strings, themes and host styling; share concurrent loads, retry failed downloads and prevent late mounting after teardown. The eager entry remains available.
+
 ## 0.1.1
 
 ### Patch Changes

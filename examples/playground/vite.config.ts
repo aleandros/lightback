@@ -94,6 +94,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       '@lightback/core': path.resolve(__dirname, '../../packages/core/src/index.ts'),
+      '@lightback/widget/lazy': path.resolve(__dirname, mode === 'demo' ? '../../packages/widget/dist/lazy.js' : '../../packages/widget/src/lazy.ts'),
       '@lightback/widget': path.resolve(__dirname, '../../packages/widget/src/index.ts'),
       '@lightback/react': path.resolve(__dirname, '../../packages/react/src/index.tsx'),
     },

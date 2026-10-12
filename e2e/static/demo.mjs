@@ -7,9 +7,11 @@ import { launch, W } from '../lib.mjs';
 
 const root = fileURLToPath(new URL('../../docs/.vitepress/dist/', import.meta.url));
 const requests = [];
+let failUI = false;
 const server = createServer(async (req, res) => {
   requests.push(req.url);
   const url = new URL(req.url, 'http://localhost');
+  if (failUI && /\/assets\/lightback-ui-.*\.js$/.test(url.pathname)) { res.writeHead(503).end(); return; }
   const relative = decodeURIComponent(url.pathname).replace(/^\/lightback\//, '');
   const file = path.resolve(root, relative + (url.pathname.endsWith('/') ? 'index.html' : ''));
   if (!file.startsWith(root)) { res.writeHead(404).end(); return; }
@@ -36,6 +38,14 @@ try {
   await page.click('[data-action=xhr-success]');
   await xhrResponse;
 
+  assert(!outbound.some((request) => /lightback-ui-.*\.js/.test(request.url())), 'production UI asset is not fetched before interaction');
+  if (!process.env.DEMO_URL) {
+    // Fail at the HTTP server: service-worker-controlled WebKit requests bypass page routing.
+    failUI = true;
+    await page.click('[data-action=demo-pick]');
+    await page.waitForFunction(() => document.querySelector('lightback-widget').shadowRoot.querySelector('[data-ref=loadStatus]')?.textContent.includes('Could not load'));
+    failUI = false;
+  }
   await page.click('[data-action=demo-pick]');
   await page.locator(W + '[data-action=cancel-pick]').waitFor();
   const card = await page.locator('[data-testid=stat-overdue]').boundingBox();

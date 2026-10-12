@@ -1,5 +1,11 @@
 # @lightback/react
 
+## Unreleased
+
+### Changed
+
+- Load the widget UI on first interaction by default. `LightbackProvider` initially mounts a lightweight trigger, and `useLightbackWidget()` exposes a lazy handle with promise-returning `open()` and `startPicking()` methods. Preserve mount-time customization, SSR safety and cleanup during loading.
+
 ## 0.1.0
 
 ### Minor Changes

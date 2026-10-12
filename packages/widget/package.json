@@ -18,6 +18,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./lazy": {
+      "import": {
+        "types": "./dist/lazy.d.ts",
+        "default": "./dist/lazy.js"
+      },
+      "require": {
+        "types": "./dist/lazy.d.cts",
+        "default": "./dist/lazy.cjs"
+      }
     }
   },
   "files": [
@@ -26,7 +36,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap --external @lightback/core --target es2020 && tsup --config tsup.iife.config.ts",
+    "build": "tsup --config tsup.config.ts && tsup --config tsup.iife.config.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
@@ -48,5 +58,12 @@
     "node": ">=18"
   },
   "unpkg": "./dist/lightback.iife.js",
-  "jsdelivr": "./dist/lightback.iife.js"
+  "jsdelivr": "./dist/lightback.iife.js",
+  "typesVersions": {
+    "*": {
+      "lazy": [
+        "./dist/lazy.d.ts"
+      ]
+    }
+  }
 }

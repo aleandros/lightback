@@ -12,7 +12,7 @@
     "changeset": "changeset",
     "check:packages": "node scripts/check-packages.mjs",
     "version-packages": "changeset version && pnpm install --lockfile-only --no-frozen-lockfile",
-    "build:site": "pnpm --filter docs build && pnpm --filter playground build:demo && node scripts/assemble-site.mjs",
+    "build:site": "pnpm build && pnpm --filter docs build && pnpm --filter playground build:demo && node scripts/assemble-site.mjs",
     "e2e:demo": "node e2e/static/demo.mjs"
   },
   "devDependencies": {

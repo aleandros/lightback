@@ -45,13 +45,13 @@ A change is done when all of these hold. Report results plainly; if something fa
 1. `pnpm build` succeeds (9 module/declaration builds plus the standalone IIFE).
 2. `pnpm typecheck` is clean.
 3. `pnpm test` passes (core and widget).
-4. `pnpm e2e` passes all four suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
+4. `pnpm e2e` passes all five suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
 5. README and the relevant `docs/*.md` describe the new behaviour. A feature that is not in README does not exist for users.
 6. New UI hooks have a `data-action` or `data-ref` attribute and the e2e suites use those, never visible text.
 
 ## Conventions that are easy to break
 
-- **Widget UI lives in `packages/widget/src/index.ts` as a template string plus a class.** Buttons dispatch through `data-action` handled in `onRootClick`. Query elements with `this.q('[data-ref=…]')`. No framework in the widget; it must stay usable from any host.
+- **Widget UI lives in `packages/widget/src/ui.ts` as a template string plus a class.** Buttons dispatch through `data-action` handled in `onRootClick`. Query elements with `this.q('[data-ref=…]')`. No framework in the widget; it must stay usable from any host.
 - **Everything the widget renders carries `data-lightback-ignore`** (the host element has it). Core's `isIgnored` and the picker's hit testing skip anything inside. Breadcrumbs and network entries from the widget's own activity must never appear in a report. The screenshot capturer's requests are suppressed with `client.mute(fn)`.
 - **Pointer handlers in pick mode call `stopPropagation` only, never `preventDefault`, on `pointerdown`/`pointerup`.** Calling `preventDefault` there suppresses the compat `mousedown`/`mouseup` events and the drag gesture dies. `click`, `dblclick`, `contextmenu`, `selectstart` are swallowed fully.
 - **Stacking inside the shadow root is explicit:** pins 1, highlight/drag 2, pickbar 3, popover 4, panel/pill/pending 5, toast 6. Keep it in one rule block in `styles.ts`. A past regex edit deleted a line from this block and pins rendered above the panel.
@@ -68,7 +68,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 | --- | --- |
 | New collector or payload field | `packages/core/src/types.ts`, `client.ts` (`buildPayload`), `prompt.ts` (render it for the model), test in `packages/core/test/core.test.ts` |
 | Element/component inspection | `packages/core/src/inspect.ts` (React fiber, Vue, `data-source`), `region.ts` for drags |
-| Widget behaviour | `packages/widget/src/index.ts`; CSS in `styles.ts` |
+| Widget behaviour | `packages/widget/src/ui.ts`; lazy lifecycle in `lazy-controller.ts`; CSS in `styles.ts` |
 | Playground scenario or mock endpoint | `examples/playground/vite.config.ts` (`mockApi`), `src/Dashboard.tsx` (ChaosPanel, ExportDialog, InvoiceTable) |
 | Inbox rendering of a new field | `examples/playground/src/Inbox.tsx` |
 | Browser test for a flow | copy the shape of `e2e/send-flow.mjs`; use `launch()` from `lib.mjs` |
@@ -77,7 +77,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 
 - Picker is mouse/pointer only; no keyboard navigation of elements.
 - No shadow-root or iframe piercing into the host app's own shadow trees.
-- Widget is loaded eagerly; no lazy-loading yet. The standalone IIFE is available.
+- Eager and lazy widget entries are available; React defaults to lazy. ESM lazy builds need URL asset support; CommonJS splitting depends on the host bundler.
 - Drafts do not survive a reload; buffers do not either.
 - React 19 `_debugStack` parsing exists but has no fixture; React 18 `_debugSource` is what the tests cover.
 - The base screenshot is captured once at pick start. Selections made after the page changes will crop a stale image.

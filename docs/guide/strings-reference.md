@@ -7,6 +7,8 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | Key | English default |
 | --- | --- |
 | <code>feedback</code> | <code>"Feedback"</code> |
+| <code>loading</code> | <code>"Loading feedback…"</code> |
+| <code>loadFailed</code> | <code>"Could not load feedback. Try again."</code> |
 | <code>pillPick</code> | <code>"⌖ Point at something"</code> |
 | <code>pillOpen</code> | <code>"✎ Write feedback"</code> |
 | <code>pillReview</code> | <code>"✎ Review & send"</code> |
