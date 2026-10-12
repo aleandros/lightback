@@ -13,6 +13,7 @@ interface NetworkConfig {
 }
 
 export function installNetwork(buffer: RingBuffer<NetworkEntry>, cfg: NetworkConfig): () => void {
+  if (typeof window === 'undefined') return () => {};
   const undoFetch = patchFetch(buffer, cfg);
   const undoXhr = patchXhr(buffer, cfg);
   return () => {

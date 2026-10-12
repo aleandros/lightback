@@ -5,7 +5,7 @@ import { formatArgs } from '../format';
 const LEVELS: Level[] = ['log', 'info', 'warn', 'error', 'debug'];
 
 export function installConsole(buffer: RingBuffer<ConsoleEntry>, maxString: number, isMuted: () => boolean = () => false): () => void {
-  if (typeof console === 'undefined') return () => {};
+  if (typeof window === 'undefined' || typeof console === 'undefined') return () => {};
   const originals: Partial<Record<Level, (...args: unknown[]) => void>> = {};
   for (const level of LEVELS) {
     const original = console[level] as (...args: unknown[]) => void;

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const dir = path.dirname(new URL(import.meta.url).pathname);
-const all = fs.readdirSync(dir).filter((f) => f.endsWith('.mjs') && !['run.mjs', 'lib.mjs'].includes(f)).sort();
+const all = fs.readdirSync(dir).filter((f) => f.endsWith('.mjs') && !['run.mjs', 'lib.mjs', 'screenshots.mjs'].includes(f)).sort();
 const picked = process.argv.slice(2);
 const suites = picked.length ? picked.map((s) => (s.endsWith('.mjs') ? s : `${s}.mjs`)) : all;
 

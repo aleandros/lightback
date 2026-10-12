@@ -10,20 +10,28 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap --external @lightback/core",
-    "typecheck": "tsc -p tsconfig.json"
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap --external @lightback/core --target es2020 && tsup --config tsup.iife.config.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "peerDependencies": {
-    "@lightback/core": "workspace:*"
+    "@lightback/core": "workspace:>=0.0.1 <0.2.0"
   },
   "devDependencies": {
     "@lightback/core": "workspace:*"
@@ -31,6 +39,14 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/aleandros/lightback.git",
-    "directory": "packages/widget/package.json"
-  }
+    "directory": "packages/widget"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "unpkg": "./dist/lightback.iife.js",
+  "jsdelivr": "./dist/lightback.iife.js"
 }

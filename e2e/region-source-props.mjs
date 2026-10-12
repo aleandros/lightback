@@ -92,7 +92,7 @@ assert(!childText.includes('INV-10'), 'nothing from the table behind the backdro
 assert(s2.region.children.some((c) => c.tag === 'select' || c.tag === 'label'), 'the selects/labels are among the children');
 assert(s2.note === 'The whole form is confusing', 'region note arrived');
 assert(s2.props && 'onClose' in s2.props && s2.props.onClose === '[fn onClose]', 'region props snapshot (function stripped)');
-const md = (await import('/Users/edgar/code/personal/lightback/packages/core/dist/index.js')).toPromptContext(p);
+const md = (await import('../packages/core/dist/index.js')).toPromptContext(p);
 assert(md.includes('Region inside <div>') && md.includes('Contains'), 'prompt renders the region');
 assert(/Source: src\/Dashboard\.tsx:\d+:\d+/.test(md), 'prompt renders source locations');
 console.log('\n--- prompt excerpt ---\n' + md.split('\n').slice(0, 40).join('\n') + '\n---');

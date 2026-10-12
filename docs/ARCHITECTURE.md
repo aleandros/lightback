@@ -13,7 +13,7 @@ user types note ─────────────────────�
 screenshot + crops (widget) ─────────────────┘
 ```
 
-1. `createLightback(options)` installs collectors once, at app start, so the buffers are warm when the user eventually reports.
+1. `createLightback(options)` installs collectors at browser app start, so the buffers are warm when the user eventually reports. On the server every installer is a no-op (including console and network); environment/page fields have empty defaults. DOM inspection and widget mounting throw explicit browser-DOM errors.
 2. The widget keeps a **draft**: note text, selections, screenshot blob, crop blobs.
 3. `client.send(draft)` builds the payload, runs `beforeSend`, and hands payload plus attachments to the transport.
 4. The transport posts to `endpoint`, or calls the consumer's `send`.
@@ -54,7 +54,7 @@ interface ElementSelection {
 
 ## `@lightback/widget`
 
-A single custom element `<lightback-widget>` with a Shadow DOM. `index.ts` holds the HTML template, the `Widget` class and all behaviour; `styles.ts` holds the CSS.
+A `<lightback-widget>` host with a Shadow DOM. It is created directly without registering a custom-element class, so repeated mounts do not collide in the registry. `index.ts` holds the HTML template, the `Widget` class and all behaviour; `styles.ts` holds the CSS.
 
 ### Surfaces
 
@@ -73,7 +73,7 @@ A single custom element `<lightback-widget>` with a Shadow DOM. `index.ts` holds
 
 Capture-phase listeners on `document`: `pointermove` (highlight), `pointerdown`/`pointerup` (drag detection, 5px threshold; these call `stopPropagation` only), `click` (select or finish drag; suppressed after a drag; clicking the page while the popover is open saves the comment and continues), `dblclick`/`contextmenu`/`selectstart` (swallowed), `keydown` (Escape). Anything inside an element with `data-lightback-ignore` is skipped.
 
-Entering pick mode with a `screenshot` capturer configured (and `autoScreenshot !== false`) hides the widget host, wraps the capture in `client.mute()`, and stores the full-page bitmap. Each new selection cuts a padded crop (`cropPadding`) from that bitmap, outlines the rect (dashed for regions) and stores it as `selection-N.png`.
+Entering pick mode with a `screenshot` capturer configured (and `autoScreenshot !== false`) hides the widget host, wraps the capture in `client.mute()`, and stores the full-page bitmap. `screenshot.ts` decodes through `createImageBitmap` when available, otherwise through a temporary object URL and an image drawn to canvas; the URL is revoked on success or failure. Each new selection cuts a padded crop (`cropPadding`) from that bitmap, outlines the rect (dashed for regions) and stores it as `selection-N.png`.
 
 ### Send
 
@@ -100,7 +100,7 @@ Pages: Dashboard (stat cards with `data-testid`, invoice table, Export modal, Ch
 
 ## E2E (`e2e`)
 
-Plain Node scripts on `playwright-core` driving the system Chrome against `pnpm dev`. `lib.mjs` provides `launch(suite)` returning `page`, `assert`, `received()`, `reset()`, `finish()`, plus `W` (the shadow-root prefix) and `BASE_URL`. `run.mjs` runs every suite in sequence and exits non-zero on failure.
+Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the local default; `BROWSER=chromium|firefox|webkit` selects a Playwright engine and bypasses the Chrome channel/executable override. `lib.mjs` provides `launch(suite)` returning `page`, `assert`, `received()`, `reset()`, `finish()`, plus `W` (the shadow-root prefix) and `BASE_URL`. `run.mjs` runs the four suites in sequence and exits non-zero on failure; it excludes the screenshot generator. The crop suite disables `createImageBitmap` to exercise the image/canvas fallback.
 
 | Suite | Covers |
 | --- | --- |
@@ -115,3 +115,9 @@ Plain Node scripts on `playwright-core` driving the system Chrome against `pnpm 
 - Nothing produced by the widget or the capturer leaks into the report (ignore attribute + `mute`).
 - Redaction is applied last and everywhere, so a new field cannot forget it.
 - The widget has no dependency other than `core`, and `core` has none.
+
+## Distribution and CI
+
+All module builds target ES2020, with separate `.d.ts` (ESM) and `.d.cts` (CommonJS) export conditions. The widget adds `lightback.iife.js`, bundling core and exposing `window.Lightback = { createLightback, mountWidget }`. Each tarball includes its own README and MIT license.
+
+`.github/workflows/ci.yml` validates build, types, tests, packed consumers and strict Are the Types Wrong checks, plus a Chromium/Firefox/WebKit matrix. It is reusable so `release.yml` requires the same gates before running Changesets. Publishing uses npm 11 through pnpm, OIDC and provenance. Initial npm package creation and per-package trusted publishers remain external setup steps. Payload version stays 1.

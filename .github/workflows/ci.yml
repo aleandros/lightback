@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm check:packages
+
+  browsers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter e2e exec playwright-core install --with-deps ${{ matrix.browser }}
+      - name: Start playground
+        run: |
+          pnpm dev --host 127.0.0.1 > /tmp/lightback-vite.log 2>&1 &
+          for _ in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:5173/api/feedback > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/lightback-vite.log
+          exit 1
+      - run: pnpm e2e
+        env:
+          BROWSER: ${{ matrix.browser }}
+          BASE_URL: http://127.0.0.1:5173
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-${{ matrix.browser }}
+          path: e2e/out/

@@ -3,6 +3,7 @@ import {
   type Attachment, type ElementSelection, type FeedbackPayload, type LightbackClient, type Rect,
 } from '@lightback/core';
 import { styles } from './styles';
+import { decodeScreenshot } from './screenshot';
 
 export interface WidgetOptions {
   client: LightbackClient;
@@ -40,7 +41,7 @@ const DRAG_THRESHOLD = 5;
 
 interface BaseShot {
   blob: Blob;
-  bitmap: ImageBitmap;
+  bitmap: ImageBitmap | HTMLCanvasElement;
   /** Document size when captured, so document-space rects map onto the bitmap. */
   page: { width: number; height: number };
 }
@@ -103,6 +104,7 @@ const TEMPLATE = /* html */ `
 `;
 
 export function mountWidget(options: WidgetOptions): WidgetHandle {
+  if (typeof window === 'undefined' || typeof document === 'undefined') throw new Error('Lightback: mountWidget requires a browser DOM');
   return new Widget(options);
 }
 
@@ -600,7 +602,7 @@ class Widget implements WidgetHandle {
       const page = { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight };
       const blob = await this.rawCapture();
       if (!blob) return null;
-      const bitmap = await createImageBitmap(blob);
+      const bitmap = await decodeScreenshot(blob);
       this.setScreenshot(blob);
       return { blob, bitmap, page };
     } catch (err) {

@@ -10,14 +10,47 @@ Tracks are independent of each other except where noted. Suggested order: A, the
 
 Goal: `@lightback/core`, `@lightback/widget` and `@lightback/react` publish to npm from GitHub Actions on merge to `main`, and work in every mainstream browser, bundler and SSR framework.
 
+### Progress — 2026-10-12
+
+A1 and the repository work for A2/A3 are implemented. The first published release is still pending; Track A is not yet complete end-to-end.
+
+- [x] UUID fallbacks, SSR guards, image/canvas screenshot fallback, repeated-mount regression coverage.
+- [x] ES2020 module builds and standalone `dist/lightback.iife.js` exposing `window.Lightback`.
+- [x] Separate ESM/CommonJS declaration exports and package README/LICENSE files.
+- [x] CI workflow with four suites per browser engine, packed-consumer smoke checks and strict type resolution (no ignored rules).
+- [x] Changesets config, initial 0.1.0 changeset, and release workflow gated on reusable CI, with OIDC/provenance and GitHub releases.
+- [ ] Confirm npm scope ownership, bootstrap the three packages, configure trusted publishers, and prove an automated release.
+- [ ] Verify the first GitHub workflow runs after pushing this implementation to `main`. Local validation results are recorded below.
+
+Implementation corrections to the original plan:
+
+- There is no `customElements.define` call. The widget creates its host directly; repeated mounts are tested without adding a registry dependency.
+- `pnpm check:packages` packs with pnpm before running `attw`: npm packing does not rewrite `workspace:` dependencies. All three packages pass the strict profile.
+- The region suite now imports core by a repository-relative path instead of an absolute developer path; browser CI builds packages before running it.
+- The default e2e runner now excludes `screenshots.mjs`; only `pnpm screenshots` rewrites committed media. The crop suite forces the legacy decoder.
+- Release CI installs npm 11 explicitly (OIDC requires npm >=11.5.1 and Node >=22.14). pnpm 10.18 delegates publication of its rewritten tarball to npm. Provenance is enabled with `NPM_CONFIG_PROVENANCE=true`.
+- Internal peer ranges cover compatible 0.0.x and 0.1.x APIs. Changesets only promotes peers when a release leaves the range, avoiding accidental 1.0.0 wrapper releases during bootstrap.
+
+Local validation on 2026-10-12:
+
+- `pnpm build` passed: nine ESM/CJS/declaration builds plus the IIFE.
+- `pnpm typecheck` passed; `pnpm test` passed 15 tests (14 core, one widget).
+- All four suites passed in system Chrome, Playwright Chromium, and WebKit on macOS. All four also passed in Firefox on Debian in an isolated Node 22 Docker container. The macOS Firefox binary failed before page load with `Could not find profile folder`, including a retry with `/private/tmp`; Linux validation succeeded after fixing the suite's absolute import path.
+- The crop suite forces `createImageBitmap` off, verifying real PNG attachments through the fallback decoder.
+- `pnpm check:packages` passed for all three tarballs: strict type resolution with no ignored rules, ESM/CJS imports, SSR client creation, standalone global, metadata and license/README inclusion.
+- `actionlint` passed both workflows; `git diff --check` passed.
+- A Changesets version dry run in a temporary copy produced `0.1.0` for all three packages. The checkout itself remains at `0.0.1` with the initial changeset pending; `pnpm version-packages` updates versions and the lockfile when the release PR is created.
+
+The next repository work after Track A validation is Track B, then Track C alongside it. The account prerequisites below need not block the website work.
+
 ### A1. Compatibility fixes (code changes, do first)
 
-1. **UUID fallback.** `packages/core/src/format.ts` `uid()` uses `crypto.randomUUID`, which is absent in Safari < 15.4 and in non-secure contexts (plain `http://` hosts). Fall back to `crypto.getRandomValues` and, if that is missing too, `Math.random`. Unit test both branches by stubbing `globalThis.crypto`.
-2. **`createImageBitmap` fallback.** `packages/widget/src/index.ts` `captureBase()` decodes the screenshot Blob with `createImageBitmap`. Safari < 15 lacks it. Fall back to an `Image` element loaded from `URL.createObjectURL(blob)` drawn onto a canvas. Keep the `BaseShot` shape; `cropSelection` only needs something `drawImage` accepts.
-3. **SSR guards.** `createLightback()` installs collectors immediately and touches `window`, `document`, `navigator`. Under Next.js, Remix, Nuxt or Astro the module is evaluated on the server. Every collector must no-op when `typeof window === 'undefined'`, and `describeElement`/`describeRegion` should throw a clear error rather than a `ReferenceError`. Add `packages/core/test/ssr.test.ts` running under vitest's `node` environment (not jsdom) that imports the package and calls `createLightback()`.
-4. **Custom element double registration.** `mountWidget` calls `customElements.define('lightback-widget', …)`. Guard with `customElements.get(...)` so hot reload and micro-frontends do not throw.
-5. **Pin the syntax target.** Add `--target es2020` to every tsup command so a TypeScript or tsup upgrade cannot silently raise it. Document the support matrix in README: evergreen browsers from the last two years, Safari 15.4+, Node 18+ for the import (not for running collectors).
-6. **IIFE build of the widget.** Add a second tsup entry for `packages/widget` producing `dist/lightback.iife.js` that bundles core, exposes `window.Lightback = { createLightback, mountWidget }`, and is referenced from a `unpkg`/`jsdelivr` field. This is the script-tag install path and what the website will embed.
+- [x] **UUID fallback.** `packages/core/src/format.ts` `uid()` uses `crypto.randomUUID`, which is absent in Safari < 15.4 and in non-secure contexts (plain `http://` hosts). Fall back to `crypto.getRandomValues` and, if that is missing too, `Math.random`. Unit test both branches by stubbing `globalThis.crypto`.
+- [x] **`createImageBitmap` fallback.** `packages/widget/src/index.ts` `captureBase()` decodes the screenshot Blob with `createImageBitmap`. Safari < 15 lacks it. Fall back to an `Image` element loaded from `URL.createObjectURL(blob)` drawn onto a canvas. Keep the `BaseShot` shape; `cropSelection` only needs something `drawImage` accepts.
+- [x] **SSR guards.** `createLightback()` installs collectors immediately and touches `window`, `document`, `navigator`. Under Next.js, Remix, Nuxt or Astro the module is evaluated on the server. Every collector must no-op when `typeof window === 'undefined'`, and `describeElement`/`describeRegion` should throw a clear error rather than a `ReferenceError`. Add `packages/core/test/ssr.test.ts` running under vitest's `node` environment (not jsdom) that imports the package and calls `createLightback()`.
+- [x] **Repeated mounting.** `mountWidget` does not register a custom element. Regression coverage verifies simultaneous and repeated mounts without a registry collision.
+- [x] **Pin the syntax target.** Add `--target es2020` to every tsup command so a TypeScript or tsup upgrade cannot silently raise it. Document the support matrix in README: evergreen browsers from the last two years, Safari 15.4+, Node 18+ for the import (not for running collectors).
+- [x] **IIFE build of the widget.** Add a second tsup entry for `packages/widget` producing `dist/lightback.iife.js` that bundles core, exposes `window.Lightback = { createLightback, mountWidget }`, and is referenced from a `unpkg`/`jsdelivr` field. This is the script-tag install path and what the website will embed.
 
 Done when: unit tests cover 1, 3 and 4; the four e2e suites still pass; README has the support matrix.
 
@@ -25,24 +58,32 @@ Done when: unit tests cover 1, 3 and 4; the four e2e suites still pass; README h
 
 Create `.github/workflows/ci.yml`, triggered on push to `main` and on pull requests.
 
-1. `actions/checkout`, `pnpm/action-setup` (reads `packageManager` from `package.json`), `actions/setup-node` with Node 22 and pnpm cache.
-2. `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm typecheck`, `pnpm test`.
-3. **E2E on three engines.** `npx playwright install --with-deps chromium firefox webkit`. Start `pnpm dev &`, wait for `http://localhost:5173/api/feedback` to answer, then run the suites. `e2e/lib.mjs` currently launches only `chromium` with `channel: 'chrome'`; add a `BROWSER` env var (`chromium | firefox | webkit`) that selects the Playwright engine and ignores `channel` when set. Run the suite job as a matrix over the three. WebKit is the one most likely to fail; fix what it finds rather than skipping it.
-4. **Pack smoke.** `pnpm -r --filter './packages/*' pack` into a temp dir, create a scratch `package.json`, `npm install` the three tarballs, then run one ESM file and one CJS file that import each package and call `createLightback` under Node. This catches broken `exports` maps.
-5. **Type resolution check.** `npx @arethetypeswrong/cli --pack packages/core` (and widget, react). Fail the job on any problem other than the ones you explicitly ignore with `--ignore-rules`.
-6. **Screenshots are not CI output.** `docs/assets` is committed; do not regenerate it in CI.
+- [x] `actions/checkout`, `pnpm/action-setup` (reads `packageManager` from `package.json`), `actions/setup-node` with Node 22 and pnpm cache.
+- [x] `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm typecheck`, `pnpm test`.
+- [x] **E2E on three engines.** `npx playwright install --with-deps chromium firefox webkit`. Start `pnpm dev &`, wait for `http://localhost:5173/api/feedback` to answer, then run the suites. `e2e/lib.mjs` currently launches only `chromium` with `channel: 'chrome'`; add a `BROWSER` env var (`chromium | firefox | webkit`) that selects the Playwright engine and ignores `channel` when set. Run the suite job as a matrix over the three. WebKit is the one most likely to fail; fix what it finds rather than skipping it.
+- [x] **Pack smoke.** `pnpm -r --filter './packages/*' pack` into a temp dir, create a scratch `package.json`, `npm install` the three tarballs, then run one ESM file and one CJS file that import each package and call `createLightback` under Node. This catches broken `exports` maps.
+- [x] **Type resolution check.** `pnpm check:packages` runs `attw` on pnpm-generated tarballs for core, widget and react. Fail the job on any problem other than the ones you explicitly ignore with `--ignore-rules`.
+- [x] **Screenshots are not CI output.** `docs/assets` is committed; do not regenerate it in CI.
 
 Done when: a PR that breaks any of build, types, unit tests, e2e on any engine, pack, or type resolution goes red.
 
 ### A3. Versioning and release
 
-1. `pnpm add -Dw @changesets/cli`, `pnpm changeset init`. Config: `"access": "public"`, `"baseBranch": "main"`, ignore `playground` and `e2e`, `"updateInternalDependencies": "patch"`. Independent versions per package.
-2. Add `publishConfig: { "access": "public" }` to the three package manifests. Copy `LICENSE` into each package's `files` (npm does not inherit the repo root file). Add `README.md` per package, or a `"readme"` pointer; the root README is not published.
-3. `.github/workflows/release.yml` on push to `main`: install, build, then `changesets/action` with `publish: pnpm changeset publish` and `version: pnpm changeset version`. It opens the "Version Packages" PR and publishes when that PR merges. Grant `permissions: { contents: write, pull-requests: write, id-token: write }`.
-4. **npm trusted publishing (OIDC).** On npmjs.com, for each package, add the GitHub repository `aleandros/lightback` and workflow file `release.yml` as a trusted publisher. No `NPM_TOKEN` secret. Provenance attestations come for free; add `--provenance` to be explicit.
-5. Tag releases `@lightback/core@x.y.z` (Changesets does this) and create a GitHub Release from the changelog.
+- [x] `pnpm add -Dw @changesets/cli`, `pnpm changeset init`. Config: `"access": "public"`, `"baseBranch": "main"`, ignore `playground` and `e2e`, `"updateInternalDependencies": "patch"`. Independent versions per package.
+- [x] Add `publishConfig: { "access": "public" }` to the three package manifests. Copy `LICENSE` into each package's `files` (npm does not inherit the repo root file). Add `README.md` per package, or a `"readme"` pointer; the root README is not published.
+- [x] `.github/workflows/release.yml` on push to `main`: install, build, then `changesets/action` with `publish: pnpm changeset publish` and `version: pnpm version-packages`. It opens the "Version Packages" PR and publishes when that PR merges. Grant `permissions: { contents: write, pull-requests: write, id-token: write }`.
+- [ ] **npm trusted publishing (OIDC).** On npmjs.com, for each package, add the GitHub repository `aleandros/lightback` and workflow file `release.yml` as a trusted publisher. No `NPM_TOKEN` secret. Provenance attestations come for free; set `NPM_CONFIG_PROVENANCE=true` to be explicit.
+- [x] Tag releases `@lightback/core@x.y.z` (Changesets does this) and create a GitHub Release from the changelog.
 
-Blocked on: the `@lightback` npm scope. Check availability at npmjs.com/org/lightback. If taken, pick the name before step 2 because it appears in every import and in the website. Trusted publishing needs the package to exist, so the very first `0.1.0` of each package is published by hand with `npm publish --access public` from a local checkout after `pnpm build`.
+Blocked on: the `@lightback` npm scope. Check availability at npmjs.com/org/lightback. If taken, pick the name before step 2 because it appears in every import and in the website. The scope page returned HTTP 403 on 2026-10-12, so availability and ownership are unverified. Trusted publishing needs each package to exist. To bootstrap:
+
+1. Confirm ownership of `@lightback` and npm publish access before changing names or uploading anything.
+2. Apply the initial changeset in the Version Packages PR (`pnpm changeset version`), refresh the lockfile with `pnpm install --lockfile-only`, review that all three versions are `0.1.0`, and run the full validation commands. Changesets status currently plans three minor bumps and no major bumps.
+3. Build and use `pnpm -r --filter './packages/*' pack --pack-destination /tmp/lightback-release` (create the directory first). Publish the three tarballs in core → widget → react order using `npm publish <tarball> --access public`. Publish tarballs, not raw workspace directories: pnpm rewrites the `workspace:` dependencies while packing.
+4. Configure each package's trusted publisher: GitHub owner `aleandros`, repository `lightback`, workflow filename `release.yml`. No `NPM_TOKEN` is needed. Allow GitHub Actions to create pull requests in repository settings.
+5. Push/merge the release setup, verify CI, and exercise a subsequent Version Packages PR to prove OIDC publication and GitHub release creation. The bootstrap publish itself is manual; until it is done, automatic publication can fail.
+
+The default `GITHUB_TOKEN` does not trigger new workflow runs when the bot opens its Version Packages PR. If branch protection requires checks on that PR, trigger CI manually on the version branch (CI supports `workflow_dispatch`) or configure a GitHub App token for the bot. Release still reruns every gate on main before publishing.
 
 Done when: merging a Version Packages PR publishes to npm with provenance, with no secrets in the repo.
 

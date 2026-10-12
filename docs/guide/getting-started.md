@@ -10,7 +10,7 @@ pnpm add @lightback/core @lightback/widget
 pnpm add @lightback/react
 ```
 
-Packages are ESM and CommonJS, with TypeScript types. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
+Packages are ESM and CommonJS, with matching TypeScript types. Initial npm publication is pending; contributors can build from this repository in the meantime. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
 
 ## Mount it
 
@@ -38,7 +38,10 @@ Import `lightback.ts` from your entry file. The screenshot capturer is optional 
 
 ```tsx
 import { LightbackProvider } from '@lightback/react';
-import { lightback } from './lightback';
+import { createLightback } from '@lightback/core';
+
+// In the React integration, let the provider mount the widget.
+const lightback = createLightback({ endpoint: '/api/feedback' });
 
 <LightbackProvider client={lightback} widget={{ screenshot }} context={{ user: { id: user.id } }}>
   <App />
@@ -46,6 +49,12 @@ import { lightback } from './lightback';
 ```
 
 `context` is pushed into every report whenever it changes. `useLightback()` returns the client, `useLightbackWidget()` the widget handle.
+
+### SSR and script tags
+
+All packages can be imported on Node 18+; `createLightback()` leaves server globals untouched and returns empty browser environment defaults. Create the browser client at app startup, and call `mountWidget()` only after the DOM is ready (for example in a client effect). The React provider mounts in an effect itself; do not also mount a second widget manually. DOM inspection APIs throw a clear error on the server.
+
+For a bundler-free integration, serve the built `packages/widget/dist/lightback.iife.js` and call `Lightback.createLightback({ endpoint: '/api/feedback' })`, then `Lightback.mountWidget({ client })`. Core is included in that script. Supported browsers are evergreen releases from the last two years and Safari 15.4+; builds target ES2020.
 
 ## First report
 

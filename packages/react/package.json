@@ -10,21 +10,28 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
-    "build": "tsup src/index.tsx --format esm,cjs --dts --clean --sourcemap --external react,@lightback/core,@lightback/widget",
+    "build": "tsup src/index.tsx --format esm,cjs --dts --clean --sourcemap --external react,@lightback/core,@lightback/widget --target es2020",
     "typecheck": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
-    "@lightback/core": "workspace:*",
-    "@lightback/widget": "workspace:*",
+    "@lightback/core": "workspace:>=0.0.1 <0.2.0",
+    "@lightback/widget": "workspace:>=0.0.1 <0.2.0",
     "react": ">=17"
   },
   "devDependencies": {
@@ -36,6 +43,12 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/aleandros/lightback.git",
-    "directory": "packages/react/package.json"
+    "directory": "packages/react"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

@@ -49,3 +49,11 @@ The suites are Node scripts with a tiny `assert` helper, run against the dev ser
 ## 12. MIT for the SDK, separate terms for any hosted backend
 
 The client packages are the distribution channel: they get embedded in other people's web apps, so any copyleft (GPL, AGPL) or source-available non-compete license (BUSL, FSL, Elastic) would stop adoption cold. MIT it is. The intended business is a hosted backend that receives the payload; that is a separate codebase and can stay proprietary or use a non-compete license without touching the SDK. The payload format is deliberately open (backend-agnostic was a day-one requirement), so the moat is the backend, not the wire format. MIT grants no trademark rights, so the name stays protectable.
+
+## 13. Separate module declarations and a self-contained script-tag bundle
+
+ESM and CommonJS export conditions each point to their matching declaration format, so NodeNext consumers do not resolve CommonJS code as an ESM type module. CI checks packed tarballs with strict Are the Types Wrong rules and imports them outside the workspace. The standalone widget entry bundles core; normal module entries preserve the existing dependency direction.
+
+## 14. Release only after the same checks used for pull requests
+
+The release workflow reuses the complete CI workflow before Changesets can publish. This duplicates CI on main, but ensures that browser and packed-package failures block a release. Changesets uses independent versions and public access. Lightback peer ranges cover the compatible 0.0.x and 0.1.x API; only out-of-range peer changes promote dependents to a major version. Initial npm creation and OIDC configuration must be completed before automated uploads can succeed.

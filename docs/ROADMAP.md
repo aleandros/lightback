@@ -1,6 +1,6 @@
 # Roadmap
 
-Status as of 2026-10-11. Items are ordered by agreed priority within each tier. Move an item to "Done" with the date and a one-line pointer when it ships, and keep README's Roadmap section in step.
+Status as of 2026-10-12. Items are ordered by agreed priority within each tier. Move an item to "Done" with the date and a one-line pointer when it ships, and keep README's Roadmap section in step.
 
 ## Done (v0)
 
@@ -14,9 +14,13 @@ Status as of 2026-10-11. Items are ordered by agreed priority within each tier. 
 - JSON/multipart transport, `beforeSend`, custom `send`, `toPromptContext`.
 - React provider and hooks. Playground with mock API and inbox. Four browser suites plus unit tests.
 
+## Done (2026-10-12)
+
+- Track A repository implementation: UUID/screenshot fallbacks, SSR-safe creation, repeated-mount coverage, ES2020 and standalone IIFE, proper ESM/CommonJS types. CI and Changesets release workflows are written; external release setup remains in flight. See `docs/HANDOFF.md`.
+
 ## In flight (see `docs/HANDOFF.md` for steps)
 
-- Track A: compatibility fixes, CI on three browser engines, npm publishing from GitHub Actions with Changesets and trusted publishing.
+- Track A: verify GitHub workflows, confirm npm scope ownership, bootstrap packages and configure trusted publishers; prove the first automated release.
 - Track B: website at https://aleandros.github.io/lightback with screenshots, clips and the guides (VitePress on `docs/`).
 - Track C: user guides in `docs/guide/` plus the small widget APIs they promise (`strings`, `theme`, `hideTrigger`, `::part`).
 

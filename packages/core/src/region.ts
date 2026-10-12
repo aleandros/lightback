@@ -21,6 +21,7 @@ const CONTAIN_TOLERANCE = 2;
  * elements fully inside the rectangle.
  */
 export function describeRegion(rect: Rect, opts: RegionOptions = {}): ElementSelection | null {
+  if (typeof window === 'undefined' || typeof document === 'undefined') throw new Error('Lightback: describeRegion requires a browser DOM');
   const hitTest = opts.hitTest ?? ((x, y) => document.elementFromPoint(x, y));
   const isIgnored = opts.isIgnored ?? (() => false);
   const maxChildren = opts.maxChildren ?? 25;

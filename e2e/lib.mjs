@@ -1,6 +1,6 @@
-// Shared launcher for the browser suites. Uses the system Chrome (no Playwright browser download).
-// Override with CHROME=/path/to/chrome or BASE_URL=http://host:port.
-import { chromium } from 'playwright-core';
+// Shared launcher: system Chrome by default; BROWSER selects a Playwright-installed engine.
+// Override the default with CHROME=/path/to/chrome, or the server with BASE_URL=http://host:port.
+import { chromium, firefox, webkit } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -11,9 +11,11 @@ export async function launch(suiteName) {
   const OUT = path.join(path.dirname(new URL(import.meta.url).pathname), 'out', suiteName) + '/';
   fs.mkdirSync(OUT, { recursive: true });
   const launchOpts = { headless: true };
-  if (process.env.CHROME) launchOpts.executablePath = process.env.CHROME;
-  else launchOpts.channel = 'chrome';
-  const browser = await chromium.launch(launchOpts);
+  const engine = process.env.BROWSER;
+  if (engine && !['chromium', 'firefox', 'webkit'].includes(engine)) throw new Error(`Unknown BROWSER: ${engine}`);
+  if (!engine && process.env.CHROME) launchOpts.executablePath = process.env.CHROME;
+  else if (!engine) launchOpts.channel = 'chrome';
+  const browser = await ({ chromium, firefox, webkit }[engine || 'chromium']).launch(launchOpts);
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));

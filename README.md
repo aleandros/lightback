@@ -12,7 +12,7 @@ Framework-agnostic in-app feedback capture. Users pick the elements they are tal
 | `@lightback/widget` | Drop-in UI: trigger button, element picker, notes, screenshot, review and send. Vanilla TypeScript inside a Shadow DOM. |
 | `@lightback/react` | `LightbackProvider`, `useLightback()`, `useLightbackWidget()`. |
 | `examples/playground` | Vite + React demo app with a mock backend and an inbox that renders what arrived. |
-| `e2e` | Playwright suites that drive the playground in a real Chrome. |
+| `e2e` | Playwright suites for Chromium, Firefox and WebKit. |
 
 ## Quick start
 
@@ -23,6 +23,43 @@ pnpm test                 # unit tests (vitest)
 pnpm build
 pnpm e2e    # browser suites; needs `pnpm dev` running and a system Chrome
 ```
+
+## Compatibility and script tags
+
+Packages ship ESM and CommonJS with matching TypeScript declarations, targeting ES2020.
+
+| Environment | Support |
+| --- | --- |
+| Browsers | Evergreen releases from the last two years; Safari 15.4+ |
+| SSR / Node | Node 18+ for imports and client creation; collectors are inactive on the server |
+| Development and CI | Node 22 and pnpm 10 |
+
+`describeElement`, `describeRegion` and `mountWidget` require a browser DOM and throw a clear error on the server. Mount after the DOM is ready. UUID generation falls back when `crypto.randomUUID` is unavailable; screenshot cropping can decode with an image/canvas when `createImageBitmap` is unavailable.
+
+For a script-tag install, build and serve `packages/widget/dist/lightback.iife.js`:
+
+```html
+<script src="/vendor/lightback.iife.js"></script>
+<script>
+  const client = Lightback.createLightback({ endpoint: '/api/feedback' });
+  Lightback.mountWidget({ client }); // Place after the page body is ready.
+</script>
+```
+
+The standalone script includes core and exposes `window.Lightback`. The package's `unpkg` and `jsdelivr` fields point to it for use after npm publication. First publication is still pending; see [the handoff](docs/HANDOFF.md#track-a-compatibility-ci-npm-publishing).
+
+## Validation and releases
+
+`pnpm build`, `pnpm typecheck`, `pnpm test` and `pnpm check:packages` validate builds, source types, unit tests, and the actual tarballs (ESM, CommonJS, IIFE, licenses, READMEs and strict type resolution).
+
+`pnpm e2e` runs the four browser suites against `pnpm dev` using system Chrome. To use a Playwright engine:
+
+```sh
+pnpm --filter e2e exec playwright-core install chromium firefox webkit
+BROWSER=webkit pnpm e2e # also chromium or firefox
+```
+
+CI runs all three engines. Screenshot regeneration remains the separate `pnpm screenshots` command. Run `pnpm changeset` for package changes; the release workflow runs the CI gates, opens a Version Packages PR, and publishes merged versions with provenance after the npm bootstrap in the handoff. No npm token is stored in GitHub.
 
 ## In action
 
@@ -132,7 +169,8 @@ Default rules replace `authorization`, `cookie` and similar headers, common secr
 ## Roadmap
 
 - v0 (this): collectors, element and area picker with inline comments, source location and props, automatic screenshot and crops, optimistic send, transport, React wrapper, playground, browser suites.
-- v1: correlation and ranking in the prompt, a reference AI triage handler and payload JSON Schema, a Vite plugin that stamps `data-source` in production, screenshot annotations with blur, draft and buffer persistence, lazy widget and IIFE build, CI.
+- Track A: compatibility fixes, standalone IIFE, CI and Changesets release workflow implemented; first npm publication and trusted-publisher setup pending. Website and customization/i18n APIs follow in Tracks B/C.
+- v1: correlation and ranking in the prompt, a reference AI triage handler and payload JSON Schema, a Vite plugin that stamps `data-source` in production, screenshot annotations with blur, draft and buffer persistence, lazy widget.
 - v2: voice notes with a pluggable transcriber, video capture via `getDisplayMedia`, optional rrweb plugin with a rolling replay window, Vue and Svelte wrappers.
 
 Details and open questions live in `docs/ROADMAP.md`.

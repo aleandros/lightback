@@ -1,0 +1,24 @@
+# @lightback/widget
+
+Lightback's framework-agnostic feedback UI: point at an element or drag an area, add comments, review context and send to your backend. Uses Shadow DOM and depends only on core.
+
+```sh
+npm install @lightback/core @lightback/widget
+```
+
+```ts
+import { createLightback } from '@lightback/core';
+import { mountWidget } from '@lightback/widget';
+
+const client = createLightback({ endpoint: '/api/feedback' });
+const widget = mountWidget({ client }); // Run after the browser DOM is ready.
+// On teardown: widget.destroy(); client.destroy();
+```
+
+Provide `screenshot: () => Promise<Blob>` to enable screenshots and selection crops. The package includes no screenshot library. `sendDelay` controls the inline send cancel window (default 5000 ms).
+
+For script tags, serve `dist/lightback.iife.js` and call `Lightback.createLightback()` and `Lightback.mountWidget()`. This standalone bundle includes core. ESM and CommonJS imports are safe during SSR; mounting requires a browser.
+
+Supports evergreen browsers from the last two years, Safari 15.4+, and Node 18+ for imports. Built to ES2020.
+
+[Full documentation and examples](https://github.com/aleandros/lightback#readme). MIT licensed.

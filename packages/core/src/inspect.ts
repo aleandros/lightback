@@ -21,6 +21,7 @@ export function toDocRect(rect: Rect): Rect {
 
 /** Describe a DOM element with enough context for a human or a model to locate it. */
 export function describeElement(el: Element): ElementSelection {
+  if (typeof window === 'undefined' || typeof document === 'undefined') throw new Error('Lightback: describeElement requires a browser DOM');
   const rect = viewportRect(el);
   const fw = frameworkInfo(el);
   return {

@@ -29,20 +29,20 @@ pnpm dev                     # playground at http://localhost:5173 (mock API inc
 pnpm build                   # tsup, topological order; run before typecheck on a fresh clone
 pnpm typecheck               # tsc across all projects (widget/react need core's dist for types)
 pnpm test                    # vitest, packages/core/test
-pnpm e2e       # browser suites; needs `pnpm dev` running and a system Chrome
+pnpm e2e       # browser suites; run build first; needs `pnpm dev` running and a system Chrome
 pnpm e2e send-flow   # one suite
 pnpm screenshots     # regenerate docs/assets/*.png from the playground; needs `pnpm dev` running
 ```
 
-Node 22, pnpm 10 via corepack. The e2e runner uses Playwright's `channel: 'chrome'`; set `CHROME=/path/to/binary` to override, `BASE_URL` to point elsewhere. Screenshots land in `e2e/out/<suite>/` (gitignored). Look at them when a suite fails: they are the fastest way to see what the widget actually rendered.
+Node 22, pnpm 10 via corepack. The e2e runner defaults to Playwright's `channel: 'chrome'`; set `CHROME=/path/to/binary` to override, `BASE_URL` to point elsewhere. `BROWSER=chromium|firefox|webkit` uses the installed Playwright engine and ignores `CHROME`. `pnpm check:packages` validates tarballs and strict type resolution; it needs npm registry access for a scratch install. Screenshots land in `e2e/out/<suite>/` (gitignored). Look at them when a suite fails: they are the fastest way to see what the widget actually rendered.
 
 ## Definition of done
 
 A change is done when all of these hold. Report results plainly; if something fails, say so with the output.
 
-1. `pnpm build` succeeds (9 builds).
+1. `pnpm build` succeeds (9 module/declaration builds plus the standalone IIFE).
 2. `pnpm typecheck` is clean.
-3. `pnpm test` passes.
+3. `pnpm test` passes (core and widget).
 4. `pnpm e2e` passes all four suites.
 5. README and the relevant `docs/*.md` describe the new behaviour. A feature that is not in README does not exist for users.
 6. New UI hooks have a `data-action` or `data-ref` attribute and the e2e suites use those, never visible text.
@@ -75,7 +75,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 
 - Picker is mouse/pointer only; no keyboard navigation of elements.
 - No shadow-root or iframe piercing into the host app's own shadow trees.
-- Widget is loaded eagerly; no lazy-loading or IIFE build yet.
+- Widget is loaded eagerly; no lazy-loading yet. The standalone IIFE is available.
 - Drafts do not survive a reload; buffers do not either.
 - React 19 `_debugStack` parsing exists but has no fixture; React 18 `_debugSource` is what the tests cover.
 - The base screenshot is captured once at pick start. Selections made after the page changes will crop a stale image.

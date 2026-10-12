@@ -8,12 +8,17 @@
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
     "e2e": "pnpm --filter e2e run e2e",
-    "screenshots": "pnpm --filter e2e run screenshots"
+    "screenshots": "pnpm --filter e2e run screenshots",
+    "changeset": "changeset",
+    "check:packages": "node scripts/check-packages.mjs",
+    "version-packages": "changeset version && pnpm install --lockfile-only --no-frozen-lockfile"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^2.31.1",
+    "jsdom": "^25.0.0",
     "tsup": "^8.3.0",
-    "vitest": "^2.1.0",
-    "jsdom": "^25.0.0"
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   }
 }

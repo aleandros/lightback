@@ -5,6 +5,8 @@ import fs from 'node:fs';
 const { page, OUT, assert, received, reset, finish } = await launch('pill-pins-crops');
 const pinCount = () => page.locator(W + '.lb-pin').count();
 await reset();
+// Force the legacy image decoder while retaining real canvas/crop assertions.
+await page.addInitScript(() => { window.createImageBitmap = undefined; });
 await page.goto(BASE_URL + '/');
 await page.waitForSelector('text=Invoices');
 await page.click('tr[data-invoice-id="INV-1044"] button');
