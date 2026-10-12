@@ -1,6 +1,7 @@
 import type { Breadcrumb } from '../types';
 import { RingBuffer } from '../ring';
-import { shortSelector } from '../inspect';
+import { elementText, shortSelector } from '../inspect';
+import { patchMethod } from './patch';
 
 export function installBreadcrumbs(buffer: RingBuffer<Breadcrumb>, isIgnored: (el: Element) => boolean): () => void {
   if (typeof window === 'undefined') return () => {};
@@ -8,7 +9,7 @@ export function installBreadcrumbs(buffer: RingBuffer<Breadcrumb>, isIgnored: (e
   const onClick = (e: MouseEvent) => {
     const el = e.target instanceof Element ? e.target : null;
     if (!el || isIgnored(el)) return;
-    const text = (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 60);
+    const text = elementText(el, 60);
     buffer.push({
       t: Date.now(),
       type: 'click',
@@ -33,16 +34,14 @@ export function installBreadcrumbs(buffer: RingBuffer<Breadcrumb>, isIgnored: (e
     buffer.push({ t: Date.now(), type: 'navigation', message: `${how}: ${lastUrl} -> ${location.href}` });
     lastUrl = location.href;
   };
-  const originalPush = history.pushState;
-  const originalReplace = history.replaceState;
-  history.pushState = function (...args) {
-    originalPush.apply(this, args);
+  const undoPush = patchMethod(history, 'pushState', (original) => function (this: History, ...args) {
+    original.apply(this, args);
     recordNavigation('pushState');
-  };
-  history.replaceState = function (...args) {
-    originalReplace.apply(this, args);
+  });
+  const undoReplace = patchMethod(history, 'replaceState', (original) => function (this: History, ...args) {
+    original.apply(this, args);
     recordNavigation('replaceState');
-  };
+  });
   const onPop = () => recordNavigation('popstate');
   const onHash = () => recordNavigation('hashchange');
 
@@ -58,7 +57,7 @@ export function installBreadcrumbs(buffer: RingBuffer<Breadcrumb>, isIgnored: (e
     document.removeEventListener('visibilitychange', onVisibility);
     window.removeEventListener('popstate', onPop);
     window.removeEventListener('hashchange', onHash);
-    history.pushState = originalPush;
-    history.replaceState = originalReplace;
+    undoPush();
+    undoReplace();
   };
 }

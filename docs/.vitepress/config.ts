@@ -5,7 +5,7 @@ export default defineConfig({
   description: 'Point at the problem. Send the context. In-app feedback for your own backend.',
   base: '/lightback/',
   // Internal implementation plans stay in the repository, outside the public guide.
-  srcExclude: ['ARCHITECTURE.md', 'DECISIONS.md', 'ROADMAP.md', 'HANDOFF.md', 'AGENTS.md'],
+  srcExclude: ['ARCHITECTURE.md', 'DECISIONS.md', 'TESTING.md', 'ROADMAP.md', 'HANDOFF.md', 'AGENTS.md'],
   themeConfig: {
     nav: [
       { text: 'Demo', link: 'https://aleandros.github.io/lightback/demo/' },

@@ -1,16 +1,11 @@
 import type { RedactOptions } from './types';
-import { redactString } from './redact';
+import { redactString, redactText } from './redact';
 
 /** Scrub before truncation, and never store inspection HTML or form-control values. */
 export function scrubRecovery(value: unknown, options: RedactOptions, maxString: number, depth = 0): unknown {
   if (depth > 12) return undefined;
   if (typeof value === 'string') {
-    let text = redactString(value, options);
-    // URLs can occur inside log messages and stack traces, not just URL fields.
-    text = text.replace(/([?&])([^\s=&?#]+)=([^\s&#]*)/g, (match, sep, key) => {
-      try { return options.urlParams.includes(decodeURIComponent(key)) ? `${sep}${key}=${options.replacement}` : match; }
-      catch { return match; }
-    });
+    let text = redactText(value, options);
     // JSON bodies and logs may contain secret keys as text.
     try {
       const parsed: unknown = JSON.parse(text);
@@ -24,7 +19,8 @@ export function scrubRecovery(value: unknown, options: RedactOptions, maxString:
     for (const [key, item] of Object.entries(value).slice(0, 100)) {
       const lower = key.toLowerCase();
       if (['html', 'value', 'defaultvalue', 'innerhtml', 'dangerouslysetinnerhtml'].includes(lower)) continue;
-      const cleanKey = redactString(key, options).slice(0, maxString);
+      // Tiny value limits must not rename structural fields such as `selections`.
+      const cleanKey = redactString(key, options).slice(0, Math.max(64, maxString));
       result[cleanKey] = [...options.headers, ...options.urlParams].some((secret) => secret.toLowerCase() === lower)
         ? options.replacement : scrubRecovery(item, options, maxString, depth + 1);
     }

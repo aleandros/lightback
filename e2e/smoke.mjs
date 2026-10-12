@@ -1,5 +1,6 @@
 // Smoke: noise generation (console, errors, network), panel flow, payload shape, inbox rendering.
 import { launch, W, BASE_URL } from './lib.mjs';
+import { checkRedirectPrivacy } from './helpers/privacy.mjs';
 
 const { page, OUT, assert, received, reset, finish } = await launch('smoke');
 await reset();
@@ -123,4 +124,5 @@ await page.screenshot({ path: OUT + '3-inbox-screenshot.png', fullPage: true });
 await page.click('.tabs >> text=summary');
 await page.screenshot({ path: OUT + '4-inbox-summary.png', fullPage: true });
 
+await checkRedirectPrivacy(page, assert, BASE_URL);
 await finish();

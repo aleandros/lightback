@@ -8,7 +8,7 @@ import { installErrors } from './collectors/errors';
 import { installNetwork } from './collectors/network';
 import { installBreadcrumbs } from './collectors/breadcrumbs';
 import { captureEnv } from './collectors/env';
-import { mergeRedact, redactString } from './redact';
+import { mergeRedact, redactDeep } from './redact';
 import { describeElement } from './inspect';
 import { describeRegion, type RegionOptions } from './region';
 import { fetchTransport } from './transport';
@@ -59,17 +59,6 @@ export interface LightbackClient {
   destroy(): void;
 }
 
-function scrubDeep(value: unknown, scrub: (s: string) => string): unknown {
-  if (typeof value === 'string') return scrub(value);
-  if (Array.isArray(value)) return value.map((v) => scrubDeep(v, scrub));
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = scrubDeep(v, scrub);
-    return out;
-  }
-  return value;
-}
-
 export function createLightback(options: LightbackOptions = {}): LightbackClient {
   const limits: Limits = { ...DEFAULT_LIMITS, ...options.limits };
   const redact = mergeRedact(options.redact);
@@ -96,17 +85,17 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
   };
 
   let muted = 0;
+  let networkEpoch = 0;
+  let destroyed = false;
   const isMuted = () => muted > 0;
 
   const undo: Array<() => void> = [];
   if (capture.console) undo.push(installConsole(consoleBuf, limits.string, isMuted));
   if (capture.errors) undo.push(installErrors(errorBuf, limits.string));
   if (capture.network) {
-    undo.push(installNetwork(networkBuf, { bodies: capture.networkBodies, maxString: limits.string, redact, ignore: isOwnEndpoint, isMuted }));
+    undo.push(installNetwork(networkBuf, { bodies: capture.networkBodies, maxString: limits.string, redact, ignore: isOwnEndpoint, isMuted, epoch: () => destroyed ? undefined : networkEpoch }));
   }
   if (capture.breadcrumbs) undo.push(installBreadcrumbs(breadcrumbBuf, isIgnored));
-
-  const scrub = (s: string) => redactString(s, redact);
 
   const clean = <T>(value: T): T => scrubRecovery(value, redact, limits.string) as T;
   const cleanDraft = (draft: Draft): Draft => {
@@ -132,15 +121,17 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
     for (const entry of entries) buffer.push(entry);
   };
   persistence = createPersistence(options.persistence, snapshot, (state) => {
-    merge(consoleBuf, state.console.slice(-limits.console).map(clean), capture.console, (e) => typeof e.message === 'string' && ['log', 'info', 'warn', 'error', 'debug'].includes(e.level));
-    merge(errorBuf, state.errors.slice(-limits.errors).map(clean), capture.errors, (e) => typeof e.message === 'string' && ['error', 'unhandledrejection'].includes(e.kind));
-    merge(networkBuf, state.network.slice(-limits.network).map(clean).map((entry) => capture.networkBodies ? entry : { ...entry, requestBody: undefined, responseBody: undefined }), capture.network,
+    merge(consoleBuf, state.console.map(clean), capture.console, (e) => typeof e.message === 'string' && ['log', 'info', 'warn', 'error', 'debug'].includes(e.level));
+    merge(errorBuf, state.errors.map(clean), capture.errors, (e) => typeof e.message === 'string' && ['error', 'unhandledrejection'].includes(e.kind));
+    merge(networkBuf, state.network.map(clean).map((entry) => capture.networkBodies ? entry : { ...entry, requestBody: undefined, responseBody: undefined }), capture.network,
       (e) => typeof e.url === 'string' && typeof e.method === 'string' && ['fetch', 'xhr'].includes(e.kind));
-    merge(breadcrumbBuf, state.breadcrumbs.slice(-limits.breadcrumbs).map(clean), capture.breadcrumbs, (e) => typeof e.message === 'string' && typeof e.type === 'string');
+    merge(breadcrumbBuf, state.breadcrumbs.map(clean), capture.breadcrumbs, (e) => typeof e.message === 'string' && typeof e.type === 'string');
     if (!draftChanged && state.draft) {
       const draft = cleanDraft(state.draft);
       draft.selections = draft.selections.filter(isRecoveredSelection);
       if (!options.persistence || !options.persistence.attachments) draft.attachments = [];
+      const names = new Set(draft.attachments.map((attachment) => attachment.name));
+      draft.selections.forEach((selection) => { if (!names.has(selection.crop ?? '')) delete selection.crop; });
       savedDraft = draft;
     }
     changed(); // Re-checkpoint under the current capture, redaction and attachment policy.
@@ -158,6 +149,7 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
     },
     flushPersistence: () => persistence!.flush(),
     clearPersistence() {
+      networkEpoch++;
       draftChanged = true;
       savedDraft = null;
       consoleBuf.clear(); errorBuf.clear(); networkBuf.clear(); breadcrumbBuf.clear();
@@ -184,7 +176,7 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
     },
     buildPayload(draft) {
       const attachments = draft.attachments ?? [];
-      return {
+      return redactDeep({
         version: 1,
         id: uid(),
         createdAt: new Date().toISOString(),
@@ -198,16 +190,16 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
               ? { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }
               : { width: 0, height: 0 },
         },
-        note: { text: scrub(draft.text ?? ''), transcript: draft.transcript ? scrub(draft.transcript) : undefined },
-        selections: (draft.selections ?? []).map((s) => scrubDeep(s, scrub) as ElementSelection),
+        note: { text: draft.text ?? '', transcript: draft.transcript },
+        selections: draft.selections ?? [],
         attachments: attachments.map(({ name, type, size }) => ({ name, type, size })),
         env: captureEnv(),
-        console: consoleBuf.toArray().map((c) => ({ ...c, message: scrub(c.message) })),
-        errors: errorBuf.toArray().map((e) => ({ ...e, message: scrub(e.message), stack: e.stack ? scrub(e.stack) : undefined })),
+        console: consoleBuf.toArray(),
+        errors: errorBuf.toArray(),
         network: networkBuf.toArray(),
         breadcrumbs: breadcrumbBuf.toArray(),
-        context: JSON.parse(JSON.stringify(context)),
-      };
+        context,
+      }, redact) as FeedbackPayload;
     },
     async send(draft) {
       await client.ready;
@@ -217,7 +209,9 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
         if (!result) return null;
         payload = result;
       }
-      const attachments = draft.attachments ?? [];
+      const attachments = (draft.attachments ?? []).map(({ blob, ...ref }) => ({
+        ...redactDeep(ref, redact) as Omit<Attachment, 'blob'>, blob,
+      }));
       if (options.send) {
         await options.send(payload, attachments);
       } else if (options.endpoint) {
@@ -229,6 +223,7 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
       return payload;
     },
     destroy() {
+      destroyed = true;
       for (const u of undo.splice(0)) u();
       persistence!.destroy();
     },

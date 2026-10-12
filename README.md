@@ -35,7 +35,7 @@ From a clone of this repository:
 ```bash
 pnpm install
 pnpm dev          # http://localhost:5173
-pnpm test                 # unit tests (vitest)
+pnpm test                 # unit and deterministic property tests (vitest)
 pnpm build
 pnpm e2e    # browser suites; needs `pnpm dev` running and a system Chrome
 ```
@@ -102,6 +102,7 @@ For contributors and agents:
 - `AGENTS.md` is the entry point for agents and new contributors: commands, definition of done, conventions that are easy to break, where to look for a given task.
 - `docs/ARCHITECTURE.md` describes every module, the payload shape, the widget's surfaces and the send flow.
 - `docs/DECISIONS.md` records why things are shaped the way they are.
+- [Stateful property tests](docs/TESTING.md) explains the reference models, invariants, seed/path replay and larger local runs (`FC_RUNS=1000 FC_ACTIONS=80 pnpm test:properties`).
 - [GitHub backlog](https://github.com/aleandros/lightback/issues/19) is the source of truth for priorities, acceptance criteria and progress. Pick up work from linked issues; keep handoff notes on the issue.
 
 ## Usage
@@ -181,11 +182,11 @@ const lightback = createLightback({
 createLightback({ endpoint: '/api/feedback', persistence: false });
 ```
 
-Text and metadata are redacted before storage using the configured rules. Inspection HTML and form-value props are omitted, and form controls are excluded from inspected ancestor text. Draft recovery keeps at most 50 selections; strings are capped by `limits.string` and collector counts by their buffer limits. App context is supplied fresh by the host and is not persisted. `beforeSend` runs only when sending, so put storage redaction rules in `redact`.
+Text and metadata are redacted before storage using the configured rules. Inspection HTML and form-value props are omitted, and form controls are excluded from inspected ancestor text. Draft recovery keeps at most 50 selections; string values are capped by `limits.string` and collector counts by their buffer limits. App context is supplied fresh by the host and is not persisted. `beforeSend` runs only when sending, so put storage redaction rules in `redact`.
 
-Screenshot and crop blobs are **not persisted by default**. Set `persistence.attachments: true` to retain them in IndexedDB after your screenshot capturer has masked input values and sensitive content. Text redaction cannot scrub pixels. Oversized attachments are omitted from recovery, with their crop references removed; an oversized metadata snapshot is deleted. These recovery bounds do not remove attachments from the current live report.
+Screenshot and crop blobs are **not persisted by default**. Set `persistence.attachments: true` to retain them in IndexedDB after your screenshot capturer has masked input values and sensitive content. Text redaction cannot scrub pixels. Oversized attachments are omitted from recovery, with their crop references removed (also when recovery switches to metadata-only); an oversized metadata snapshot is deleted. These recovery bounds do not remove attachments from the current live report.
 
-Successful send and Discard clear the stored draft and the old collector buffers. A failed or vetoed send retains them. `await lightback.clearPersistence()` also clears both, for example on logout before destroying the client. Collection continues until `destroy()`. Disabling persistence avoids reading or writing recovery storage; it does not erase old records, which expire normally.
+Successful send and Discard clear the stored draft and collector buffers. Successful send also clears edits and events made while it was in flight; custom editors should await send before starting another report. A failed or vetoed send retains current edits and buffers. Discard or widget destruction while a send is still waiting for screenshot/crop jobs cancels that send; transport already in progress is not aborted. `await lightback.clearPersistence()` also clears both, for example on logout before destroying the client. Collection continues until `destroy()`. Disabling persistence avoids reading or writing recovery storage; it does not erase old records, which expire normally.
 
 Checkpoints are coalesced over 100 ms, with best-effort flushes on hiding the page and teardown. A browser crash or immediate navigation can lose the last uncommitted edit or unfinished capture. Storage denial, quota errors or a blocked database leave the widget usable in memory; failed writes invalidate the session key so an older snapshot cannot return. Records have a separate schema version and expire 30 minutes after their last checkpoint by default. Expired/incompatible records are removed the next time recovery storage opens. Closing a tab normally loses its session key; browser session restore or tab duplication may preserve/copy sessionStorage, so the expiry still applies. IndexedDB records can remain physically stored until that cleanup or the user clears site data.
 
@@ -251,7 +252,11 @@ The picker uses `elementFromPoint` and describes the element with a unique selec
 
 ## Redaction
 
-Default rules replace `authorization`, `cookie` and similar headers, common secret query params, JWT-shaped strings and card-number-shaped digit runs. Input values are never recorded in breadcrumbs. Request and response bodies are off by default and only ever captured for same-origin requests.
+Default rules replace `authorization`, `cookie` and similar secret-named fields, common secret query params, JWT-shaped strings and card-number-shaped digit runs. The complete payload is copied and redacted before preview, `beforeSend` and delivery, including page URL/referrer/title, context, breadcrumbs, errors, selections and attachment names. Embedded URLs and JSON bodies use the same rules. `beforeSend` is a trusted host hook and may further transform the redacted payload; screenshot pixels require masking in your capturer.
+
+Breadcrumbs and inspected text omit input, textarea, select and contenteditable contents, including clicks on their descendants or containing elements. Request and response bodies are off by default. With `capture.networkBodies: true`, request bodies require a same-origin request; response bodies additionally require a verified same-origin final response URL, so a redirect to another origin cannot expose its body.
+
+Multiple clients can collect independently and be destroyed in any order. `destroy()` stops that client's collectors without replacing another client's or the host's wrappers. Pending fetch, XHR and body reads cannot add data after destruction or refill buffers cleared by `clearPersistence()`, Discard or successful send; the application's requests continue normally.
 
 ## Backlog
 

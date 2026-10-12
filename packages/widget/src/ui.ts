@@ -786,6 +786,7 @@ class Widget implements WidgetHandle {
       return;
     }
     this.sending = true;
+    const generation = this.captureGeneration;
     const btn = this.q<HTMLButtonElement>('[data-action=send]');
     btn.disabled = true;
     this.setStatus(this.strings.sendingStatus);
@@ -793,7 +794,9 @@ class Widget implements WidgetHandle {
       // Crops and the base screenshot may still be rendering if the user sent quickly.
       await this.base;
       await Promise.all(this.cropJobs.values());
+      if (this.destroyed || generation !== this.captureGeneration) return;
       const payload = await this.client.send(this.draft());
+      if (this.destroyed || generation !== this.captureGeneration) return;
       if (payload) {
         this.opts.onSent?.(payload);
         this.reset();
@@ -804,6 +807,7 @@ class Widget implements WidgetHandle {
         this.open();
       }
     } catch (err) {
+      if (this.destroyed || generation !== this.captureGeneration) return;
       this.setStatus(this.strings.sendFailed(err instanceof Error ? err.message : String(err)), true);
       this.opts.onError?.(err);
       this.open(); // surface the error with the draft intact

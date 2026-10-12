@@ -207,7 +207,33 @@ it('stores opted-in attachments as bounded binary data and restores exact bytes'
   expect(recovered.selections[0]!.crop).toBe('selection-1.png');
   const metadataOnly = client(); await metadataOnly.ready;
   expect(metadataOnly.getDraft()?.attachments).toEqual([]);
+  expect(metadataOnly.getDraft()?.selections[0]?.crop).toBeUndefined();
   await metadataOnly.flushPersistence();
   expect((await record()).state.draft.attachments).toEqual([]);
   expect((await record()).state.draft.selections[0].crop).toBeUndefined();
+});
+
+
+it('preserves recovery field names with a one-character string limit', async () => {
+  const instance = client({ limits: { string: 1 }, redact: { patterns: [/private-secret/g] } });
+  await instance.ready;
+  instance.saveDraft(draft('private-secret'));
+  await instance.flushPersistence();
+  expect(instance.getDraft()?.text).toBe('[');
+  expect((await record()).state.draft.text).toBe('[');
+});
+
+
+it('sorts recovered request timestamps before applying a smaller buffer limit', async () => {
+  const first = client(); await first.ready;
+  first.saveDraft(draft()); await first.flushPersistence(); first.destroy(); await first.flushPersistence();
+  await record((value) => {
+    value.state.network = [
+      { t: 2, kind: 'fetch', method: 'GET', url: 'https://test/newer' },
+      { t: 1, kind: 'fetch', method: 'GET', url: 'https://test/older' },
+    ];
+    return value;
+  });
+  const next = client({ capture: { network: true }, limits: { network: 1 } }); await next.ready;
+  expect(next.buildPayload({}).network.map((e) => e.url)).toEqual(['https://test/newer']);
 });
