@@ -17,12 +17,16 @@ await page.click(W + '[data-action=close]');
 
 // Framework-neutral source path, with an actual failed module download then a retry.
 await page.goto(BASE_URL + '/?lazy-retry');
+await page.locator(W + '[data-ref=pillOpen]').waitFor();
 await page.evaluate(async ({ corePath, widgetPath }) => {
   const { createLightback } = await import(corePath);
   const { mountLazyWidget } = await import(widgetPath);
-  // The React provider owns the first host; use a separate hidden-trigger mount.
+  // The provider owns a separate host; identify this mount independently of DOM order.
   window.lazyClient = createLightback();
   window.lazyHandle = mountLazyWidget({ client: window.lazyClient, hideTrigger: true });
+  window.lazyHandle.element.dataset.ref = 'retryWidget';
+  // Reproduce the order seen when React mounts after this fixture on a slower runner.
+  document.body.prepend(window.lazyHandle.element);
 }, { corePath: '/@fs' + new URL('../packages/core/src/index.ts', import.meta.url).pathname, widgetPath: '/@fs' + new URL('../packages/widget/src/lazy.ts', import.meta.url).pathname });
 let fail = true;
 await page.route('**/widget/src/ui.ts*', (route) => fail ? route.abort() : route.continue());
@@ -30,7 +34,7 @@ const failed = await page.evaluate(() => window.lazyHandle.open().then(() => fal
 assert(failed, 'failed module download rejects to host API');
 fail = false;
 await page.evaluate(() => window.lazyHandle.startPicking());
-assert(await page.locator('lightback-widget').last().locator('[data-ref=count]').textContent() === '0 selected', 'retry enters pick mode without selecting the trigger');
+assert(await page.locator('lightback-widget[data-ref=retryWidget] >> [data-ref=count]').textContent() === '0 selected', 'retry enters pick mode without selecting the trigger');
 await page.evaluate(() => { window.lazyHandle.destroy(); window.lazyClient.destroy(); });
 assert(await page.locator('lightback-widget').count() === 1, 'destroy removes only its own host');
 // Test the shipped standalone files, with a real failed download and fresh-URL retry.
