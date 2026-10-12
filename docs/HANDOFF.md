@@ -108,6 +108,8 @@ Config lives in `docs/.vitepress/config.ts`. Set `base: '/lightback/'` (required
 
 ### B2. Landing page
 
+- [ ] Add an npm version badge near the top of the root `README.md` as part of the website/documentation work. Use a live badge for `@lightback/widget`, link it to `https://www.npmjs.com/package/@lightback/widget`, and verify that the badge renders and its link opens the package page.
+
 `docs/index.md` with the `home` layout: tagline, three feature cards (point at anything, context a model can use, your backend), install snippet, and the hero image. Below the fold, a short gallery: pick → comment → sending → inbox.
 
 **Media.** Still images already exist in `docs/assets/` and are regenerated with `pnpm screenshots` (needs `pnpm dev` running). For GIFs or MP4s, record with Playwright's `recordVideo` option in a variant of `e2e/screenshots.mjs`, then convert with ffmpeg: `ffmpeg -i in.webm -vf "fps=15,scale=1280:-1" -c:v libx264 -crf 28 out.mp4` for MP4 and `-vf "fps=12,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"` for a GIF. Prefer MP4 with `<video autoplay loop muted playsinline>`; GIFs over 2 MB make the page slow. Suggested clips: single element to send in five seconds; drag over the modal; pending card with Cancel.
