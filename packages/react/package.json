@@ -1,6 +1,6 @@
 {
   "name": "@lightback/react",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "React provider and hooks for Lightback.",
   "license": "MIT",
   "type": "module",
