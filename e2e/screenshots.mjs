@@ -1,0 +1,73 @@
+// Regenerates the product screenshots in docs/assets from the playground. Needs `pnpm dev` running.
+// Usage: pnpm --filter e2e run screenshots
+import { chromium } from 'playwright-core';
+import path from 'node:path';
+const OUT = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'docs', 'assets') + '/';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
+const W = 'lightback-widget >> ';
+const launchOpts = { headless: true };
+if (process.env.CHROME) launchOpts.executablePath = process.env.CHROME; else launchOpts.channel = 'chrome';
+const browser = await chromium.launch(launchOpts);
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 });
+await fetch(BASE_URL + '/api/feedback', { method: 'DELETE' });
+await page.goto(BASE_URL + '/');
+await page.waitForSelector('text=Invoices');
+await page.click('tr[data-invoice-id="INV-1044"] button');
+await page.waitForSelector('text=Payment failed');
+await page.screenshot({ path: OUT + 'playground.png' });
+// hero: popover on the failing button
+await page.click(W + '.lb-pill [data-action=pick]');
+await page.waitForSelector(W + '.lb-pickbar');
+const rb = await page.locator('tr[data-invoice-id="INV-1044"] button').boundingBox();
+await page.mouse.move(rb.x + 10, rb.y + 10);
+await page.waitForTimeout(150);
+await page.screenshot({ path: OUT + 'pick-hover.png' });
+await page.mouse.click(rb.x + 10, rb.y + 10);
+await page.waitForSelector(W + '[data-ref=popover]:not([hidden])');
+await page.keyboard.type('Retry does nothing after the 500. Expected a retry or a clear error.');
+await page.waitForTimeout(400);
+await page.screenshot({ path: OUT + 'hero.png' });
+// region over the modal: leave pick mode via the pickbar, open the dialog, pick again from the pill
+await page.click(W + '[data-action=pop-more]');
+await page.click(W + '[data-action=cancel-pick]');
+await page.click('text=Export…');
+await page.waitForSelector('.modal');
+await page.click(W + '.lb-pill [data-action=pick]');
+await page.waitForSelector(W + '.lb-pickbar');
+const mb = await page.locator('.modal').boundingBox();
+const sx = mb.x - 120, sy = mb.y + 60, ex = mb.x + mb.width - 20, ey = mb.y + mb.height - 70;
+await page.mouse.move(sx, sy);
+await page.mouse.down();
+await page.mouse.move(sx + 40, sy + 30);
+await page.mouse.move(ex, ey, { steps: 8 });
+await page.waitForTimeout(100);
+await page.screenshot({ path: OUT + 'region-drag.png' });
+await page.mouse.up();
+await page.waitForSelector(W + '[data-ref=popover]:not([hidden])');
+await page.keyboard.type('Format selector resets when the dialog reopens');
+await page.waitForTimeout(300);
+await page.screenshot({ path: OUT + 'region-popover.png' });
+// pending card
+await page.keyboard.press('Enter');
+await page.waitForSelector(W + '[data-ref=pending]:not([hidden])');
+await page.waitForTimeout(700);
+await page.screenshot({ path: OUT + 'sending.png' });
+await page.click(W + '[data-action=pending-edit]');
+await page.waitForSelector(W + '.lb-panel:not([hidden])');
+await page.click(W + 'summary');
+await page.waitForTimeout(300);
+await page.screenshot({ path: OUT + 'panel-review.png' });
+await page.click(W + '[data-action=send]');
+await page.waitForSelector(W + '.lb-toast:not([hidden])');
+await page.waitForSelector(W + '.lb-toast[hidden]', { state: 'attached', timeout: 10000 });
+await page.mouse.click(8, 400); // backdrop click closes the dialog
+await page.waitForTimeout(200);
+await page.click('text=Feedback inbox');
+await page.waitForSelector('.tabs');
+await page.waitForTimeout(400);
+await page.screenshot({ path: OUT + 'inbox-summary.png' });
+await page.click('.tabs >> text=prompt');
+await page.waitForTimeout(300);
+await page.screenshot({ path: OUT + 'inbox-prompt.png' });
+await browser.close();
+console.log('done');

@@ -14,6 +14,12 @@ Status as of 2026-10-11. Items are ordered by agreed priority within each tier. 
 - JSON/multipart transport, `beforeSend`, custom `send`, `toPromptContext`.
 - React provider and hooks. Playground with mock API and inbox. Four browser suites plus unit tests.
 
+## In flight (see `docs/HANDOFF.md` for steps)
+
+- Track A: compatibility fixes, CI on three browser engines, npm publishing from GitHub Actions with Changesets and trusted publishing.
+- Track B: website at https://aleandros.github.io/lightback with screenshots, clips and the guides (VitePress on `docs/`).
+- Track C: user guides in `docs/guide/` plus the small widget APIs they promise (`strings`, `theme`, `hideTrigger`, `::part`).
+
 ## Next (agreed, not started)
 
 1. **Correlation and ranking in the prompt.** `toPromptContext` should surface the errors and failed requests that happened closest to the selection or the last user action first, and collapse repetitive noise. Pure function in `prompt.ts`, test with fixtures.
@@ -21,8 +27,7 @@ Status as of 2026-10-11. Items are ordered by agreed priority within each tier. 
 3. **Vite plugin that stamps `data-source`.** Adds `data-source="file:line:col"` to JSX/Vue/Svelte elements at build time so production bundles keep source locations without React debug internals. Lives in a new `packages/vite-plugin`.
 4. **Screenshot annotations.** Rectangles, arrows and a blur tool on the captured screenshot, so sensitive regions can be masked before sending.
 5. **Persistence.** Keep ring buffers and the current draft in `sessionStorage` so a reload mid-report, or an error that reloads the page, does not lose context.
-6. **Lazy widget and IIFE build.** Load the widget on first pill interaction; ship a single-file IIFE for script-tag installs.
-7. **CI.** GitHub Actions running build, typecheck, unit tests and the e2e suites against the playground with a Playwright-provided Chromium.
+6. **Lazy widget.** Load the widget on first pill interaction. (The IIFE build and CI moved into Track A.)
 
 ## Later
 

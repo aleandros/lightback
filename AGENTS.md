@@ -1,6 +1,8 @@
 # Lightback — guide for agents
 
-Read this first. Then `docs/ARCHITECTURE.md` for how the pieces fit, `docs/DECISIONS.md` for why they are shaped this way, and `docs/ROADMAP.md` for what is agreed next. Keep all four current when you change something they describe.
+Read this first. Then `docs/ARCHITECTURE.md` for how the pieces fit, `docs/DECISIONS.md` for why they are shaped this way, `docs/ROADMAP.md` for what is agreed next, and `docs/HANDOFF.md` for the detailed steps of the tracks currently in flight (compatibility and CI publishing, the website, the user guides). Keep them current when you change something they describe.
+
+User-facing guides live in `docs/guide/`. They are written ahead of the code in places; every such section is marked **Planned**. When you ship one of those features, remove the marker and update the prose in the same change.
 
 ## What this is
 
@@ -14,7 +16,7 @@ packages/widget    @lightback/widget  <lightback-widget> custom element, Shadow 
 packages/react     @lightback/react   LightbackProvider, useLightback, useLightbackWidget. Thin.
 examples/playground                   Vite + React demo with a mock API (vite.config.ts) and an inbox page.
 e2e                                   Playwright suites against the playground. Not unit tests.
-docs                                  Architecture, decisions, roadmap.
+docs                                  Architecture, decisions, roadmap, handoff, user guides (docs/guide), screenshots (docs/assets).
 ```
 
 Dependency direction is strict: `core ← widget ← react`, `playground` consumes all three via Vite aliases to `src` (no build needed for `pnpm dev`).
@@ -29,6 +31,7 @@ pnpm typecheck               # tsc across all projects (widget/react need core's
 pnpm test                    # vitest, packages/core/test
 pnpm e2e       # browser suites; needs `pnpm dev` running and a system Chrome
 pnpm e2e send-flow   # one suite
+pnpm screenshots     # regenerate docs/assets/*.png from the playground; needs `pnpm dev` running
 ```
 
 Node 22, pnpm 10 via corepack. The e2e runner uses Playwright's `channel: 'chrome'`; set `CHROME=/path/to/binary` to override, `BASE_URL` to point elsewhere. Screenshots land in `e2e/out/<suite>/` (gitignored). Look at them when a suite fails: they are the fastest way to see what the widget actually rendered.

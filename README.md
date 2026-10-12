@@ -1,5 +1,7 @@
 # Lightback
 
+![Lightback: click an element, the comment box opens right there](docs/assets/hero.png)
+
 Framework-agnostic in-app feedback capture. Users pick the elements they are talking about, write a note, optionally attach a screenshot, and submit. The payload carries the context a developer or a model needs: component chain for each selected element, console output, errors, network requests, breadcrumbs, environment and whatever app context you attach. Nothing leaves the browser until the user sends; sending shows a cancel window, and the full preview is one click away.
 
 ## Packages
@@ -22,12 +24,30 @@ pnpm build
 pnpm e2e    # browser suites; needs `pnpm dev` running and a system Chrome
 ```
 
+## In action
+
+| Drag an area, even over a modal | Optimistic send with a cancel window | What the backend receives |
+| --- | --- | --- |
+| ![Region selection resolves to the dialog, not the backdrop](docs/assets/region-popover.png) | ![Sending card with Edit and Cancel](docs/assets/sending.png) | ![Inbox showing component chain, source, crop and props](docs/assets/inbox-summary.png) |
+
+Regenerate these with `pnpm screenshots` while `pnpm dev` is running.
+
 ## Documentation
+
+User guides, drafted and partly ahead of the code (sections marked **Planned**):
+
+- `docs/guide/getting-started.md`: install, mount, first report.
+- `docs/guide/customization.md`: options, CSS variables, theme, your own trigger, screenshot capturers.
+- `docs/guide/backend.md`: wire contract, a receiver in Node, custom `send`, `beforeSend`, triage with a model.
+- `docs/guide/texts-and-i18n.md`: the `strings` option and every label.
+
+For contributors and agents:
 
 - `AGENTS.md` is the entry point for agents and new contributors: commands, definition of done, conventions that are easy to break, where to look for a given task.
 - `docs/ARCHITECTURE.md` describes every module, the payload shape, the widget's surfaces and the send flow.
 - `docs/DECISIONS.md` records why things are shaped the way they are.
 - `docs/ROADMAP.md` lists what is done, what is agreed next, and open questions.
+- `docs/HANDOFF.md` is the step-by-step plan for the next tracks: compatibility and npm publishing from CI, the website at aleandros.github.io/lightback, and finishing the user guides.
 
 ## Usage
 
