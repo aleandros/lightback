@@ -9,7 +9,7 @@ page activity ──► collectors (ring buffers) ──┐
                                                │
 user picks/drags ──► inspect/region ──► selections ─┤
                                                ├──► buildPayload(draft) ──► beforeSend ──► transport
-user types note ─────────────────────────────┤        (scrubDeep redaction)                 (JSON or multipart)
+user types note ─────────────────────────────┤        (redactDeep redaction)                 (JSON or multipart)
 screenshot + crops (widget) ─────────────────┘
 ```
 
@@ -26,11 +26,12 @@ screenshot + crops (widget) ─────────────────�
 | `client.ts` | `createLightback()`. Owns the buffers, context, `describeElement`/`describeRegion` wrappers, `buildPayload`, `send`, `mute`, `destroy`. Exports `IGNORE_ATTR = 'data-lightback-ignore'`. The configured `endpoint` is excluded from network capture. |
 | `collectors/console.ts` | Patches `console.*`, formats args with `format.ts`, respects `isMuted`. |
 | `collectors/errors.ts` | `window.onerror` + `unhandledrejection`. |
-| `collectors/network.ts` | Patches `fetch` and `XMLHttpRequest`. Records method, url (redacted), status, ok, duration, kind. Bodies only when `capture.networkBodies` and same-origin. Honors `isMuted` and `ignore(url)`. |
+| `collectors/network.ts` | Patches `fetch` and `XMLHttpRequest`. Records method, url (redacted), status, ok, duration, kind. Bodies only when `capture.networkBodies` and same-origin; response bodies also require a verified same-origin final URL. Per-client epochs invalidate pending captures on clear/destroy. Honors `isMuted` and `ignore(url)`. |
 | `collectors/breadcrumbs.ts` | click, change (no values), visibility, `pushState`/`replaceState`/`popstate`/`hashchange`, plus `addBreadcrumb` for custom ones. |
+| `collectors/patch.ts` | Composable method wrappers for console, fetch/XHR and history. Teardown disables the collector, preserves newer wrappers, and collapses inactive wrappers when restoring a method. |
 | `collectors/env.ts` | userAgent, language, timezone, viewport, screen, DPR, online. |
 | `ring.ts` | Fixed-size ring buffer. Limits come from `options.limits`. |
-| `redact.ts` | `DEFAULT_REDACT` (auth/cookie headers, secret query params, JWT and card-number regexes), `redactString`, `redactUrl`, `redactHeaders`, `truncate`. `client.ts` applies these recursively (`scrubDeep`) to the whole payload including selection text, attrs and props. |
+| `redact.ts` | `DEFAULT_REDACT` (auth/cookie fields, secret query params, JWT and card-number regexes), string/URL helpers, `redactText`, `redactDeep`, `truncate`. `buildPayload` normalizes JSON serialization (including Dates and host `toJSON` hooks), then recursively copies and redacts the complete payload, including embedded URLs/JSON, page metadata, context and breadcrumbs. Attachment names are scrubbed identically in payload references and transport metadata. `beforeSend` receives this snapshot and is a trusted host transformation. |
 | `inspect.ts` | `describeElement(el)` → `ElementSelection`. `uniqueSelector` (data-testid → id → structural path anchored on nearest ancestor with either). `componentChain` walks React fiber internals (`__reactFiber$…`, `_debugSource`, React 19 `_debugStack` parsing, `memoizedProps`) or Vue 3/2 internals, and falls back to a `data-source="file:line:col"` attribute. `snapshotProps` strips functions, elements and children, depth 2, 40 keys, 200-char strings. |
 | `region.ts` | `describeRegion(rect)`: grid-sample `elementFromPoint` inside the rect (step ≥ 6px, ≤ 40 samples per axis), discard hits that contain other hits (backdrops, padding), container = lowest common ancestor, children = highest ancestors fully inside the rect, document order. |
 | `prompt.ts` | `toPromptContext(payload)` renders bounded markdown: note, selections (kind, note, crop, components with sources, selector, text, attrs, props, rect, region children), errors, network, console, breadcrumbs, env, context, attachments. This is what a model should read; keep it in step with `types.ts`. |
@@ -44,7 +45,7 @@ screenshot + crops (widget) ─────────────────�
 
 Records expire after the last checkpoint (default/maximum 30 minutes, configurable shorter). Reads purge expired, incompatible or malformed records. Expired records from closed tabs are physically removed on the next storage open; browser-restored/duplicated sessions can retain/copy the tab key. Denial, quota failure, blocked opens and missing storage fall back to memory; write errors invalidate the session key to prevent stale recovery. `persistence: false` makes no recovery storage calls. This database is independent of the demo inbox. The recovery schema is separate from payload version 1.
 
-`getDraft`, `saveDraft`, `flushPersistence` and `clearPersistence` support custom editors. Successful sends clear the current stored draft and all four collector buffers, including intervening edits/events; failed/vetoed sends retain current state. The submitted payload is the snapshot built before the asynchronous hook/transport. Widget Discard calls the same clear API. Destroy flushes best-effort and unregisters listeners. The widget checkpoints each note input and selection/attachment change, guards late screenshot work after discard/destroy, and restores object URLs after recovery without resuming picking or send timers. The lazy shell reads only draft metadata to show the count, leaving the UI deferred. Older core clients without recovery APIs still mount with memory-only behavior.
+`getDraft`, `saveDraft`, `flushPersistence` and `clearPersistence` support custom editors. Successful sends clear the current stored draft and all four collector buffers, including intervening edits/events; failed/vetoed sends retain current state. The submitted payload is the snapshot built before the asynchronous hook/transport. Widget Discard calls the same clear API. Clear increments a per-client network epoch so pending fetch/XHR and cloned-body completions cannot refill buffers or schedule stale checkpoints. Destroy invalidates pending captures, flushes best-effort and unregisters listeners; it does not abort host requests. Independently created clients can be destroyed in any order without disabling or reviving each other’s collectors. The widget checkpoints each note input and selection/attachment change, guards late screenshot work after discard/destroy, and restores object URLs after recovery without resuming picking or send timers. The lazy shell reads only draft metadata to show the count, leaving the UI deferred. Older core clients without recovery APIs still mount with memory-only behavior.
 
 ### Selection shape
 
@@ -130,7 +131,7 @@ Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the
 | --- | --- |
 | `session-recovery.mjs` | Real IndexedDB recovery of text, selection notes, blobs and context across reloads; deletion on send/discard, tab isolation and pending-send cancellation. |
 | `lazy-loading.mjs` | Deferred React/neutral/standalone loading, first interaction, real import failure and retry, host identity and teardown. |
-| `smoke.mjs` | Noise generation, panel flow, full payload assertions (redaction, bodies, breadcrumbs, context), inbox overlays. |
+| `smoke.mjs` | Noise generation, panel flow, full payload assertions (redaction, bodies, breadcrumbs, context), inbox overlays, native fetch/XHR redirect body privacy. |
 | `region-source-props.mjs` | Inline popover, drag over a modal resolving to the modal, source location and props in payload and inbox. |
 | `pill-pins-crops.mjs` | Pill actions, removing via popover and pin, Cancel keeps draft, auto screenshot and crops; `helpers/customization.mjs` checks translations, themes, hidden trigger and CSS parts. |
 | `send-flow.mjs` | Popover Send and Enter, pending card Cancel/Edit, Add more, auto-send after delay with crops, Discard. |

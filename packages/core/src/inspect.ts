@@ -61,15 +61,17 @@ export function summarizeElement(el: Element): ElementSummary {
   };
 }
 
-function elementText(el: Element, max = MAX_TEXT): string {
+export function elementText(el: Element, max = MAX_TEXT): string {
+  // Descendants of editors inherit their editable contents, even without their own attribute.
+  if (el.closest('[contenteditable]')) return '';
   const input = el as HTMLInputElement;
   // Never read values out of form controls.
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
     return (input.placeholder || input.getAttribute('aria-label') || '').slice(0, max);
   }
+  if (el.closest('textarea, select')) return '';
   const clone = el.cloneNode(true) as Element;
   clone.querySelectorAll('input, textarea, select, [contenteditable]').forEach((control) => control.remove());
-  if (el.hasAttribute('contenteditable')) return '';
   return (clone.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
 
@@ -86,6 +88,7 @@ function interestingAttrs(el: Element): Record<string, string> {
 }
 
 function trimmedHtml(el: Element): string {
+  if (el.closest('[contenteditable], textarea, select')) return '';
   const safe = el.cloneNode(true) as Element;
   for (const control of [safe, ...Array.from(safe.querySelectorAll('input, textarea, select, [contenteditable]'))]) {
     control.removeAttribute('value');

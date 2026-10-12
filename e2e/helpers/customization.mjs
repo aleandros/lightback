@@ -7,7 +7,7 @@ export async function checkCustomization(page, assert, baseURL) {
   await page.evaluate(async ({ corePath, widgetPath }) => {
     const { createLightback } = await import(corePath);
     const { mountWidget } = await import(widgetPath);
-    const client = createLightback({ capture: { console: false, errors: false, network: false, breadcrumbs: false }, send: async () => {} });
+    const client = createLightback({ persistence: false, capture: { console: false, errors: false, network: false, breadcrumbs: false }, send: async () => {} });
     const widget = mountWidget({ client, hideTrigger: true, theme: 'light', strings: {
       countSelected: (n) => `${n} elegidos`, done: (n) => `Listo (${n})`,
       areaIn: (name) => `Área de ${name}`, send: 'Enviar', summarySelections: (n) => `${n} selecciones`,
@@ -36,6 +36,7 @@ export async function checkCustomization(page, assert, baseURL) {
   assert(await bg() === '#111827', 'auto responds to system preference changes');
   assert(await q('[data-ref=pill]').isHidden(), 'custom trigger starts with hidden pill');
   await page.click('[data-action=customPick]');
+  await q('[data-action=done]').waitFor({ state: 'visible' });
   const target = await page.locator('[data-testid=stat-overdue]').boundingBox();
   await page.mouse.click(target.x + 8, target.y + 8);
   assert(await q('[data-ref=count]').textContent() === '1 elegidos', 'translated dynamic count');
@@ -46,6 +47,7 @@ export async function checkCustomization(page, assert, baseURL) {
   await q('[data-action=pending-cancel]').click();
   assert(await q('[data-ref=pill]').isHidden(), 'pending cancellation keeps custom trigger hidden');
   await page.click('[data-action=customPick]');
+  await q('[data-action=done]').waitFor({ state: 'visible' });
   await q('[data-action=done]').click();
   assert(await q('[data-ref=panel]').evaluate((panel) => getComputedStyle(panel).borderRadius) === '23px', 'host stylesheet can customize panel part');
   await q('[data-action=discard]').click();

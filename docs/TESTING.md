@@ -38,6 +38,9 @@ A successful **core** send clears the current draft and all collector buffers, i
 | Invariant | Test owner |
 | --- | --- |
 | FIFO ring order, capacity including zero, isolated array snapshots | Core `invariants.property.test.ts` |
+| Independent collectors across arbitrary teardown orders; original methods restored | Core collector lifecycle property, with four clients and generated disposal permutations |
+| Complete payload redaction, editable contents, fetch/XHR redirect origin | Core privacy regressions plus native redirects in `e2e/helpers/privacy.mjs` |
+| Pending network/body completions after clear, send or destroy; no stale recovery | Core collector lifecycle regressions with deferred responses, controlled XHR and durable-record inspection |
 | All four collectors and bounded recovery, startup event order, stricter capture/body policy | Core lifecycle model plus focused merge property |
 | Schema/expiry validation; malformed selections do not discard a valid note | Core focused properties using generated corrupt records |
 | Redaction before truncation; no form values or inspection HTML | Durable-record privacy property, using independent expected strings |
