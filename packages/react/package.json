@@ -1,0 +1,33 @@
+{
+  "name": "@lightback/react",
+  "version": "0.0.1",
+  "description": "React provider and hooks for Lightback.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.tsx --format esm,cjs --dts --clean --sourcemap --external react,@lightback/core,@lightback/widget",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@lightback/core": "workspace:*",
+    "@lightback/widget": "workspace:*",
+    "react": ">=17"
+  },
+  "devDependencies": {
+    "@lightback/core": "workspace:*",
+    "@lightback/widget": "workspace:*",
+    "@types/react": "^18.3.0",
+    "react": "^18.3.1"
+  }
+}

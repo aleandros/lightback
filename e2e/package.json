@@ -1,0 +1,12 @@
+{
+  "name": "e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser suites against the playground. Needs the dev server running (pnpm dev) and a system Chrome.",
+  "scripts": {
+    "e2e": "node run.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.49.1"
+  }
+}

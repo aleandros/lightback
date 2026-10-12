@@ -1,0 +1,118 @@
+# Lightback
+
+Framework-agnostic in-app feedback capture. Users pick the elements they are talking about, write a note, optionally attach a screenshot, and submit. The payload carries the context a developer or a model needs: component chain for each selected element, console output, errors, network requests, breadcrumbs, environment and whatever app context you attach. Nothing leaves the browser until the user sends; sending shows a cancel window, and the full preview is one click away.
+
+## Packages
+
+| Package | What it is |
+| --- | --- |
+| `@lightback/core` | Collectors, ring buffers, redaction, element inspection, payload builder, transport. No UI, no dependencies. |
+| `@lightback/widget` | Drop-in UI: trigger button, element picker, notes, screenshot, review and send. Vanilla TypeScript inside a Shadow DOM. |
+| `@lightback/react` | `LightbackProvider`, `useLightback()`, `useLightbackWidget()`. |
+| `examples/playground` | Vite + React demo app with a mock backend and an inbox that renders what arrived. |
+| `e2e` | Playwright suites that drive the playground in a real Chrome. |
+
+## Quick start
+
+```bash
+pnpm install
+pnpm dev          # http://localhost:5173
+pnpm test                 # unit tests (vitest)
+pnpm build
+pnpm e2e    # browser suites; needs `pnpm dev` running and a system Chrome
+```
+
+## Documentation
+
+- `CLAUDE.md` is the entry point for agents and new contributors: commands, definition of done, conventions that are easy to break, where to look for a given task.
+- `docs/ARCHITECTURE.md` describes every module, the payload shape, the widget's surfaces and the send flow.
+- `docs/DECISIONS.md` records why things are shaped the way they are.
+- `docs/ROADMAP.md` lists what is done, what is agreed next, and open questions.
+
+## Usage
+
+```ts
+// lightback.ts, imported once at app start so buffers are warm
+import { createLightback } from '@lightback/core';
+import { mountWidget } from '@lightback/widget';
+
+export const lightback = createLightback({
+  endpoint: '/api/feedback',               // or send: async (payload, attachments) => {...}
+  context: { release: '1.4.2' },
+  capture: { networkBodies: false },       // default; bodies are opt-in and same-origin only
+  redact: { headers: ['x-session'], patterns: [/acct_\w+/g] },
+  beforeSend: (payload) => payload,        // mutate or return null to veto
+});
+
+lightback.setContext({ user: { id: 'u_1' }, session: 'sess_1' });
+
+mountWidget({
+  client: lightback,
+  screenshot: () => import('modern-screenshot').then((m) => m.domToBlob(document.documentElement)),
+});
+```
+
+React:
+
+```tsx
+<LightbackProvider client={lightback} widget={{ screenshot }} context={{ user }}>
+  <App />
+</LightbackProvider>
+```
+
+## Payload
+
+The transport sends `application/json` when there are no attachments and `multipart/form-data` otherwise. In multipart, the `payload` field holds the JSON and each attachment is a file field named by its `name` (for example `screenshot.png`).
+
+```ts
+interface FeedbackPayload {
+  version: 1;
+  id: string;
+  createdAt: string;
+  page: { url; title; referrer; scroll: { x; y }; size: { width; height } };
+  note: { text: string; transcript?: string };
+  selections: ElementSelection[];   // selector, tag, text, attrs, rect, docRect, framework, components[], note
+  attachments: { name; type; size }[];
+  env: { userAgent; language; timezone; viewport; screen; devicePixelRatio; online };
+  console: ConsoleEntry[];
+  errors: ErrorEntry[];
+  network: NetworkEntry[];
+  breadcrumbs: Breadcrumb[];
+  context: Record<string, unknown>;
+}
+```
+
+`toPromptContext(payload)` renders the payload as bounded markdown for a model prompt. Pair it with the screenshot for a vision-capable model.
+
+## Selecting elements and areas
+
+The floating pill offers the two entry points directly: **Point at something** starts pick mode, **Write feedback** opens the panel. With a draft in progress the pill shows the selection count and switches to **Review & send**.
+
+Pick mode has two gestures:
+
+- **Click an element.** A comment box opens right next to it, focused, with the component name as its title. Enter saves, Esc skips, clicking elsewhere saves and continues picking. A numbered pin stays on the element while the draft exists.
+- **Drag a rectangle.** The widget samples the browser's own hit testing on a grid inside the rectangle, so only elements that are actually visible and on top count. If a modal is open, the dragged area resolves to the modal, never to what sits behind its backdrop. The selection records the container (lowest common ancestor of what was hit, with surfaces the drag spilled onto discarded) and the largest visible elements fully inside the rectangle.
+
+Every selection has a numbered pin on the page with a remove button on hover. The top bar shows the count with **Cancel** (leave pick mode, keep the draft) and **Done** (open the panel). The comment box has **Remove**, **Add more** (save and keep pointing) and **Send**; Enter sends.
+
+**Sending is optimistic.** Send does not open a review step. It shows a small "Sending feedback…" card with a summary and a draining bar, and the report goes out when the bar empties (`sendDelay`, default 5000 ms, 0 for immediate). **Edit** opens the full panel with the draft, which is where the prompt and JSON preview still live. **Cancel** stops the send and keeps the draft; the pill then reads "Review & send". The panel has **Discard** to drop a draft.
+
+**Screenshots are automatic** when a `screenshot` capturer is configured: entering pick mode captures the full page once (collectors are muted during capture so the capturer's own requests never reach the report), and each selection gets a padded crop with the selected rect outlined, attached as `selection-N.png` and referenced from `selection.crop`. Set `autoScreenshot: false` to go back to manual capture.
+
+Each selection carries, when a dev build exposes them, a **source location** (JSX call site, from React's debug info, Vue's `__file`, or a `data-source="file:line:col"` attribute a build plugin can stamp) and a **props snapshot** of the nearest component (functions, elements and children stripped, depth-limited, redacted like every other string).
+
+## How element selection works
+
+The picker uses `elementFromPoint` and describes the element with a unique selector (preferring `data-testid`, then `id`, then a structural path), interesting attributes, trimmed text, and a component chain. The chain comes from React fiber internals (`__reactFiber$…`) or Vue instance internals (`__vueParentComponent`, `__vue__`), so a selection reads as `InvoiceRow ‹ InvoiceTable ‹ Dashboard ‹ App` rather than a CSS path.
+
+## Redaction
+
+Default rules replace `authorization`, `cookie` and similar headers, common secret query params, JWT-shaped strings and card-number-shaped digit runs. Input values are never recorded in breadcrumbs. Request and response bodies are off by default and only ever captured for same-origin requests.
+
+## Roadmap
+
+- v0 (this): collectors, element and area picker with inline comments, source location and props, automatic screenshot and crops, optimistic send, transport, React wrapper, playground, browser suites.
+- v1: correlation and ranking in the prompt, a reference AI triage handler and payload JSON Schema, a Vite plugin that stamps `data-source` in production, screenshot annotations with blur, draft and buffer persistence, lazy widget and IIFE build, CI.
+- v2: voice notes with a pluggable transcriber, video capture via `getDisplayMedia`, optional rrweb plugin with a rolling replay window, Vue and Svelte wrappers.
+
+Details and open questions live in `docs/ROADMAP.md`.
