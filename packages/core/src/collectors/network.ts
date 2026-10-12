@@ -62,6 +62,7 @@ function patchFetch(buffer: RingBuffer<NetworkEntry>, cfg: NetworkConfig): () =>
           .text()
           .then((text) => {
             entry.responseBody = cleanBody(text, cfg);
+            buffer.touch();
           })
           .catch(() => {});
       }

@@ -52,6 +52,14 @@ export function createLazyWidget(
   let pending: Promise<void> | undefined;
   let intent: 'open' | 'startPicking' | undefined;
   let destroyed = false;
+  void Promise.resolve(opts.client.ready).then(() => {
+    if (destroyed || widget) return;
+    const draft = opts.client.getDraft?.();
+    if (!draft) return;
+    const count = draft.selections.length;
+    pill.querySelector('[data-ref=pillPick]')!.textContent = count ? strings.pillPickCount(count) : strings.pillPick;
+    pill.querySelector('[data-ref=pillOpen]')!.textContent = count || draft.text ? strings.pillReview : strings.pillOpen;
+  });
   const activate = (action: 'open' | 'startPicking'): Promise<void> => {
     if (destroyed) return Promise.resolve();
     if (widget) { widget[action](); return Promise.resolve(); }
@@ -61,7 +69,7 @@ export function createLazyWidget(
     status.textContent = strings.loading;
     pill.setAttribute('aria-busy', 'true');
     // Do not mute collectors while downloading: host activity must keep accumulating.
-    pending = Promise.resolve().then(load).then((module) => {
+    pending = Promise.all([Promise.resolve().then(load), opts.client.ready]).then(([module]) => {
       if (destroyed || !intent) return;
       widget = module.mountWidget(opts, element);
       root.removeEventListener('click', onClick);

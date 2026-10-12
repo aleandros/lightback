@@ -67,7 +67,10 @@ function elementText(el: Element, max = MAX_TEXT): string {
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
     return (input.placeholder || input.getAttribute('aria-label') || '').slice(0, max);
   }
-  return (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
+  const clone = el.cloneNode(true) as Element;
+  clone.querySelectorAll('input, textarea, select, [contenteditable]').forEach((control) => control.remove());
+  if (el.hasAttribute('contenteditable')) return '';
+  return (clone.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
 
 function interestingAttrs(el: Element): Record<string, string> {
@@ -83,10 +86,14 @@ function interestingAttrs(el: Element): Record<string, string> {
 }
 
 function trimmedHtml(el: Element): string {
-  const clone = el.cloneNode(false) as Element;
-  clone.removeAttribute('value');
+  const safe = el.cloneNode(true) as Element;
+  for (const control of [safe, ...Array.from(safe.querySelectorAll('input, textarea, select, [contenteditable]'))]) {
+    control.removeAttribute('value');
+    if (control.matches('textarea, select, [contenteditable]')) control.textContent = '';
+  }
+  const clone = safe.cloneNode(false) as Element;
   const open = clone.outerHTML.replace(/<\/[^>]+>$/, '');
-  const inner = el.innerHTML.replace(/\s+/g, ' ').trim();
+  const inner = safe.innerHTML.replace(/\s+/g, ' ').trim();
   return `${open}${inner.slice(0, MAX_HTML)}${inner.length > MAX_HTML ? '…' : ''}</${el.tagName.toLowerCase()}>`;
 }
 
@@ -249,7 +256,7 @@ export function snapshotProps(props: Record<string, unknown>, depth = PROPS_DEPT
   const out: Record<string, unknown> = {};
   let n = 0;
   for (const [k, v] of Object.entries(props)) {
-    if (k === 'children') continue;
+    if (['children', 'value', 'defaultValue', 'innerHTML', 'dangerouslySetInnerHTML'].includes(k)) continue;
     if (++n > PROPS_KEYS) {
       out['…'] = `${Object.keys(props).length - PROPS_KEYS} more keys`;
       break;

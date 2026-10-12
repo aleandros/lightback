@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Restore report text, selections, in-progress selection notes and opted-in screenshot/crop blobs after reload. Show recovered counts in the lazy trigger, keep restored reports editable without restarting send timers, and prevent late capture jobs from reviving discarded drafts.
+
 ### Changed
 
 - Add `mountLazyWidget()` through `@lightback/widget/lazy` and a lazy standalone script that load the editor and picker on first interaction while collectors keep running. Preserve custom triggers, strings, themes and host styling; share concurrent loads, retry failed downloads and prevent late mounting after teardown. The eager entry remains available.
