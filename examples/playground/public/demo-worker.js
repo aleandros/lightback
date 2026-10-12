@@ -1,6 +1,9 @@
 // Only simulates the demo's API. No caching or interception of docs, assets, or other sites.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener('message', (event) => {
+  if (event.data === 'lightback:claim') event.waitUntil(self.clients.claim());
+});
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   const api = new URL('api/', self.registration.scope);

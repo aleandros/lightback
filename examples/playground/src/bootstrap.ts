@@ -6,7 +6,7 @@ async function start() {
     await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}demo-worker.js`, {
       scope: import.meta.env.BASE_URL,
     });
-    await navigator.serviceWorker.ready;
+    const registration = await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) {
       await new Promise<void>((resolve, reject) => {
         const onChange = () => {
@@ -20,6 +20,9 @@ async function start() {
           reject(new Error('The demo could not start. Please reload the page.'));
         }, 10000);
         navigator.serviceWorker.addEventListener('controllerchange', onChange);
+        // A forced reload can bypass an already-active worker (notably Firefox).
+        // Ask it to claim this page again; activation alone only covers installation.
+        registration.active?.postMessage('lightback:claim');
         onChange();
       });
     }

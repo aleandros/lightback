@@ -140,6 +140,14 @@ try {
   await page.waitForFunction(() => document.querySelector('lightback-widget').shadowRoot.querySelector('[data-ref=status]').textContent.includes('storage'));
   assert(await page.inputValue(W + '[data-ref=text]') === 'Keep this draft on failure', 'failed storage keeps the draft available for retry');
   await finish();
+} catch (error) {
+  await page.screenshot({ path: OUT + 'failure.png', fullPage: true }).catch(() => {});
+  console.error('Demo failure state:', await page.evaluate(() => ({
+    url: location.href,
+    body: document.body.innerText.slice(0, 3000),
+    controlled: !!navigator.serviceWorker.controller,
+  })).catch(() => null));
+  throw error;
 } finally {
   await browser.close();
   server.close();
