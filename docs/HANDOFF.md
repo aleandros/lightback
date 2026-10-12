@@ -20,7 +20,7 @@ A1 and the repository work for A2/A3 are implemented. The first published releas
 - [x] CI workflow with four suites per browser engine, packed-consumer smoke checks and strict type resolution (no ignored rules).
 - [x] Changesets config, initial 0.1.0 changeset, and release workflow gated on reusable CI, with OIDC/provenance and GitHub releases.
 - [ ] Confirm npm scope ownership, bootstrap the three packages, configure trusted publishers, and prove an automated release.
-- [ ] Verify the first GitHub workflow runs after pushing this implementation to `main`. Local validation results are recorded below.
+- [x] Verified GitHub CI and Release on `main` (2026-10-12). All package and browser checks passed; Release succeeded on its second attempt after enabling Actions PR creation in repository settings.
 
 Implementation corrections to the original plan:
 
@@ -30,6 +30,8 @@ Implementation corrections to the original plan:
 - The default e2e runner now excludes `screenshots.mjs`; only `pnpm screenshots` rewrites committed media. The crop suite forces the legacy decoder.
 - Release CI installs npm 11 explicitly (OIDC requires npm >=11.5.1 and Node >=22.14). pnpm 10.18 delegates publication of its rewritten tarball to npm. Provenance is enabled with `NPM_CONFIG_PROVENANCE=true`.
 - Internal peer ranges cover compatible 0.0.x and 0.1.x APIs. Changesets only promotes peers when a release leaves the range, avoiding accidental 1.0.0 wrapper releases during bootstrap.
+
+GitHub validation on 2026-10-12: [CI passed](https://github.com/aleandros/lightback/actions/runs/38265463883). The first [Release run](https://github.com/aleandros/lightback/actions/runs/38265464388) passed every check but failed to open its Version Packages PR with `GitHub Actions is not permitted to create or approve pull requests`. Enabled the repository's Actions PR-creation setting (`can_approve_pull_request_reviews=true`), preserving default workflow permissions as `read`. Rerunning the failed release job succeeded and created the release PR. npm bootstrap and trusted publishing remain outstanding.
 
 Local validation on 2026-10-12:
 
