@@ -20,13 +20,11 @@ Status as of 2026-10-12. Items are ordered by agreed priority within each tier. 
 
 - Published `@lightback/core`, `@lightback/widget` and `@lightback/react` at `0.1.0`; configured trusted publishing for all three and merged release PR #1.
 
-- Tracks B/C repository implementation (2026-10-12): VitePress site, complete user guides, generated payload/string references, translations, theme, hidden trigger and CSS parts. Local validation complete; deployment and widget publication remain below.
+- Tracks A–C complete (2026-10-12): [public VitePress site](https://aleandros.github.io/lightback/), complete guides and generated references, widget customization/i18n APIs in [0.1.1](https://github.com/aleandros/lightback/releases/tag/%40lightback/widget%400.1.1), and the first verified npm OIDC upload with provenance. See the publication record in `docs/HANDOFF.md`.
 
-## In flight (see `docs/HANDOFF.md` for steps)
+## In flight
 
-- Track A: verify the first actual OIDC upload on the next Version Packages PR. The `0.1.0` bootstrap is published, trusted publishers are configured, and GitHub CI/Release checks pass.
-- Track B: activate GitHub Pages, merge and verify the VitePress site at https://aleandros.github.io/lightback/. Landing page, screenshots, guides and workflow are implemented. Clips/static demo can follow.
-- Track C: publish the implemented widget customization APIs and remove release-availability notices, then verify the guides publicly. The widget patch Changeset also supplies Track A’s first substantive OIDC upload.
+None. The next agreed work starts with prompt correlation and ranking below. Optional site follow-ups are short video clips and a static playground demo.
 
 ## Next (agreed, not started)
 
@@ -50,5 +48,5 @@ Status as of 2026-10-12. Items are ordered by agreed priority within each tier. 
 
 License is settled: the SDK packages are MIT (see `docs/DECISIONS.md` #12). A hosted backend, if built, is a separate codebase under its own terms.
 
-- Public API freeze point for `FeedbackPayload` v1. Decide before publishing to npm.
+- Formalize the `FeedbackPayload` v1 compatibility policy before any breaking schema change. Version 1 is already published.
 - npm scope is settled: `@lightback/*`, owned by the `lightback` organization. Initial `0.1.0` packages published on 2026-10-12.

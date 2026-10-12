@@ -3,7 +3,7 @@
 Everything below is set on `mountWidget()` or, in React, on the `widget` prop of `LightbackProvider`.
 
 ::: info Release availability
-`strings`, `theme`, `hideTrigger` and styling parts are implemented in the repository for the next widget release. They are not included in npm `0.1.0`.
+`strings`, `theme`, `hideTrigger` and styling parts are available in `@lightback/widget` starting with **0.1.1**.
 :::
 
 ## Options

@@ -60,7 +60,7 @@ For a script-tag install, build and serve `packages/widget/dist/lightback.iife.j
 </script>
 ```
 
-The standalone script includes core and exposes `window.Lightback`. The next widget release also exposes `Lightback.defaultStrings` for script-tag translations. All three packages are available on npm at `0.1.0`. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.1.0/dist/lightback.iife.js` in the script tag above.
+The standalone script includes core and exposes `window.Lightback`. Widget `0.1.1` also exposes `Lightback.defaultStrings` for script-tag translations. The current npm versions are widget `0.1.1`, core `0.1.0`, and React `0.1.0`. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.1.1/dist/lightback.iife.js` in the script tag above.
 
 ## Validation and releases
 
@@ -73,7 +73,7 @@ pnpm --filter e2e exec playwright-core install chromium firefox webkit
 BROWSER=webkit pnpm e2e # also chromium or firefox
 ```
 
-CI runs all three engines. Screenshot regeneration remains the separate `pnpm screenshots` command. Run `pnpm changeset` for package changes; the release workflow runs the CI gates, opens a Version Packages PR, and is configured to publish subsequent merged versions with provenance through npm trusted publishing. The initial `0.1.0` release was published locally; the first automated upload remains to be verified. No npm token is stored in GitHub.
+CI runs all three engines. Screenshot regeneration remains the separate `pnpm screenshots` command. Run `pnpm changeset` for package changes; the release workflow runs the CI gates, opens a Version Packages PR, and publishes merged versions with provenance through npm trusted publishing. Widget `0.1.1` is the first verified OIDC upload; the initial `0.1.0` release was published locally. No npm token is stored in GitHub.
 
 ## In action
 
@@ -85,7 +85,7 @@ Regenerate these with `pnpm screenshots` while `pnpm dev` is running.
 
 ## Documentation
 
-User guides (the customization additions are implemented in the source tree and will ship in the next widget release):
+Published guides at [aleandros.github.io/lightback](https://aleandros.github.io/lightback/):
 
 - `docs/guide/getting-started.md`: install, mount, first report.
 - `docs/guide/customization.md`: options, CSS variables, theme, your own trigger, screenshot capturers.
@@ -93,7 +93,7 @@ User guides (the customization additions are implemented in the source tree and 
 - [Texts and i18n](docs/guide/texts-and-i18n.md): the `strings` option and every label.
 - [Payload reference](docs/guide/payload.md): generated from the public TypeScript types.
 
-Preview the website with `pnpm --filter docs dev`, or build and preview the production site with `pnpm --filter docs build` and `pnpm --filter docs preview`. The Pages workflow deploys `/lightback/` when changes land on main; repository Pages source must be set to GitHub Actions.
+Preview the website with `pnpm --filter docs dev`, or build and preview the production site with `pnpm --filter docs build` and `pnpm --filter docs preview`. The Pages workflow deploys `/lightback/` when changes land on main; GitHub Pages is configured to use Actions.
 
 For contributors and agents:
 
@@ -101,7 +101,7 @@ For contributors and agents:
 - `docs/ARCHITECTURE.md` describes every module, the payload shape, the widget's surfaces and the send flow.
 - `docs/DECISIONS.md` records why things are shaped the way they are.
 - `docs/ROADMAP.md` lists what is done, what is agreed next, and open questions.
-- `docs/HANDOFF.md` is the step-by-step plan for the next tracks: compatibility and npm publishing from CI, the website at aleandros.github.io/lightback, and finishing the user guides.
+- `docs/HANDOFF.md` records completed release/site/docs tracks and links to the next agreed priorities.
 
 ## Usage
 
@@ -145,7 +145,7 @@ mountWidget({
 });
 ```
 
-`strings` merges over exported `defaultStrings`; its functions let your app control plural rules. `strings.pillOpen` wins over the legacy `triggerLabel`. CSS variables remain the primary styling API, with `::part(pill)`, `::part(panel)`, `::part(popover)` and `::part(pending)` for larger changes. These additions are in the source tree for the next widget release; npm `0.1.0` does not include them yet.
+`strings` merges over exported `defaultStrings`; its functions let your app control plural rules. `strings.pillOpen` wins over the legacy `triggerLabel`. CSS variables remain the primary styling API, with `::part(pill)`, `::part(panel)`, `::part(popover)` and `::part(pending)` for larger changes. These options are available in `@lightback/widget` starting with `0.1.1`.
 
 ## Payload
 
@@ -199,7 +199,7 @@ Default rules replace `authorization`, `cookie` and similar headers, common secr
 ## Roadmap
 
 - v0 (this): collectors, element and area picker with inline comments, source location and props, automatic screenshot and crops, optimistic send, transport, React wrapper, playground, browser suites.
-- Track A: compatibility fixes, standalone IIFE, CI and Changesets release workflow implemented; `0.1.0` published and trusted publishers configured; verification of the next automated upload remains. Tracks B/C add a VitePress site, complete guides, and customization/i18n APIs; public deployment and the widget release remain to be verified.
+- Tracks A–C complete: compatibility, standalone IIFE, CI with verified npm OIDC publishing, the public docs site, complete guides, and widget customization/i18n APIs in `0.1.1`.
 - v1: correlation and ranking in the prompt, a reference AI triage handler and payload JSON Schema, a Vite plugin that stamps `data-source` in production, screenshot annotations with blur, draft and buffer persistence, lazy widget.
 - v2: voice notes with a pluggable transcriber, video capture via `getDisplayMedia`, optional rrweb plugin with a rolling replay window, Vue and Svelte wrappers.
 

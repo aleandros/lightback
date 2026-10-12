@@ -1,7 +1,7 @@
 # Texts and i18n
 
 ::: info Release availability
-`strings` and `defaultStrings` are implemented in the repository for the next widget release. npm `0.1.0` supports only `triggerLabel`.
+`strings` and `defaultStrings` are available in `@lightback/widget` starting with **0.1.1**. Version `0.1.0` supports only `triggerLabel`.
 :::
 
 ## Design

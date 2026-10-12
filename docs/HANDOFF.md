@@ -2,7 +2,18 @@
 
 Work agreed on 2026-10-11, written so a fresh session can pick up any track without the original conversation. Read `AGENTS.md` first. Each track lists steps in order, what "done" means, and the files involved. Tick items off here as they ship and move finished tracks to `docs/ROADMAP.md`.
 
-Tracks are independent of each other except where noted. Suggested order: A, then B and C together.
+## Publication completed — 2026-10-12
+
+Tracks A, B and C are complete. Next agreed implementation: prompt correlation and ranking, followed by the reference triage handler and source-stamping Vite plugin; see `docs/ROADMAP.md`. The original checklists below remain as implementation history.
+
+- [Docs site](https://aleandros.github.io/lightback/) is live. Enabled Pages with `build_type: workflow`; [initial deployment](https://github.com/aleandros/lightback/actions/runs/38297130348) succeeded. All seven public pages, local search, images and internal links passed a live browser check.
+- Implementation commit `9af2a67` passed [CI](https://github.com/aleandros/lightback/actions/runs/38297130351) and [Release checks](https://github.com/aleandros/lightback/actions/runs/38297130739), including all four suites on Chromium, Firefox and WebKit.
+- [Version PR #2](https://github.com/aleandros/lightback/pull/2), head `1976b4ce1601e7f1c01b1ba40bfdf8d156586d3e`, passed [version-branch CI](https://github.com/aleandros/lightback/actions/runs/38297386846) and merged as `e05e0165ea5226baec2c12fd432ba7d385717232`.
+- [Widget 0.1.1](https://github.com/aleandros/lightback/releases/tag/%40lightback/widget%400.1.1) published through [GitHub Actions OIDC](https://github.com/aleandros/lightback/actions/runs/38297673131), with registry provenance tied to that repository, workflow and merge commit. Core and React stay at `0.1.0`; payload version stays 1.
+- Installed `@lightback/widget@0.1.1` in a clean consumer and checked the new exports. Tarball SHA-512 matches registry integrity and provenance; `npm audit signatures` verified both registry signatures and the widget attestation.
+- npm availability lagged the successful upload by several minutes. [Publish-time scanning](https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/) can delay downloads; verify a clean install after upload, rather than retrying publication.
+- Updated the guides and README to identify the released API version. Subsequent docs pushes automatically redeploy the site.
+- npm's badge renders and links to the published package. Automated Chrome reached npm's HTTP 403 challenge; registry metadata and the release artifacts were verified directly.
 
 ---
 
@@ -12,7 +23,7 @@ Goal: `@lightback/core`, `@lightback/widget` and `@lightback/react` publish to n
 
 ### Progress — 2026-10-12
 
-A1/A2 are implemented and verified. All three `0.1.0` packages are published and their trusted publishers are configured. Track A remains open only for proving an actual OIDC upload on the next package release.
+Track A is complete: the initial packages are published, trusted publishers are configured, and widget `0.1.1` proves the OIDC upload and provenance path.
 
 - [x] UUID fallbacks, SSR guards, image/canvas screenshot fallback, repeated-mount regression coverage.
 - [x] ES2020 module builds and standalone `dist/lightback.iife.js` exposing `window.Lightback`.
@@ -20,7 +31,7 @@ A1/A2 are implemented and verified. All three `0.1.0` packages are published and
 - [x] CI workflow with four suites per browser engine, packed-consumer smoke checks and strict type resolution (no ignored rules).
 - [x] Changesets config, initial 0.1.0 changeset, and release workflow gated on reusable CI, with OIDC/provenance and GitHub releases.
 - [x] Confirmed organization ownership, published all three `0.1.0` packages, and configured trusted publishers for `aleandros/lightback` / `release.yml`.
-- [ ] Prove an actual OIDC upload and provenance on the next package release.
+- [x] Proved an actual OIDC upload and provenance with widget `0.1.1`; see the publication record above.
 - [x] Verified GitHub CI and Release on `main` (2026-10-12). All package and browser checks passed; Release succeeded on its second attempt after enabling Actions PR creation in repository settings.
 
 Implementation corrections to the original plan:
@@ -44,7 +55,7 @@ Local validation on 2026-10-12:
 - `actionlint` passed both workflows; `git diff --check` passed.
 - A Changesets version dry run in a temporary copy produced `0.1.0` for all three packages. Release PR #1 subsequently applied those versions and was merged; the initial changeset has been consumed. `pnpm version-packages` updates future versions and the lockfile.
 
-Tracks B/C repository implementation is now ready for review (see their progress records below). The next widget release will verify the remaining OIDC upload path.
+Tracks B/C are published; widget `0.1.1` verified the remaining OIDC path. See the publication record above.
 
 ### A1. Compatibility fixes (code changes, do first)
 
@@ -86,11 +97,11 @@ Publication record — 2026-10-12:
 - Configured each npm trusted publisher for GitHub repository `aleandros/lightback`, workflow `release.yml`, allowing publication. npm confirmed creation for all three packages after interactive 2FA. No npm token is stored in GitHub.
 - [Release-branch CI](https://github.com/aleandros/lightback/actions/runs/38274305408) passed the package job and all three browser engines. PR #1 merged as `6513c0c86adce229a5f4e5033186202b5c460452`; [CI](https://github.com/aleandros/lightback/actions/runs/38282278297) and [Release](https://github.com/aleandros/lightback/actions/runs/38282278451) both passed on that merge.
 - Created the three initial package tags and [GitHub release records](https://github.com/aleandros/lightback/releases) at the merged version commit. Future release records are handled by Changesets.
-- The initial upload was local, so it has no GitHub OIDC provenance. The successful post-merge release job does not prove an OIDC upload because `0.1.0` already exists. Verify that path on the next substantive release; do not republish `0.1.0`.
+- The initial upload was local, so it has no GitHub OIDC provenance. The successful post-merge release job does not prove an OIDC upload because `0.1.0` already exists. That path was subsequently verified with widget `0.1.1`; do not republish `0.1.0`.
 
-Next release work: the B/C implementation includes a widget patch Changeset. After review and merge, merge its Version Packages PR after CI and verify npm publication, provenance and GitHub release creation.
+The B/C widget patch Changeset was consumed by version PR #2; publication, provenance and GitHub release creation are verified. Future package changes follow the same Changesets workflow.
 
-The default `GITHUB_TOKEN` does not trigger new workflow runs when the bot opens its Version Packages PR. If branch protection requires checks on that PR, trigger CI manually on the version branch (CI supports `workflow_dispatch`) or configure a GitHub App token for the bot. Release still reruns every gate on main before publishing.
+If a bot-opened Version Packages PR has no CI checks, trigger CI manually on the version branch (CI supports `workflow_dispatch`). For PR #2, both the dispatched run and the pull-request run passed. Release reruns every gate on main before publishing.
 
 Done when: merging a Version Packages PR publishes to npm with provenance, with no secrets in the repo.
 
@@ -102,15 +113,15 @@ Goal: a public page that shows the product in motion and hosts the guides from `
 
 ### Progress — 2026-10-12
 
-Repository implementation is complete and locally validated; the public deployment is still pending.
+Track B is complete: the site is deployed at https://aleandros.github.io/lightback/ and automatic deployments are configured.
 
 - [x] Private `docs` workspace using VitePress 1.6, `/lightback/` base, guide sidebar, local search, edit links and responsive landing page with existing screenshots.
 - [x] Internal architecture, decisions, roadmap and handoff excluded from the public build. The guides and generated references are public.
 - [x] Pages workflow on main/manual dispatch, plus docs build and generated-reference freshness checks in reusable CI.
 - [x] README live npm badge added; it renders `v0.1.0` and targets the correct widget package URL. Opening npm in automated Chrome reached an HTTP 403 challenge, so visual verification of the package page remains pending.
 - [x] All seven public pages, internal links, images and local search checked in production preview; desktop/mobile screenshots reviewed.
-- [ ] Activate repository Pages with GitHub Actions as its source, merge the implementation, and verify the public URL and subsequent automatic deployment. The Pages API returned 404 during the read-only check; no settings were changed.
-- [ ] Recheck the npm badge destination in a browser that can pass npm's challenge.
+- [x] Enabled Pages with GitHub Actions as its source and verified the public URL after deployment. Subsequent main pushes trigger the Pages workflow.
+Optional verification: revisit the npm package page in a browser that can pass its challenge; the registry and package URL are verified.
 
 Media currently uses the committed screenshots. Video clips and the optional static playground demo remain enhancements after the initial docs site ships.
 
@@ -144,7 +155,7 @@ Done when: the URL serves the landing page with media and the guides, and a docs
 
 Goal: someone who has never seen the repo can install Lightback, make it look like their app, point it at their own backend, and translate it.
 
-The guides now describe the implemented code, with release-availability notices for widget additions that are not in npm `0.1.0`. No **Planned** markers remain in the guides.
+Track C is complete. The public guides describe the released code and identify widget `0.1.1` as the first version with customization/i18n. No **Planned** markers remain in the guides.
 
 ### Progress — 2026-10-12
 
@@ -152,9 +163,9 @@ The guides now describe the implemented code, with release-availability notices 
 - [x] `theme: 'light' | 'dark' | 'auto'`, `hideTrigger` through close/cancel/discard/send, and `pill`/`panel`/`popover`/`pending` CSS parts.
 - [x] Guide examples corrected: screenshot dependency install, actual system-font behavior, beforeSend veto and mutation, auth/multipart details, and provider-neutral model forwarding.
 - [x] Payload and full string references generated by `scripts/generate-reference.mjs` from TypeScript source; the docs build regenerates them and CI rejects drift.
-- [x] README, package README, architecture and decisions updated. `.changeset/quiet-lights-translate.md` requests a compatible widget patch; core and payload version stay unchanged.
+- [x] README, package README, architecture and decisions updated. The compatible widget patch Changeset was consumed by version PR #2; core and payload version stay unchanged.
 - [x] Local checks: package build, typecheck, 19 unit tests, all four system-Chrome suites (including new customization checks), docs build, packed-consumer/strict declaration checks, and `git diff --check` passed. The focused `BROWSER=webkit pnpm e2e pill-pins-crops` run also passed, including forced/automatic themes, translated counts and status, hidden-trigger cancellation, and CSS-part styling.
-- [ ] Publish the widget release, verify OIDC provenance (Track A), and replace the guides' release-availability notices with the released version. Serve the guides publicly through Track B.
+- [x] Published widget `0.1.1`, verified OIDC provenance, updated release-availability notices and served the guides through Track B.
 
 ### C1. Implemented APIs (original checklist)
 

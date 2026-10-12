@@ -12,7 +12,7 @@ pnpm add modern-screenshot
 pnpm add @lightback/react
 ```
 
-Packages are ESM and CommonJS, with matching TypeScript types. Version `0.1.0` is published on npm for all three packages. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
+Packages are ESM and CommonJS, with matching TypeScript types. Current npm versions are widget `0.1.1`, core `0.1.0`, and React `0.1.0`. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
 
 ## Mount it
 
