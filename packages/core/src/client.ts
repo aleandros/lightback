@@ -132,15 +132,17 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
     for (const entry of entries) buffer.push(entry);
   };
   persistence = createPersistence(options.persistence, snapshot, (state) => {
-    merge(consoleBuf, state.console.slice(-limits.console).map(clean), capture.console, (e) => typeof e.message === 'string' && ['log', 'info', 'warn', 'error', 'debug'].includes(e.level));
-    merge(errorBuf, state.errors.slice(-limits.errors).map(clean), capture.errors, (e) => typeof e.message === 'string' && ['error', 'unhandledrejection'].includes(e.kind));
-    merge(networkBuf, state.network.slice(-limits.network).map(clean).map((entry) => capture.networkBodies ? entry : { ...entry, requestBody: undefined, responseBody: undefined }), capture.network,
+    merge(consoleBuf, state.console.map(clean), capture.console, (e) => typeof e.message === 'string' && ['log', 'info', 'warn', 'error', 'debug'].includes(e.level));
+    merge(errorBuf, state.errors.map(clean), capture.errors, (e) => typeof e.message === 'string' && ['error', 'unhandledrejection'].includes(e.kind));
+    merge(networkBuf, state.network.map(clean).map((entry) => capture.networkBodies ? entry : { ...entry, requestBody: undefined, responseBody: undefined }), capture.network,
       (e) => typeof e.url === 'string' && typeof e.method === 'string' && ['fetch', 'xhr'].includes(e.kind));
-    merge(breadcrumbBuf, state.breadcrumbs.slice(-limits.breadcrumbs).map(clean), capture.breadcrumbs, (e) => typeof e.message === 'string' && typeof e.type === 'string');
+    merge(breadcrumbBuf, state.breadcrumbs.map(clean), capture.breadcrumbs, (e) => typeof e.message === 'string' && typeof e.type === 'string');
     if (!draftChanged && state.draft) {
       const draft = cleanDraft(state.draft);
       draft.selections = draft.selections.filter(isRecoveredSelection);
       if (!options.persistence || !options.persistence.attachments) draft.attachments = [];
+      const names = new Set(draft.attachments.map((attachment) => attachment.name));
+      draft.selections.forEach((selection) => { if (!names.has(selection.crop ?? '')) delete selection.crop; });
       savedDraft = draft;
     }
     changed(); // Re-checkpoint under the current capture, redaction and attachment policy.

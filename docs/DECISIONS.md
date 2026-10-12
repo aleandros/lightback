@@ -87,3 +87,10 @@ Use IndexedDB for bounded collector snapshots and drafts so screenshots can rema
 Persisted strings use configured redaction before truncation, secret-named fields are redacted, and inspection HTML and form-value props are omitted. The inspector also strips controls from ancestor text/HTML. Persisting screenshot pixels requires explicit `attachments: true`: only the injected capturer can mask those pixels. This preserves text recovery without assuming regexes sanitize an image. Context is re-supplied by the host rather than persisted.
 
 Never replay a pending send after reload. Restore an editable draft, retain it on send failure/veto, and clear draft plus old context buffers on successful send or discard. Storage failures must not break feedback; invalidate the session key after a failed write so a stale checkpoint does not return. Serialized writes and clear generations handle startup and teardown races. Keep recovery storage independent of the playground's sent-report inbox.
+
+
+## 21. Property tests at public and platform boundaries
+
+Use fast-check as a workspace development dependency: its generated arrays shrink action sequences and values and provide seed/path replay under Vitest. Small reference states track text, selection ids, ordered event labels and lifecycle flags. They compare public observations after each action, rather than calling production normalization or reproducing persistence queues. Plain action arrays keep replay to a single seed/path; guarded actions outside their allowed state are no-ops. Core remains dependency-free at runtime.
+
+Use fake-indexeddb for transactions, with narrow deferred open notifications and Blob encoding for race tests. Widget tests drive the public handles and DOM hooks with controlled clocks, transport and raster callbacks. No state-management rewrite or new public test seam is needed. The normal corpus is deterministic and bounded; larger local runs are opt-in. Keep the real IndexedDB/UI browser suites and retain meaningful shrunk failures as named regressions. [TESTING.md](./TESTING.md) documents the state model and replay workflow.

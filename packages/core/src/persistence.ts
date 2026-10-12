@@ -64,6 +64,8 @@ export function createPersistence(
   }
   const ready = (async () => {
     if (!enabled) return;
+    // Clear can happen while open itself is pending, before a transaction exists.
+    const epoch = generation;
     try {
       key = sessionStorage.getItem(sessionKey) || uid();
       sessionStorage.setItem(sessionKey, key);
@@ -80,7 +82,6 @@ export function createPersistence(
       });
       db = database;
       db.onversionchange = () => fail();
-      const epoch = generation;
       await transaction((store) => {
         const cursor = store.openCursor();
         cursor.onsuccess = () => {

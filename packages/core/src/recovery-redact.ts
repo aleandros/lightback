@@ -24,7 +24,8 @@ export function scrubRecovery(value: unknown, options: RedactOptions, maxString:
     for (const [key, item] of Object.entries(value).slice(0, 100)) {
       const lower = key.toLowerCase();
       if (['html', 'value', 'defaultvalue', 'innerhtml', 'dangerouslysetinnerhtml'].includes(lower)) continue;
-      const cleanKey = redactString(key, options).slice(0, maxString);
+      // Tiny value limits must not rename structural fields such as `selections`.
+      const cleanKey = redactString(key, options).slice(0, Math.max(64, maxString));
       result[cleanKey] = [...options.headers, ...options.urlParams].some((secret) => secret.toLowerCase() === lower)
         ? options.replacement : scrubRecovery(item, options, maxString, depth + 1);
     }
