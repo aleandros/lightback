@@ -98,6 +98,10 @@ Vite + React 18. Aliases point at package `src`, so no build is needed for `pnpm
 | `GET /api/notfound?token=…` | 404; proves query-param redaction. |
 | `GET /api/slow`, `/api/echo` | Latency and XHR scenarios for the ChaosPanel. |
 
+The public demo uses `vite build --mode demo` with base `/lightback/demo/` and hash navigation, so inbox links and refreshes work on a static host. `bootstrap.ts` activates a scoped service worker before mounting the app. `public/demo-worker.js` simulates only the demo API (including fetch and XHR); it does not cache assets or intercept the docs. The normal development API remains unchanged.
+
+In demo mode, the custom `send` in `submissions.ts` stores payloads and attachment data URLs in IndexedDB, retaining the latest 20 reports. Reads and clears use the same store, with errors surfaced in the inbox/widget. Reports never leave the browser. This is example inbox storage, not SDK draft/buffer persistence. The external cross-origin noise button is omitted from the public demo.
+
 Pages: Dashboard (stat cards with `data-testid`, invoice table, Export modal, ChaosPanel to generate console/errors/network/breadcrumb noise) and Inbox (Summary, Screenshot with selection overlays, Prompt, JSON).
 
 ## E2E (`e2e`)
@@ -126,4 +130,4 @@ All module builds target ES2020, with separate `.d.ts` (ESM) and `.d.cts` (Commo
 
 ## Documentation site
 
-`docs` is a private VitePress workspace, with base `/lightback/`. The home page and `docs/guide/` are public; internal planning files are excluded. `scripts/generate-reference.mjs` uses the TypeScript parser to regenerate payload and string reference tables during the docs build. CI builds the site and rejects stale generated tables. `.github/workflows/pages.yml` builds and deploys the site on main, with Pages configured to use Actions. The [site](https://aleandros.github.io/lightback/) is live. Build output and VitePress cache are ignored.
+`docs` is a private VitePress workspace, with base `/lightback/`. `pnpm build:site` builds the docs and playground, then `scripts/assemble-site.mjs` copies the demo into the Pages artifact. `pnpm e2e:demo` serves those built files without a fallback or mock backend and exercises send, screenshots, inbox, refresh, isolation and clearing. CI runs it on all three browser engines. The home page and `docs/guide/` are public; internal planning files are excluded. `scripts/generate-reference.mjs` uses the TypeScript parser to regenerate payload and string reference tables during the docs build. CI builds the site and rejects stale generated tables. `.github/workflows/pages.yml` builds and deploys the site on main, with Pages configured to use Actions. The [site](https://aleandros.github.io/lightback/) is live. Build output and VitePress cache are ignored.

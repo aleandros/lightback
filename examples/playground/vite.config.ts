@@ -86,8 +86,11 @@ function mockApi(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), mockApi()],
+export default defineConfig(({ mode }) => ({
+  base: mode === 'demo' ? '/lightback/demo/' : '/',
+  // Keep the demo's component chains readable in its production bundle.
+  esbuild: { keepNames: mode === 'demo' },
+  plugins: [react(), ...(mode === 'demo' ? [] : [mockApi()])],
   resolve: {
     alias: {
       '@lightback/core': path.resolve(__dirname, '../../packages/core/src/index.ts'),
@@ -96,4 +99,4 @@ export default defineConfig({
     },
   },
   server: { port: 5173 },
-});
+}));

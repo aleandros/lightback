@@ -8,6 +8,7 @@ export default defineConfig({
   srcExclude: ['ARCHITECTURE.md', 'DECISIONS.md', 'ROADMAP.md', 'HANDOFF.md', 'AGENTS.md'],
   themeConfig: {
     nav: [
+      { text: 'Demo', link: 'https://aleandros.github.io/lightback/demo/' },
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Payload', link: '/guide/payload' },
     ],

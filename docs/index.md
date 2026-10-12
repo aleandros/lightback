@@ -6,11 +6,11 @@ hero:
   tagline: In-app feedback with the element, the screenshot, and the trail that led there. Delivered to your own backend.
   actions:
     - theme: brand
+      text: Try the demo
+      link: https://aleandros.github.io/lightback/demo/
+    - theme: alt
       text: Get started
       link: /guide/getting-started
-    - theme: alt
-      text: Explore the payload
-      link: /guide/payload
 features:
   - title: Point at anything
     details: Click an element or drag an area. Add a comment right where the problem is, with a screenshot crop for each selection.

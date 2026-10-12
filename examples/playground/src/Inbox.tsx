@@ -1,31 +1,36 @@
 import { useEffect, useState } from 'react';
-import { toPromptContext, type FeedbackPayload } from '@lightback/core';
-
-interface Submission {
-  id: string;
-  receivedAt: string;
-  payload: FeedbackPayload;
-  files: Record<string, string>;
-}
+import { toPromptContext } from '@lightback/core';
+import { clearSubmissions, listSubmissions, type Submission } from './submissions';
 
 export function Inbox() {
   const [items, setItems] = useState<Submission[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<'summary' | 'screenshot' | 'prompt' | 'json'>('summary');
+  const [error, setError] = useState('');
 
   const load = async () => {
-    const res = await fetch('/api/feedback');
-    const data = (await res.json()) as Submission[];
-    setItems(data);
-    setSelectedId((cur) => cur ?? data[0]?.id ?? null);
+    try {
+      const data = await listSubmissions();
+      setItems(data);
+      setSelectedId((cur) => data.some((item) => item.id === cur) ? cur : data[0]?.id ?? null);
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load the inbox.');
+    }
   };
 
   useEffect(() => {
     void load();
     const timer = setInterval(() => void load(), 3000);
     const hot = import.meta.hot;
-    hot?.on('lightback:submission', () => void load());
-    return () => clearInterval(timer);
+    const onSubmission = () => void load();
+    hot?.on('lightback:submission', onSubmission);
+    window.addEventListener('lightback:submission', onSubmission);
+    return () => {
+      clearInterval(timer);
+      hot?.off('lightback:submission', onSubmission);
+      window.removeEventListener('lightback:submission', onSubmission);
+    };
   }, []);
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
@@ -38,21 +43,27 @@ export function Inbox() {
           <span className="muted">{items.length} submission{items.length === 1 ? '' : 's'}</span>
           <button
             className="btn"
+            data-action="clear-inbox"
             onClick={async () => {
-              await fetch('/api/feedback', { method: 'DELETE' });
-              setSelectedId(null);
-              void load();
+              try {
+                await clearSubmissions();
+                setSelectedId(null);
+                await load();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Could not clear the inbox.');
+              }
             }}
           >
             Clear
           </button>
         </div>
       </header>
+      {error && <p role="alert" data-ref="inbox-error">{error}</p>}
       <div className="inbox">
         <ul className="inbox-list">
           {items.length === 0 && <li className="muted empty">Nothing yet. Send feedback from the dashboard.</li>}
           {items.map((s) => (
-            <li key={s.id} className={s.id === selectedId ? 'active' : ''} onClick={() => setSelectedId(s.id)}>
+            <li key={s.id} data-ref="submission" className={s.id === selectedId ? 'active' : ''} onClick={() => setSelectedId(s.id)}>
               <div className="when">{new Date(s.receivedAt).toLocaleTimeString()}</div>
               <div className="note">{s.payload.note.text || <em>(no text)</em>}</div>
               <div className="meta">
@@ -66,7 +77,7 @@ export function Inbox() {
           <div className="inbox-detail card">
             <div className="tabs">
               {(['summary', 'screenshot', 'prompt', 'json'] as const).map((t) => (
-                <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
+                <button key={t} data-action={`tab-${t}`} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
                   {t}
                 </button>
               ))}
@@ -74,7 +85,7 @@ export function Inbox() {
             {tab === 'summary' && <Summary s={selected} />}
             {tab === 'screenshot' && <Screenshot s={selected} />}
             {tab === 'prompt' && <Prompt s={selected} />}
-            {tab === 'json' && <pre className="code">{JSON.stringify(selected.payload, null, 2)}</pre>}
+            {tab === 'json' && <pre className="code" data-ref="payload-json">{JSON.stringify(selected.payload, null, 2)}</pre>}
           </div>
         )}
       </div>

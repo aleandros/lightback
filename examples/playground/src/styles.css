@@ -18,7 +18,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 .nav-item:hover { background: var(--bg); }
 .nav-item.active { background: var(--accent); color: #fff; }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: auto; }
-.main { padding: 24px 32px; max-width: 1100px; }
+.main { padding: 24px 32px; max-width: 1100px; min-width: 0; width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 h1 { margin: 0; font-size: 24px; }
 h2 { margin: 0 0 6px; font-size: 16px; }
@@ -97,3 +97,31 @@ table.mini tr.bad td { color: var(--danger); }
 .shot-box.region { border-style: dashed; }
 .shot-box.child { border-width: 1px; background: transparent; opacity: .7; }
 .crop { display: block; max-width: 100%; max-height: 220px; border: 1px solid var(--border); border-radius: 8px; margin: 4px 0; }
+
+/* Public demo introduction and layouts that also work on narrow screens. */
+.demo-intro { margin-bottom: 28px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
+.demo-eyebrow { display: block; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .12em; margin-bottom: 10px; }
+.demo-intro p { line-height: 1.6; max-width: 680px; }
+.demo-intro .btn { text-decoration: none; }
+.demo-guide { color: var(--accent); padding: 8px; }
+.demo-intro p:last-child { margin-bottom: 0; }
+.table-scroll { overflow-x: auto; }
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--border); padding: 16px; }
+  .sidebar nav { flex-direction: row; flex-wrap: wrap; }
+  .sidebar .hint { display: none; }
+  .main { padding: 20px 16px 100px; }
+  .page-header { flex-wrap: wrap; gap: 12px; }
+  .page-header .row { flex-wrap: wrap; }
+  .inbox { grid-template-columns: 1fr; }
+  table.mini { table-layout: fixed; }
+  .summary { overflow-wrap: anywhere; }
+}
+@media (max-width: 520px) {
+  .grid { grid-template-columns: 1fr; gap: 0; }
+  .demo-intro { padding: 18px; }
+  .demo-intro h1 { font-size: 22px; }
+  label.inline { flex-wrap: wrap; }
+  .tabs { flex-wrap: wrap; }
+}

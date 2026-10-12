@@ -1,3 +1,4 @@
+import { apiUrl, isDemo } from './mode';
 import { useState } from 'react';
 import { useLightback, useLightbackWidget } from '@lightback/react';
 
@@ -100,7 +101,7 @@ function StatCard({ label, value, trend }: { label: string; value: string; trend
 
 function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
   return (
-    <div className="card">
+    <div className="card table-scroll">
       <table className="invoices">
         <thead>
           <tr>
@@ -130,7 +131,7 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
     lb.addBreadcrumb('pay clicked', { invoice: invoice.id });
     try {
       // Overdue invoices hit the failing endpoint on purpose.
-      const res = await fetch(invoice.status === 'overdue' ? '/api/fail' : '/api/echo', {
+      const res = await fetch(invoice.status === 'overdue' ? apiUrl('fail') : apiUrl('echo'), {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1XzEyMyJ9.c2VjcmV0c2lnbmF0dXJlX3h4eHh4eHh4' },
         body: JSON.stringify({ invoice: invoice.id, amount: invoice.total }),
@@ -155,7 +156,7 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
       </td>
       <td className="actions">
         {state !== 'paid' && (
-          <button className="btn small" onClick={pay} disabled={state === 'paying'}>
+          <button data-action="pay" className="btn small" onClick={pay} disabled={state === 'paying'}>
             {state === 'paying' ? 'Paying…' : state === 'failed' ? 'Retry' : 'Pay'}
           </button>
         )}
@@ -200,12 +201,12 @@ function ChaosPanel() {
         </button>
       </div>
       <div className="row wrap">
-        <button className="btn" onClick={() => void fetch('/api/invoices')}>fetch 200</button>
-        <button className="btn" onClick={() => void fetch('/api/fail')}>fetch 500</button>
-        <button className="btn" onClick={() => void fetch('/api/notfound?token=supersecret&q=x')}>fetch 404 (redacted param)</button>
-        <button className="btn" onClick={() => void fetch('/api/slow')}>fetch slow</button>
-        <button className="btn" onClick={() => xhr('/api/invoices')}>XHR 200</button>
-        <button className="btn" onClick={() => void fetch('https://httpstat.us/503').catch(() => {})}>cross-origin</button>
+        <button className="btn" onClick={() => void fetch(apiUrl('invoices'))}>fetch 200</button>
+        <button data-action="fetch-failure" className="btn" onClick={() => void fetch(apiUrl('fail'))}>fetch 500</button>
+        <button className="btn" onClick={() => void fetch(apiUrl('notfound?token=supersecret&q=x'))}>fetch 404 (redacted param)</button>
+        <button className="btn" onClick={() => void fetch(apiUrl('slow'))}>fetch slow</button>
+        <button data-action="xhr-success" className="btn" onClick={() => xhr(apiUrl('invoices'))}>XHR 200</button>
+        {!isDemo && <button className="btn" onClick={() => void fetch('https://httpstat.us/503').catch(() => {})}>cross-origin</button>}
       </div>
       <div className="row wrap">
         <button className="btn" onClick={() => lb.addBreadcrumb('custom: opened export dialog', { format: 'csv' })}>custom breadcrumb</button>

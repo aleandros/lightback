@@ -16,7 +16,7 @@ Lightback ships a payload shape and a transport, nothing else. Consumers point i
 
 ## 4. Context, not replay
 
-Console, errors, network, breadcrumbs and environment in ring buffers, plus a screenshot. No DOM recording. rrweb-style replay is a later optional plugin, not a core concern: it multiplies payload size and privacy surface, and a model gets more from a component chain and a failed request than from a replay.
+Console, errors, network, breadcrumbs and environment in ring buffers, plus a screenshot. No DOM recording. Session replay and screen recording are deferred, not active backlog items: it multiplies payload size and privacy surface, and a model gets more from a component chain and a failed request than from a replay.
 
 ## 5. Privacy defaults are conservative
 
@@ -65,3 +65,11 @@ The private `docs` workspace keeps site dependencies out of the SDK. VitePress s
 ## 16. Translation functions and mount-time customization
 
 Every UI label and status has an English default in `strings.ts`; number-dependent messages are functions so the host owns plural rules. Host-supplied text is escaped at HTML boundaries. `strings.pillOpen` overrides `triggerLabel`; existing integrations keep working. Options are read at mount time. CSS variables remain the primary style contract, four surface parts allow larger changes, and explicit themes override system preference while `auto` keeps responding to it.
+
+## 17. A static interactive demo with browser-only reports
+
+Reuse the playground at `/lightback/demo/`, with an explicitly selected build mode so local API-based development and its tests remain intact. Hash routing avoids GitHub Pages rewrite requirements. A service worker scoped to the demo supplies simulated API responses for the real fetch/XHR collectors without a backend; it does not cache the site. A custom `send` stores the latest 20 reports and screenshots in IndexedDB, which accommodates screenshots better than localStorage. Visitors can clear the inbox. Prerecorded promotional walkthroughs are deferred.
+
+## 18. GitHub issues own the backlog and handoff
+
+[Backlog #19](https://github.com/aleandros/lightback/issues/19) holds the agreed ordering and links to actionable issues. Product work and AI integration improvements have separate lanes. Scope, acceptance criteria, progress and handoff notes belong on issues; source documentation continues to explain architecture and shipped behavior. The former roadmap and handoff files are stable pointers for existing links.

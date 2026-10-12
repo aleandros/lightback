@@ -1,6 +1,6 @@
 # Lightback — guide for agents
 
-Read this first. Then `docs/ARCHITECTURE.md` for how the pieces fit, `docs/DECISIONS.md` for why they are shaped this way, `docs/ROADMAP.md` for what is agreed next, and `docs/HANDOFF.md` for the detailed steps of the tracks currently in flight (compatibility and CI publishing, the website, the user guides). Keep them current when you change something they describe.
+Read this first. Then `docs/ARCHITECTURE.md` for how the pieces fit and `docs/DECISIONS.md` for why they are shaped this way. Pick work from the [GitHub backlog](https://github.com/aleandros/lightback/issues/19) and read the selected issue for scope, acceptance criteria and handoff notes. GitHub issues are the source of truth for priorities and progress; update the issue rather than maintaining source-controlled roadmap/handoff checklists. Keep architecture, decisions and user guides current when behavior changes.
 
 User-facing guides live in `docs/guide/`. They are written ahead of the code in places; every such section is marked **Planned**. When you ship one of those features, remove the marker and update the prose in the same change.
 
@@ -16,7 +16,7 @@ packages/widget    @lightback/widget  <lightback-widget> custom element, Shadow 
 packages/react     @lightback/react   LightbackProvider, useLightback, useLightbackWidget. Thin.
 examples/playground                   Vite + React demo with a mock API (vite.config.ts) and an inbox page.
 e2e                                   Playwright suites against the playground. Not unit tests.
-docs                                  Architecture, decisions, roadmap, handoff, user guides (docs/guide), screenshots (docs/assets).
+docs                                  Architecture, decisions, user guides (docs/guide), screenshots (docs/assets).
 ```
 
 Dependency direction is strict: `core ← widget ← react`, `playground` consumes all three via Vite aliases to `src` (no build needed for `pnpm dev`).
@@ -31,6 +31,8 @@ pnpm typecheck               # tsc across all projects (widget/react need core's
 pnpm test                    # vitest, packages/core/test
 pnpm e2e       # browser suites; run build first; needs `pnpm dev` running and a system Chrome
 pnpm e2e send-flow   # one suite
+pnpm build:site       # docs + production demo, assembled for Pages
+pnpm e2e:demo         # built static demo against a temporary HTTP server
 pnpm screenshots     # regenerate docs/assets/*.png from the playground; needs `pnpm dev` running
 ```
 
@@ -43,7 +45,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 1. `pnpm build` succeeds (9 module/declaration builds plus the standalone IIFE).
 2. `pnpm typecheck` is clean.
 3. `pnpm test` passes (core and widget).
-4. `pnpm e2e` passes all four suites.
+4. `pnpm e2e` passes all four suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
 5. README and the relevant `docs/*.md` describe the new behaviour. A feature that is not in README does not exist for users.
 6. New UI hooks have a `data-action` or `data-ref` attribute and the e2e suites use those, never visible text.
 

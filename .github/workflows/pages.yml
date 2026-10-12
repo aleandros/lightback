@@ -23,7 +23,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter docs build
+      - run: pnpm build:site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/.vitepress/dist

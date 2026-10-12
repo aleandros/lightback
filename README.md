@@ -28,6 +28,8 @@ pnpm add modern-screenshot
 
 ## Try the playground
 
+[Open the interactive demo](https://aleandros.github.io/lightback/demo/) — select an element or drag a region, send a report, then inspect its screenshots, prompt and JSON in the inbox. Reports stay in this browser; the latest 20 are kept until you clear the inbox or site storage. Payments and network failures are simulated. No signup or backend is needed.
+
 From a clone of this repository:
 
 ```bash
@@ -93,15 +95,14 @@ Published guides at [aleandros.github.io/lightback](https://aleandros.github.io/
 - [Texts and i18n](docs/guide/texts-and-i18n.md): the `strings` option and every label.
 - [Payload reference](docs/guide/payload.md): generated from the public TypeScript types.
 
-Preview the website with `pnpm --filter docs dev`, or build and preview the production site with `pnpm --filter docs build` and `pnpm --filter docs preview`. The Pages workflow deploys `/lightback/` when changes land on main; GitHub Pages is configured to use Actions.
+Preview the website with `pnpm --filter docs dev`, or build and preview the production site with `pnpm build:site` and `pnpm --filter docs preview`. The combined build includes the demo at `/lightback/demo/`. `pnpm e2e:demo` serves the built files and checks the demo end to end. The Pages workflow deploys `/lightback/` when changes land on main; GitHub Pages is configured to use Actions.
 
 For contributors and agents:
 
 - `AGENTS.md` is the entry point for agents and new contributors: commands, definition of done, conventions that are easy to break, where to look for a given task.
 - `docs/ARCHITECTURE.md` describes every module, the payload shape, the widget's surfaces and the send flow.
 - `docs/DECISIONS.md` records why things are shaped the way they are.
-- `docs/ROADMAP.md` lists what is done, what is agreed next, and open questions.
-- `docs/HANDOFF.md` records completed release/site/docs tracks and links to the next agreed priorities.
+- [GitHub backlog](https://github.com/aleandros/lightback/issues/19) is the source of truth for priorities, acceptance criteria and progress. Pick up work from linked issues; keep handoff notes on the issue.
 
 ## Usage
 
@@ -196,11 +197,6 @@ The picker uses `elementFromPoint` and describes the element with a unique selec
 
 Default rules replace `authorization`, `cookie` and similar headers, common secret query params, JWT-shaped strings and card-number-shaped digit runs. Input values are never recorded in breadcrumbs. Request and response bodies are off by default and only ever captured for same-origin requests.
 
-## Roadmap
+## Backlog
 
-- v0 (this): collectors, element and area picker with inline comments, source location and props, automatic screenshot and crops, optimistic send, transport, React wrapper, playground, browser suites.
-- Tracks A–C complete: compatibility, standalone IIFE, CI with verified npm OIDC publishing, the public docs site, complete guides, and widget customization/i18n APIs in `0.1.1`.
-- v1: correlation and ranking in the prompt, a reference AI triage handler and payload JSON Schema, a Vite plugin that stamps `data-source` in production, screenshot annotations with blur, draft and buffer persistence, lazy widget.
-- v2: voice notes with a pluggable transcriber, video capture via `getDisplayMedia`, optional rrweb plugin with a rolling replay window, Vue and Svelte wrappers.
-
-Details and open questions live in `docs/ROADMAP.md`.
+Priorities and implementation notes live in the [GitHub backlog](https://github.com/aleandros/lightback/issues/19), with an ordered product lane and an independent AI lane. Repository documentation describes shipped behavior; there is no separate Markdown roadmap to maintain.

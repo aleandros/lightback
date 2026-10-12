@@ -25,7 +25,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm check:packages
-      - run: pnpm --filter docs build
+      - run: pnpm build:site
       - run: git diff --exit-code -- docs/guide/payload.md docs/guide/strings-reference.md
 
   browsers:
@@ -58,6 +58,10 @@ jobs:
         env:
           BROWSER: ${{ matrix.browser }}
           BASE_URL: http://127.0.0.1:5173
+      - run: pnpm build:site
+      - run: pnpm e2e:demo
+        env:
+          BROWSER: ${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
