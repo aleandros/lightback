@@ -5,8 +5,8 @@ import {
 import { defaultStrings, type WidgetStrings } from './strings';
 export { defaultStrings, type WidgetStrings } from './strings';
 import { styles } from './styles';
-import { covers, decodeScreenshot, maskShot, release, type Shot } from './screenshot';
-import { captureCost } from './capture';
+import { bitmapBounds, covers, decodeScreenshot, maskShot, release, type Shot } from './screenshot';
+import { captureCost, OMITS_WIDGET } from './capture';
 
 import type { WidgetOptions, WidgetHandle } from './types';
 import { createHost } from './shell';
@@ -14,6 +14,9 @@ import { createHost } from './shell';
 const DRAG_THRESHOLD = 5;
 /** Default `screenshotMaxElements`: roughly 2 s of a DOM-cloning capturer on an ordinary laptop. */
 const DEFAULT_MAX_ELEMENTS = 8000;
+/** A budgeted capture that did not run because it would clone more than `screenshotMaxElements`. */
+const OVER_BUDGET = 'over-budget';
+type Captured = { shot: Shot; sensitive: Rect[] };
 
 const template = (s: WidgetStrings) => /* html */ `
 <div class="lb-pill" part="pill" data-ref="pill" role="group" aria-label="${esc(s.feedback)}">
@@ -116,6 +119,10 @@ class Widget implements WidgetHandle {
   private crops = new Map<string, { blob: Blob; url: string; width: number; area?: Rect }>();
   /** Captures run one at a time: each hides the widget, and an overlapping one would restore it mid-capture. */
   private captureQueue: Promise<unknown> = Promise.resolve();
+  /** Viewport (document coordinates) when each selection was made: what a viewport crop must show. */
+  private seenFrom = new Map<string, Rect>();
+  /** Latest capture for crops the viewport base does not show; reused while it covers them, dropped on new masks. */
+  private extra: { area: Rect; shot: Promise<Shot | null> } | null = null;
   private cropJobs = new Map<string, Promise<void>>();
   private pendingTimer: number | null = null;
   private autoShot: boolean;
@@ -465,6 +472,7 @@ class Widget implements WidgetHandle {
     this.renderSelections();
     this.updateCount();
     this.openPopover(desc.id);
+    this.seenFrom.set(desc.id, viewportRect());
     this.cropJobs.set(desc.id, this.cropSelection(desc).catch(() => {}));
     this.persistDraft();
   }
@@ -473,6 +481,7 @@ class Widget implements WidgetHandle {
     if (this.popoverFor === id) this.closePopover();
     this.selections = this.selections.filter((s) => s.id !== id);
     this.liveEls.delete(id);
+    this.seenFrom.delete(id);
     const crop = this.crops.get(id);
     if (crop) URL.revokeObjectURL(crop.url);
     this.crops.delete(id);
@@ -606,6 +615,7 @@ class Widget implements WidgetHandle {
     };
     if (rect.width <= 0 || rect.height <= 0) return;
     this.masks.push(rect);
+    this.extra = null; // captured without this mask
     this.hideHighlight();
     this.renderMasks();
     this.persistDraft();
@@ -655,8 +665,9 @@ class Widget implements WidgetHandle {
           this.crops.delete(sel.id);
           dropped = true;
         }
-        // Re-cut affected crops, and in-flight ones discarded by the repaint (restored crops have no job).
-        if (repainted && job && (hit || !this.crops.has(sel.id))) {
+        // Re-cut affected crops (the base may not show them: viewport crops can come from another capture), and
+        // in-flight ones discarded by the repaint. Restored crops have no job.
+        if (job && (hit || (repainted && !this.crops.has(sel.id)))) {
           this.cropJobs.set(sel.id, job.then(() => this.cropSelection(sel)).catch(() => {}));
         }
       }
@@ -753,31 +764,45 @@ class Widget implements WidgetHandle {
    * Hide the widget, run the consumer's capturer, restore, then mask sensitive elements and reporter areas.
    * The capturer's unmasked blob and bitmap never leave this method.
    */
-  private capture(): Promise<{ shot: Shot; sensitive: Rect[] } | null> {
-    const run = this.captureQueue.then(() => this.captureNow());
+  /**
+   * Queue a capture of `area` (default: `captureArea()` when it runs). With `budget`, it is skipped and resolves to
+   * OVER_BUDGET when it would clone too much; that is checked when it runs, since the page can change while it waits.
+   */
+  private capture(area?: Rect, budget = false): Promise<Captured | typeof OVER_BUDGET | null> {
+    const run = this.captureQueue.then(() => this.captureNow(area, budget));
     this.captureQueue = run.catch(() => {});
     return run;
   }
 
-  private async captureNow(): Promise<{ shot: Shot; sensitive: Rect[] } | null> {
-    if (!this.opts.screenshot || this.destroyed) return null;
+  private async captureNow(requested: Rect | undefined, budget: boolean): Promise<Captured | typeof OVER_BUDGET | null> {
+    const capturer = this.opts.screenshot;
+    if (!capturer || this.destroyed) return null;
+    // domCapturer leaves the widget out of the image, so it can stay visible and keep focus (and keystrokes).
+    const hide = !(capturer as { [OMITS_WIDGET]?: boolean })[OMITS_WIDGET];
     // WebKit scrolls the page to the top when a focused element inside the fixed host becomes hidden.
-    const focused = this.root.activeElement instanceof HTMLElement ? this.root.activeElement : null;
-    focused?.blur();
-    this.element.style.visibility = 'hidden';
-    await nextFrame();
-    await nextFrame();
+    const focused = hide && this.root.activeElement instanceof HTMLElement ? this.root.activeElement : null;
+    if (hide) {
+      focused?.blur();
+      this.element.style.visibility = 'hidden';
+      await nextFrame();
+      await nextFrame();
+    }
     let blob: Blob | null;
     let sensitive: Rect[];
-    const area = this.captureArea();
+    const area = requested ?? this.captureArea();
+    if (budget && captureCost(area) > (this.opts.screenshotMaxElements ?? DEFAULT_MAX_ELEMENTS)) {
+      if (hide) this.element.style.visibility = '';
+      focused?.focus({ preventScroll: true });
+      return OVER_BUDGET;
+    }
     try {
       // Measure on both sides: content can appear, move or become sensitive while the capturer runs.
       const before = this.sensitiveRects();
       // Screenshot libraries fetch fonts, images and blob URLs; none of that belongs in the report.
-      blob = await this.client.mute(() => this.opts.screenshot!({ area }));
+      blob = await this.client.mute(() => capturer({ area }));
       sensitive = uniqueRects([...before, ...this.sensitiveRects()]);
     } finally {
-      this.element.style.visibility = '';
+      if (hide) this.element.style.visibility = '';
       // Give focus back unless the user moved it meanwhile (it is then no longer on the body).
       if (focused?.isConnected && !this.root.activeElement && document.activeElement === document.body) focused.focus({ preventScroll: true });
     }
@@ -796,30 +821,21 @@ class Widget implements WidgetHandle {
 
   /** What to capture: the whole document, or with `screenshotArea: 'viewport'` what is on screen. */
   private captureArea(): Rect {
-    const root = document.documentElement;
-    if (this.opts.screenshotArea !== 'viewport') return { x: 0, y: 0, width: root.scrollWidth, height: root.scrollHeight };
-    return { x: Math.round(window.scrollX), y: Math.round(window.scrollY), width: root.clientWidth, height: root.clientHeight };
+    return this.opts.screenshotArea === 'viewport' ? viewportRect() : pageRect();
   }
 
   /**
-   * Automatic captures stop at `screenshotMaxElements`: DOM-cloning capturers block the page for time proportional
-   * to the elements they copy, which on large pages means seconds to minutes.
+   * Capture for the current pick session; it becomes the attached screenshot. Automatic, so it is budgeted:
+   * DOM-cloning capturers block the page for time proportional to what they copy, seconds to minutes on large pages.
    */
-  private withinBudget(): boolean {
-    const max = this.opts.screenshotMaxElements ?? DEFAULT_MAX_ELEMENTS;
-    if (max === Infinity) return true;
-    return captureCost(this.captureArea()) <= max;
-  }
-
-  /** Capture for the current pick session. Also becomes the attached screenshot. */
   private async captureBase(): Promise<Shot | null> {
     const generation = this.captureGeneration;
-    if (!this.withinBudget()) {
-      this.toast(this.strings.screenshotSkipped);
-      return null;
-    }
     try {
-      const result = await this.capture();
+      const result = await this.capture(undefined, true);
+      if (result === OVER_BUDGET) {
+        if (generation === this.captureGeneration) this.toast(this.strings.screenshotSkipped);
+        return null;
+      }
       if (!result) return null;
       if (this.destroyed || generation !== this.captureGeneration) {
         release(result.shot.bitmap);
@@ -835,35 +851,30 @@ class Widget implements WidgetHandle {
   }
 
   /**
-   * Cut a padded crop of the selection out of the base capture and outline the selected rect. A viewport base that
-   * does not show the selection (the page scrolled since) is replaced, for this crop only, by a capture of the screen.
+   * Cut a padded crop of the selection out of the base capture and outline the selected rect. In viewport mode, when
+   * the base does not show what was on screen at selection time (the page scrolled since), the crop comes from a
+   * capture of that viewport instead, shared by every selection it shows.
    */
   private async cropSelection(sel: ElementSelection): Promise<void> {
     const base = await this.base;
     if (this.destroyed || !base || !this.selections.includes(sel)) return;
     const version = this.baseVersion;
-    let shot = base;
-    let own: Shot | null = null;
-    if (this.opts.screenshotArea === 'viewport' && !covers(base.area, this.cropArea(sel, pageRect()))) {
-      if (!this.withinBudget()) return;
-      const result = await this.capture();
-      if (!result) return;
-      own = result.shot;
-      shot = own;
-      this.baseMasks = uniqueRects([...this.baseMasks, ...result.sensitive]);
+    const maskCount = this.masks.length;
+    const r = sel.region ? sel.region.docRect : sel.docRect;
+    let shot: Shot | null = base;
+    if (this.opts.screenshotArea === 'viewport') {
+      const seen = this.seenFrom.get(sel.id) ?? viewportRect();
+      const shown = intersect(r, seen);
+      if (shown && !covers(base.area, shown)) shot = await this.extraShot(seen);
     }
-    try {
-      const r = sel.region ? sel.region.docRect : sel.docRect;
+    if (this.destroyed || !shot || !this.selections.includes(sel)) return;
+    {
       const area = this.cropArea(sel, shot.area);
       const sx = shot.bitmap.width / shot.area.width;
       const sy = shot.bitmap.height / shot.area.height;
-      const x0 = Math.max(0, Math.floor((area.x - shot.area.x) * sx));
-      const y0 = Math.max(0, Math.floor((area.y - shot.area.y) * sy));
-      const x1 = Math.min(shot.bitmap.width, Math.ceil((area.x - shot.area.x + area.width) * sx));
-      const y1 = Math.min(shot.bitmap.height, Math.ceil((area.y - shot.area.y + area.height) * sy));
-      const w = x1 - x0;
-      const h = y1 - y0;
-      if (w <= 0 || h <= 0) return;
+      const bounds = bitmapBounds(area, shot.area, shot.bitmap);
+      if (!bounds) return;
+      const { x: x0, y: y0, width: w, height: h } = bounds;
       const canvas = document.createElement('canvas');
       canvas.width = w;
       canvas.height = h;
@@ -875,17 +886,34 @@ class Widget implements WidgetHandle {
       if (sel.kind === 'region') ctx.setLineDash([6 * sx, 4 * sx]);
       ctx.strokeRect((r.x - shot.area.x) * sx - x0, (r.y - shot.area.y) * sy - y0, r.width * sx, r.height * sy);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      // A mask landed meanwhile: the mask job re-cuts this crop from the repainted base.
+      // A mask landed meanwhile: the mask job re-cuts this crop from repainted or recaptured pixels.
       if (this.destroyed || !blob || !this.selections.includes(sel) || version !== this.baseVersion) return;
+      const pad = this.opts.cropPadding ?? 16;
+      if (this.masks.slice(maskCount).some((m) => overlaps(r, m, pad))) return;
       const prev = this.crops.get(sel.id);
       if (prev) URL.revokeObjectURL(prev.url);
       const cut = { x: shot.area.x + x0 / sx, y: shot.area.y + y0 / sy, width: w / sx, height: h / sy };
       this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob), width: w / sx, area: roundRect(cut) });
       this.renderSelections();
       this.persistDraft();
-    } finally {
-      if (own) release(own.bitmap);
     }
+  }
+
+  /** A capture of `area` for viewport crops, reusing the latest one while it shows that area. */
+  private extraShot(area: Rect): Promise<Shot | null> {
+    if (this.extra && covers(this.extra.area, area)) return this.extra.shot;
+    const generation = this.captureGeneration;
+    const shot = this.capture(area, true).then((result) => {
+      if (!result || result === OVER_BUDGET || generation !== this.captureGeneration) return null;
+      this.baseMasks = uniqueRects([...this.baseMasks, ...result.sensitive]);
+      return result.shot;
+    }).catch((err: unknown) => {
+      this.opts.onError?.(err);
+      return null;
+    });
+    // Not released when replaced: a crop job may still be drawing from it. The bitmap goes with its last reference.
+    this.extra = { area, shot };
+    return shot;
   }
 
   /** A selection's crop in document CSS pixels: its rect plus `cropPadding`, clipped to `bounds`. */
@@ -909,7 +937,8 @@ class Widget implements WidgetHandle {
     btn.disabled = true;
     const generation = this.captureGeneration;
     try {
-      const result = await this.capture();
+      const captured = await this.capture();
+      const result = captured === OVER_BUDGET ? null : captured;
       if (result) release(result.shot.bitmap);
       if (!this.destroyed && generation === this.captureGeneration) this.setScreenshot(result?.shot.blob ?? null, result?.shot.area, result?.sensitive);
     } catch (err) {
@@ -1095,6 +1124,8 @@ class Widget implements WidgetHandle {
     for (const c of this.crops.values()) URL.revokeObjectURL(c.url);
     this.crops.clear();
     this.cropJobs.clear();
+    this.seenFrom.clear();
+    this.extra = null;
     this.base = null;
     this.masks = [];
     this.shotMasks = [];
@@ -1221,6 +1252,20 @@ function clip(s: string, max: number): string {
 /** The document in CSS pixels. */
 function pageRect(): Rect {
   return { x: 0, y: 0, width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight };
+}
+
+/** What is on screen, in document coordinates. */
+function viewportRect(): Rect {
+  const root = document.documentElement;
+  return { x: Math.round(window.scrollX), y: Math.round(window.scrollY), width: root.clientWidth, height: root.clientHeight };
+}
+
+function intersect(a: Rect, b: Rect): Rect | null {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const width = Math.min(a.x + a.width, b.x + b.width) - x;
+  const height = Math.min(a.y + a.height, b.y + b.height) - y;
+  return width > 0 && height > 0 ? { x, y, width, height } : null;
 }
 
 function roundRect(r: Rect): Rect {

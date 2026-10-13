@@ -18,8 +18,8 @@ export interface WidgetOptions {
   screenshot?: (request: ScreenshotRequest) => Promise<Blob | null>;
   /**
    * What a capture covers. 'page' (default) asks for the whole document. 'viewport' asks for what is on screen:
-   * images stay small on long pages, and capturers can skip content below it. Selections outside the first capture
-   * get a fresh capture for their crop.
+   * images stay small on long pages, and `domCapturer` copies only what is on screen. A selection the first capture
+   * does not show gets its crop from a capture of the screen it was selected on.
    */
   screenshotArea?: 'page' | 'viewport';
   /**

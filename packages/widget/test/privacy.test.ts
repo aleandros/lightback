@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import { createLightback, type Attachment, type Draft, type FeedbackPayload } from '@lightback/core';
 import { mountWidget } from '../src/ui';
 import type { WidgetOptions } from '../src/types';
+import { OMITS_WIDGET } from '../src/capture';
 import { propertyParameters } from '../../../test/property';
 
 // Rasterization is a platform boundary: a 200x100 bitmap for a 100x50 page (2x), recorded canvas calls.
@@ -95,6 +96,90 @@ it('captures the viewport on request and maps masks and crops by its offset', as
   expect(area('selection-1.png')).toEqual({ x: 34, y: 24, width: 42, height: 42 });
   const stroke = calls.filter((c) => c.op === 'strokeRect').at(-1)!;
   expect(stroke.args).toEqual([32, 32, 20, 20]);
+});
+
+/** A 100x50 viewport on a 100x1000 page, scrolled to `y`; `#target` and `#other` follow the scroll. */
+function viewport(y: number) {
+  for (const [dimension, value] of [['clientWidth', 100], ['clientHeight', 50], ['scrollHeight', 1000]] as const) {
+    Object.defineProperty(document.documentElement, dimension, { configurable: true, value });
+  }
+  vi.stubGlobal('scrollY', y);
+  cleanup.push(() => { for (const d of ['clientWidth', 'clientHeight']) delete (document.documentElement as unknown as Record<string, unknown>)[d]; });
+}
+function place(id: string, docX: number, docY: number) {
+  vi.spyOn(document.getElementById(id)!, 'getBoundingClientRect').mockImplementation(() => rect(docX, docY - (window.scrollY as number), 10, 10));
+}
+function pick(id: string) {
+  Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => document.getElementById(id) });
+  document.getElementById(id)!.click();
+}
+
+it('reuses the base for selections it shows, even at its edge, and one recapture for a scrolled screen', async () => {
+  viewport(0);
+  document.body.insertAdjacentHTML('beforeend', '<button id="other">Other</button>');
+  place('target', 50, 42); // its padded crop reaches past the bottom of the 50px viewport
+  const { widget, attachment, area, capturer } = setup({ widget: { screenshotArea: 'viewport' } });
+  await settle(); widget.startPicking();
+  await vi.waitFor(() => expect(attachment('screenshot.png')).toBeDefined());
+  pick('target');
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  expect(capturer).toHaveBeenCalledTimes(1);
+  expect(area('selection-1.png')).toEqual({ x: 34, y: 26, width: 42, height: 24 }); // clipped to what was captured
+  // Scroll down: two selections on the new screen share one capture of it.
+  vi.stubGlobal('scrollY', 300);
+  place('target', 50, 320);
+  place('other', 10, 330);
+  pick('target');
+  pick('other');
+  await vi.waitFor(() => expect(attachment('selection-3.png')).toBeDefined());
+  expect(capturer).toHaveBeenCalledTimes(2);
+  expect(capturer).toHaveBeenLastCalledWith({ area: { x: 0, y: 300, width: 100, height: 50 } });
+  expect(area('selection-2.png')).toEqual({ x: 34, y: 304, width: 42, height: 42 });
+});
+
+it('re-cuts a recaptured crop when the reporter hides an area over it', async () => {
+  viewport(0);
+  place('target', 50, 20);
+  const { widget, q, action, attachment, fills, capturer } = setup({ widget: { screenshotArea: 'viewport' } });
+  await settle(); widget.startPicking();
+  await vi.waitFor(() => expect(attachment('screenshot.png')).toBeDefined());
+  vi.stubGlobal('scrollY', 300);
+  place('target', 50, 320);
+  pick('target');
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  const crop = attachment('selection-1.png');
+  expect(capturer).toHaveBeenCalledTimes(2);
+  action('pop-more');
+  action('mask-mode');
+  expect(q('maskMode').getAttribute('aria-pressed')).toBe('true');
+  pick('target'); // hides the selected element's area; the base (at y=0) does not show it
+  await vi.waitFor(() => expect(attachment('selection-1.png')).not.toBe(crop));
+  expect(attachment('selection-1.png')).toBeDefined();
+  // Recaptured with the new mask painted in: {50,320,10,10} at 2x on an image of y=300, with bleed.
+  expect(capturer).toHaveBeenCalledTimes(3);
+  expect(fills()).toContainEqual([96, 36, 28, 28]);
+});
+
+it('keeps the widget visible and focused while a capturer that omits it runs', async () => {
+  viewport(0);
+  place('target', 50, 20);
+  const states: Array<{ visibility: string; focused: string | undefined }> = [];
+  let host: HTMLElement | null = null;
+  const raw = new Blob(['raw'], { type: 'image/png' });
+  const screenshot = Object.assign(vi.fn(async () => {
+    states.push({ visibility: host!.style.visibility, focused: (host!.shadowRoot!.activeElement as HTMLElement | null)?.dataset.ref });
+    return raw;
+  }), { [OMITS_WIDGET]: true });
+  const { widget, attachment } = setup({ widget: { screenshotArea: 'viewport', screenshot } });
+  host = widget.element;
+  await settle(); widget.startPicking();
+  await vi.waitFor(() => expect(attachment('screenshot.png')).toBeDefined());
+  vi.stubGlobal('scrollY', 300);
+  place('target', 50, 320);
+  pick('target');
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  // The recapture runs right after the comment box takes focus; typing there must keep working.
+  expect(states).toEqual([{ visibility: '', focused: undefined }, { visibility: '', focused: 'popText' }]);
 });
 
 it('skips the automatic capture over the element budget and says so', async () => {
