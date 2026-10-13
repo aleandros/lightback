@@ -123,9 +123,11 @@ await page.evaluate(addLate);
 await page.click(W + '[data-ref=pillOpen]');
 await page.waitForFunction(() => document.querySelector('lightback-widget').shadowRoot.querySelectorAll('.lb-thumb').length === 6);
 assert(await page.evaluate(() => client.getDraft().masks.filter((m) => m.reason === 'reporter').length) === 1, 'reporter mask restored');
+// The restored attachment is already a different Blob than storedShot, so wait on the preview's object URL:
+// it changes only when the retake lands, and fetching the old one races its revocation (WebKit: "Load failed").
+const restoredSrc = await page.getAttribute(W + '[data-ref=shotImg]', 'src');
 await page.click(W + '[data-action=shot]'); // retake after reload
-await page.waitForFunction(() => window.client.getDraft()?.attachments.some((a) => a.name === 'screenshot.png' && a.blob !== window.storedShot));
-await page.waitForTimeout(200);
+await page.waitForFunction((before) => document.querySelector('lightback-widget').shadowRoot.querySelector('[data-ref=shotImg]').src !== before, restoredSrc);
 assert(await color(preview, '#hideme') === MASK, 'retaken screenshot reapplies the restored reporter mask');
 await page.fill(W + '[data-ref=text]', 'Account card looks wrong');
 await page.click(W + '[data-action=send]');
