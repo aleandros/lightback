@@ -160,7 +160,8 @@ pre.lb-preview {
 .lb-pending-summary { font-size: 12px; color: var(--lb-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-bottom: 10px; }
 .lb-pending-bar { height: 3px; background: var(--lb-surface); margin: 0 -14px; }
 .lb-pending-bar i { display: block; height: 100%; background: var(--lb-accent); width: 100%; }
-.lb-thumb { display: block; width: 100%; max-height: 120px; object-fit: contain; object-position: left; border: 1px solid var(--lb-border); border-radius: 8px; background: var(--lb-bg); }
+/* Auto size with both maxima keeps the crop's proportions; flex-start stops the card's column from stretching it. */
+.lb-thumb { display: block; align-self: flex-start; width: auto; height: auto; max-width: 100%; max-height: 120px; border: 1px solid var(--lb-border); border-radius: 8px; background: var(--lb-bg); }
 .lb-toast {
   position: absolute; bottom: 0; right: 0; background: var(--lb-fg); color: var(--lb-bg);
   padding: 10px 14px; border-radius: 10px; font-weight: 600; box-shadow: var(--lb-shadow); white-space: nowrap;

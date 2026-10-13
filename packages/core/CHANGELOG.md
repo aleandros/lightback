@@ -1,11 +1,19 @@
 # @lightback/core
 
-## Unreleased
+## 0.2.0
 
 ### Added
 
-- Add session-scoped IndexedDB recovery for redacted collector buffers and drafts, bounded retention, blob opt-in, custom-editor recovery APIs and a storage opt-out. Clear recovery and old buffers on successful send or explicit discard; tolerate denied/quota storage and invalid schemas. Exclude form-control values from inspected text, HTML and props.
-- Add `data-lightback-sensitive` and `privacy.selectors` for sensitive subtrees. Selections, region children and breadcrumbs keep selectors and component names but withhold text, classes, attributes, HTML and the props of components that render sensitive content; they carry `sensitive: true`. Matching uses the live DOM, so dynamic content is covered; invalid selectors throw. Add `client.isSensitive()`, `client.sensitiveRects()`, `SENSITIVE_ATTR`, draft `masks` (persisted and validated on recovery) and an optional payload `masks` field, present when images are attached and rendered by `toPromptContext`.
+- Session recovery: restore bounded, redacted collector buffers and unfinished drafts after reload through session-scoped IndexedDB (default maximum age 30 minutes). Includes expiry and schema checks, custom-editor recovery APIs, `clearPersistence()`, a storage opt-out, and an explicit `persistence.attachments` opt-in for masked screenshot/crop blobs. Successful send and Discard clear the draft and old buffers; denied or full storage leaves the client usable.
+- Sensitive content: mark subtrees with `data-lightback-sensitive` or `privacy.selectors`. Selections, region children and breadcrumbs keep selectors and component names but withhold text, classes, attributes, HTML and the props of components that render sensitive content, and carry `sensitive: true`. Matching uses the live DOM; invalid selectors throw. Adds `client.isSensitive()`, `client.sensitiveRects()`, `SENSITIVE_ATTR`, draft `masks`, and an optional payload `masks` field (present when images are attached, rendered by `toPromptContext`). Payload `version` stays 1.
+
+### Fixed
+
+- Redact the complete payload, including page metadata, context, breadcrumbs and embedded URLs/JSON, and keep attachment names consistent with redacted references.
+- Exclude form-control values and editable contents from inspected text, HTML, props, breadcrumbs and persisted metadata.
+- Omit redirected response bodies unless the final origin is verified as same-origin.
+- Late network completions no longer refill cleared or destroyed clients; destroying several clients in any order keeps the others' collectors running.
+- Recovery races found by stateful property tests: clear wins over a pending database open, recovered events are sorted before smaller buffer limits apply, metadata-only recovery drops orphaned crop references, and tiny string limits keep recovery field names.
 
 ## 0.1.0
 

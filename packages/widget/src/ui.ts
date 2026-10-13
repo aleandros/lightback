@@ -108,7 +108,8 @@ class Widget implements WidgetHandle {
   private baseMasks: Rect[] = [];
   private maskJob: Promise<void> = Promise.resolve();
   private maskMode = false;
-  private crops = new Map<string, { blob: Blob; url: string }>();
+  /** `width` is the crop's extent in CSS pixels, so a high-DPR crop previews at page size instead of doubled. */
+  private crops = new Map<string, { blob: Blob; url: string; width: number }>();
   private cropJobs = new Map<string, Promise<void>>();
   private pendingTimer: number | null = null;
   private autoShot: boolean;
@@ -817,7 +818,7 @@ class Widget implements WidgetHandle {
     if (this.destroyed || !blob || !this.selections.includes(sel) || version !== this.baseVersion) return;
     const prev = this.crops.get(sel.id);
     if (prev) URL.revokeObjectURL(prev.url);
-    this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob) });
+    this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob), width: w / sx });
     this.renderSelections();
     this.persistDraft();
   }
@@ -877,7 +878,13 @@ class Widget implements WidgetHandle {
       this.baseMasks = this.shotMasks;
       for (const selection of this.selections) {
         const crop = draft.attachments.find((a) => a.name === selection.crop);
-        if (crop) this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob) });
+        if (crop) {
+          // The capture scale is not stored; the padded rect is the crop's CSS extent up to clipping at the page edges.
+          const r = selection.region ? selection.region.docRect : selection.docRect;
+          const pad = this.opts.cropPadding ?? 16;
+          const width = r.x + r.width + pad - Math.max(0, r.x - pad);
+          this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob), width });
+        }
         // Coordinates remain the captured coordinates; a selector may now point at different content.
       }
       this.setScreenshot(draft.attachments.find((a) => a.name === 'screenshot.png')?.blob ?? null);
@@ -1041,7 +1048,8 @@ class Widget implements WidgetHandle {
         const hidden = s.sensitive ? `<div class="lb-sensitive" data-ref="sensitive">🔒 ${esc(this.strings.sensitiveContent)}</div>` : '';
         const note = s.note ? `<div class="lb-note">💬 ${esc(s.note)}</div>` : `<div class="lb-note empty">${esc(this.strings.noComment)}</div>`;
         const crop = this.crops.get(s.id);
-        const thumb = crop ? `<img class="lb-thumb" src="${crop.url}" alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
+        // Natural proportions, never enlarged past the selected area's on-page size (+2 for the border-box border).
+        const thumb = crop ? `<img class="lb-thumb" src="${crop.url}" style="max-width:min(100%, ${Math.max(1, Math.round(crop.width)) + 2}px)" alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
         return `<div class="lb-sel" data-id="${esc(s.id)}">
   <div class="lb-sel-head"><span class="lb-badge${s.kind === 'region' ? ' region' : ''}">${i + 1}</span><span class="lb-chain" title="${esc(s.components.join(' < '))}">${chain} ${kind}</span><button class="lb-icon" type="button" data-action="sel-edit" aria-label="${esc(this.strings.editComment)}" title="${esc(this.strings.editComment)}">✎</button><button class="lb-icon" type="button" data-action="sel-remove" aria-label="${esc(this.strings.removeSelection)}">✕</button></div>
   <code class="lb-selector">${esc(s.selector)}</code>
