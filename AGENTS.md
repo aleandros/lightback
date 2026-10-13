@@ -45,7 +45,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 1. `pnpm build` succeeds (9 module/declaration builds plus the standalone IIFE).
 2. `pnpm typecheck` is clean.
 3. `pnpm test` passes (core and widget).
-4. `pnpm e2e` passes all six suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
+4. `pnpm e2e` passes all seven suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
 5. README and the relevant `docs/*.md` describe the new behaviour. A feature that is not in README does not exist for users.
 6. New UI hooks have a `data-action` or `data-ref` attribute and the e2e suites use those, never visible text.
 
@@ -54,7 +54,8 @@ A change is done when all of these hold. Report results plainly; if something fa
 - **Widget UI lives in `packages/widget/src/ui.ts` as a template string plus a class.** Buttons dispatch through `data-action` handled in `onRootClick`. Query elements with `this.q('[data-ref=…]')`. No framework in the widget; it must stay usable from any host.
 - **Everything the widget renders carries `data-lightback-ignore`** (the host element has it). Core's `isIgnored` and the picker's hit testing skip anything inside. Breadcrumbs and network entries from the widget's own activity must never appear in a report. The screenshot capturer's requests are suppressed with `client.mute(fn)`.
 - **Pointer handlers in pick mode call `stopPropagation` only, never `preventDefault`, on `pointerdown`/`pointerup`.** Calling `preventDefault` there suppresses the compat `mousedown`/`mouseup` events and the drag gesture dies. `click`, `dblclick`, `contextmenu`, `selectstart` are swallowed fully.
-- **Stacking inside the shadow root is explicit:** pins 1, highlight/drag 2, pickbar 3, popover 4, panel/pill/pending 5, toast 6. Keep it in one rule block in `styles.ts`. A past regex edit deleted a line from this block and pins rendered above the panel.
+- **Stacking inside the shadow root is explicit:** masks/pins 1, highlight/drag 2, pickbar 3, popover 4, panel/pill/pending 5, toast 6. Keep it in one rule block in `styles.ts`. A past regex edit deleted a line from this block and pins rendered above the panel.
+- **Sensitive is not ignored.** `data-lightback-ignore` hides Lightback's own UI from the picker and collectors; `data-lightback-sensitive`/`privacy.selectors` keep host data out (withheld text/attrs/HTML/props, masked pixels). Every capture goes through `capture()` → `maskShot` in the widget; never store, preview or crop the capturer's raw blob.
 - **Never record input values.** Breadcrumbs record that an input changed, not what was typed. Request/response bodies are opt-in (`capture.networkBodies`) and same-origin only. Default redaction runs over every string in the payload, selections and props included, through `scrubDeep` in `client.ts`.
 - **Payload `version` is 1.** Adding optional fields is fine. Renaming or removing a field is a version bump and a note in `docs/ARCHITECTURE.md`.
 - **Selectors prefer `data-testid`, then `id`, then a structural path anchored on the nearest ancestor with either.** Tests depend on the exact shape (`[data-testid="stat-overdue"] > div:nth-of-type(1)`).
@@ -78,7 +79,8 @@ A change is done when all of these hold. Report results plainly; if something fa
 - Picker is mouse/pointer only; no keyboard navigation of elements.
 - No shadow-root or iframe piercing into the host app's own shadow trees.
 - Eager and lazy widget entries are available; React defaults to lazy. ESM lazy builds need URL asset support; CommonJS splitting depends on the host bundler.
-- Drafts and buffers recover through session-scoped IndexedDB (default maximum age 30 minutes); screenshot persistence requires an explicit opt-in and a privacy-safe capturer. Browser session restore or tab duplication can preserve/copy the session key.
+- Drafts and buffers recover through session-scoped IndexedDB (default maximum age 30 minutes); screenshot persistence requires an explicit opt-in; stored images are masked, but only for marked content. Browser session restore or tab duplication can preserve/copy the session key.
 - React 19 `_debugStack` parsing exists but has no fixture; React 18 `_debugSource` is what the tests cover.
 - The base screenshot is captured once at pick start. Selections made after the page changes will crop a stale image.
+- Masks assume the capturer renders the full document at the current scroll position; fixed/sticky elements rendered elsewhere misalign. Reporter masks are additive (cannot be removed from captured pixels).
 - `modern-screenshot` is the playground's capturer; the packages do not depend on it. Any `() => Promise<Blob>` works.

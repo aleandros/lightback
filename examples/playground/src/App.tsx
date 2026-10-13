@@ -51,6 +51,11 @@ function Sidebar({ path }: { path: string }) {
         <Item to="/" label="Dashboard" />
         <Item to="/inbox" label="Feedback inbox" />
       </nav>
+      {/* Sensitive: reports keep the selector but never this text, and screenshots show an opaque box. */}
+      <div className="account" data-lightback-sensitive data-testid="account">
+        <span className="account-name">Dana Whitfield</span>
+        <span className="muted small">dana@initech.example · •••• 4242</span>
+      </div>
       <p className="hint">
         Use the <strong>Feedback</strong> button bottom-right. Try selecting rows, buttons or the totals, then open
         the inbox to see what arrived.

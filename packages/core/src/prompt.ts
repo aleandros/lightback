@@ -34,6 +34,7 @@ export function toPromptContext(p: FeedbackPayload, opts: { maxLogLines?: number
         lines.push(`   Components: ${s.chain.map((c) => (c.source ? `${c.name} (${fmtSource(c.source)})` : c.name)).join(' < ')}`);
       }
       if (s.source) lines.push(`   Source: ${fmtSource(s.source)}`);
+      if (s.sensitive) lines.push(`   Sensitive: content withheld by the app`);
       if (s.text) lines.push(`   Text: "${s.text}"`);
       const attrs = Object.entries(s.attrs).map(([k, v]) => `${k}="${v}"`).join(' ');
       if (attrs) lines.push(`   Attrs: ${attrs}`);
@@ -44,6 +45,7 @@ export function toPromptContext(p: FeedbackPayload, opts: { maxLogLines?: number
         lines.push(`   Contains ${s.region.children.length} visible elements:`);
         for (const c of s.region.children) {
           const bits = [`<${c.tag}>`];
+          if (c.sensitive) bits.push('(sensitive)');
           if (c.role) bits.push(`role=${c.role}`);
           if (c.text) bits.push(`"${c.text}"`);
           if (c.components.length) bits.push(`[${c.components.join(' < ')}]`);
@@ -88,6 +90,11 @@ export function toPromptContext(p: FeedbackPayload, opts: { maxLogLines?: number
 
   if (Object.keys(p.context).length) {
     lines.push('', `## App context`, '```json', JSON.stringify(p.context, null, 2), '```');
+  }
+  if (p.masks?.length) {
+    const count = (reason: string) => p.masks!.filter((m) => m.reason === reason).length;
+    lines.push('', `## Screenshot masks`);
+    lines.push(`- ${p.masks.length} area(s) are covered by opaque boxes (${count('sensitive')} sensitive, ${count('reporter')} hidden by the reporter). Their content is intentionally absent.`);
   }
   if (p.attachments.length) {
     lines.push('', `## Attachments`);

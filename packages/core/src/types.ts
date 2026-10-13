@@ -74,6 +74,8 @@ export interface ElementSummary {
   rect: Rect;
   docRect: Rect;
   source?: SourceLocation;
+  /** Inside a sensitive subtree: text and role are withheld. */
+  sensitive?: boolean;
 }
 
 export interface ElementSelection {
@@ -107,6 +109,16 @@ export interface ElementSelection {
   note?: string;
   /** Short HTML snippet (outerHTML trimmed) for extra context. */
   html?: string;
+  /** Inside a sensitive subtree: text, classes, attributes, props and HTML are withheld. */
+  sensitive?: boolean;
+}
+
+/** An opaque box painted over screenshot pixels before they are stored, previewed or sent. */
+export interface ScreenshotMask {
+  /** Document-relative rect, in the same space as `ElementSelection.docRect`. */
+  docRect: Rect;
+  /** `sensitive`: a host-marked element at capture time. `reporter`: an area the reporter chose to hide. */
+  reason: 'sensitive' | 'reporter';
 }
 
 export interface AttachmentRef {
@@ -140,6 +152,8 @@ export interface FeedbackPayload {
   network: NetworkEntry[];
   breadcrumbs: Breadcrumb[];
   context: Record<string, unknown>;
+  /** Areas covered in the attached screenshots. Absent when nothing was masked. */
+  masks?: ScreenshotMask[];
 }
 
 export interface Limits {
@@ -168,11 +182,21 @@ export interface PersistenceOptions {
   maxAge?: number;
   /** Maximum stored snapshot size, including blobs. Default: 5 MiB. Oversized attachments are omitted. */
   maxBytes?: number;
-  /** Persist screenshot blobs. Off by default: the capturer must mask sensitive pixels first. */
+  /** Persist screenshot blobs. Off by default. The widget stores only masked images (see privacy). */
   attachments?: boolean;
 }
 
+export interface PrivacyOptions {
+  /**
+   * CSS selectors for sensitive subtrees, in addition to the `data-lightback-sensitive` attribute. Matching elements
+   * and their descendants keep their selector and component names; text, attributes, props, HTML and pixels are withheld.
+   */
+  selectors?: string[];
+}
+
 export interface LightbackOptions {
+  /** Sensitive elements to withhold from reports and mask in screenshots. */
+  privacy?: PrivacyOptions;
   /** Session recovery is on by default. Set false to avoid all recovery storage access. */
   persistence?: false | PersistenceOptions;
   /** URL that receives submissions. Ignored if `send` is provided. */

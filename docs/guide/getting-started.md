@@ -105,9 +105,10 @@ Call `widget.destroy()` and `lightback.destroy()` when an integration is unmount
 ## Next
 
 - [Customization](./customization.md): colours, position, theme, your own trigger.
+- [Privacy and masking](./privacy.md): keep account, payment or personal data out of reports and screenshots.
 - [Backend](./backend.md): receive, store and triage reports.
 - [Texts and i18n](./texts-and-i18n.md): change every label.
 
 ## Reload recovery
 
-The unreleased core/widget changes enable session recovery by default. Report text, selections, notes and recent collector buffers survive reloads in the current tab for up to 30 minutes since the last checkpoint. Send or Discard clears the draft and old buffers. Restored reports wait for the user to send them. Screenshot persistence is a separate opt-in because the capturer must mask sensitive pixels first. Set `persistence: false` on `createLightback()` to disable recovery storage. See [retention, privacy and custom-editor APIs](./customization.md#restore-work-after-reload). The demo inbox stores sent reports separately.
+The unreleased core/widget changes enable session recovery by default. Report text, selections, notes and recent collector buffers survive reloads in the current tab for up to 30 minutes since the last checkpoint. Send or Discard clears the draft and old buffers. Restored reports wait for the user to send them. Screenshot persistence is a separate opt-in; only [masked images](./privacy.md) are stored. Set `persistence: false` on `createLightback()` to disable recovery storage. See [retention, privacy and custom-editor APIs](./customization.md#restore-work-after-reload). The demo inbox stores sent reports separately.

@@ -51,6 +51,8 @@ A successful **core** send clears the current draft and all collector buffers, i
 | Pending timer cancellation and editable recovery | Widget lifecycle model; real reload remains in `e2e/session-recovery.mjs` |
 | Late image jobs and waiting sends | Widget jobs model and named discard/destroy regressions |
 | Lazy download lifecycle | Lazy model plus the existing real import failure/retry browser test |
+| Sensitive subtrees never leak text, attributes, HTML or breadcrumbs for any pick or region | Core `sensitive.property.test.ts` over generated trees marked by attribute or selector, with secret tokens tracked independently of the implementation; focused props/Vue/rect/recovery cases in `sensitive.test.ts` |
+| Every sensitive rect and reporter mask is painted into the lineage of every sent image | Widget `privacy.test.ts` property: generated selections and drags, canvas calls traced through each `drawImage` source; named regressions for fail-closed masking, untouched captures and restored masks. Real pixels in `e2e/privacy-masking.mjs` and the static demo |
 
 Core tests replace only platform boundaries. `property-fixtures.ts` supplies a new IndexedDB factory per example, a controllable clock, valid selection fixtures and direct durable-record inspection. Timers are virtual; fake-indexeddb transactions keep their own task scheduling. `holdOpen` delays the database-open notification while transactions still come from fake-indexeddb. Blob encoding and widget rasterization are explicit deferred promises/callbacks. `settle` drains promise continuations without advancing time or releasing a blocked job. These tests do not introduce a production storage adapter or expose private widget methods.
 

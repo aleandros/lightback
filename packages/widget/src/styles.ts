@@ -3,7 +3,7 @@ import { shellStyles } from './shell';
 export const styles = /* css */ `
 ${shellStyles}
 /* Stacking inside the host: pins live on the page, chrome goes above them. */
-.lb-pins { z-index: 1; }
+.lb-masks, .lb-pins { z-index: 1; }
 .lb-highlight, .lb-drag { z-index: 2; }
 .lb-pickbar { z-index: 3; }
 .lb-popover { z-index: 4; }
@@ -111,13 +111,22 @@ pre.lb-preview {
 }
 
 /* ---- pins and popover (live on the page while a draft exists) ---- */
-.lb-pins { position: fixed; top: 0; left: 0; width: 0; height: 0; }
+.lb-masks, .lb-pins { position: fixed; top: 0; left: 0; width: 0; height: 0; }
+.lb-mask {
+  position: fixed; pointer-events: none; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  background: repeating-linear-gradient(135deg, rgba(17,24,39,.82) 0 8px, rgba(17,24,39,.68) 8px 16px);
+  color: #fff; font-size: 12px; font-weight: 600; border-radius: 4px;
+}
+.lb-highlight.mask { outline-color: #111827; background: rgba(17,24,39,.25); }
+.lb-pick-btn[aria-pressed=true] { background: var(--lb-bg); color: var(--lb-fg); border-color: transparent; }
+.lb-sensitive { font-size: 12px; color: var(--lb-muted); }
 .lb-pin {
   position: fixed; pointer-events: auto; cursor: pointer;
   outline: 2px solid var(--lb-accent); outline-offset: 1px; border-radius: 3px;
   background: color-mix(in srgb, var(--lb-accent) 6%, transparent);
 }
 .lb-pin.region { outline-style: dashed; }
+.lb-pins.passive .lb-pin { pointer-events: none !important; }
 .lb-pin.active, .lb-pin:hover { background: color-mix(in srgb, var(--lb-accent) 14%, transparent); }
 .lb-pin .lb-badge { position: absolute; top: -10px; left: -10px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
 .lb-pin-x {

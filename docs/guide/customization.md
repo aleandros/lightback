@@ -82,7 +82,7 @@ screenshot: () => import('html2canvas').then(async (m) => {
 })
 ```
 
-Full-page size matters: crops are cut from this image using document coordinates, so a capture that stops at the viewport will produce blank crops for anything below the fold.
+Full-page size matters: crops and privacy masks are placed on this image using document coordinates, so a capture that stops at the viewport will produce blank crops, and misplaced masks, for anything below the fold. The widget masks sensitive elements and reporter-hidden areas after the capturer returns; see [Privacy and masking](./privacy.md#contract-with-your-capturer).
 
 ## Keeping the widget out of its own reports
 
@@ -92,11 +92,13 @@ Any element with `data-lightback-ignore` is invisible to the picker and the brea
 <button id="report-bug" data-lightback-ignore>Report a bug</button>
 ```
 
+Ignoring is not a privacy control. To keep user data out of reports and screenshots, use `data-lightback-sensitive` or `privacy.selectors` ([Privacy and masking](./privacy.md)).
+
 ## What the client controls
 
-Capture, limits, recovery and redaction are client options, not widget options. See `createLightback()` in the README: `capture.networkBodies`, `limits.*`, `redact.headers`, `redact.urlParams`, `redact.patterns`, and `beforeSend`.
+Capture, limits, recovery and redaction are client options, not widget options. See `createLightback()` in the README: `capture.networkBodies`, `limits.*`, `redact.headers`, `redact.urlParams`, `redact.patterns`, `privacy.selectors`, and `beforeSend`.
 
-Redaction covers the complete payload before preview, `beforeSend` and delivery: page metadata, context, breadcrumbs, errors, selections and attachment names all use your rules. Secret-named fields and embedded URLs/JSON are scrubbed too. `beforeSend` remains a trusted host hook for further changes. Text rules cannot mask screenshot pixels.
+Redaction covers the complete payload before preview, `beforeSend` and delivery: page metadata, context, breadcrumbs, errors, selections and attachment names all use your rules. Secret-named fields and embedded URLs/JSON are scrubbed too. `beforeSend` remains a trusted host hook for further changes. Text rules cannot mask screenshot pixels; sensitive elements can.
 
 Click breadcrumbs and element text exclude form control and contenteditable contents, including nested or containing elements. Network bodies are opt-in and same-origin only; response capture also checks the final response URL after redirects. Unknown or cross-origin final URLs omit the response body while retaining request metadata.
 
@@ -124,7 +126,7 @@ const lightback = createLightback({
     key: 'my-app',       // use a different namespace for each client on the origin
     maxAge: 15 * 60_000, // expiry since last checkpoint; default/maximum 30 minutes
     maxBytes: 5 * 1024 * 1024, // default 5 MiB per snapshot
-    attachments: false, // default; opt in only with a capturer that masks sensitive pixels
+    attachments: false, // default; stored images are masked, but only for content you marked
   },
 });
 // Or disable all recovery storage access:
@@ -133,7 +135,7 @@ createLightback({ endpoint: '/api/feedback', persistence: false });
 
 Text and metadata are redacted before storage using the configured rules. Inspection HTML and form-value props are omitted, and form controls are excluded from inspected ancestor text. Draft recovery keeps at most 50 selections; string values are capped by `limits.string` and collector counts by their buffer limits. App context is supplied fresh by the host and is not persisted. `beforeSend` runs only when sending, so put storage redaction rules in `redact`.
 
-Screenshot and crop blobs are **not persisted by default**. Set `persistence.attachments: true` to retain them in IndexedDB after your screenshot capturer has masked input values and sensitive content. Text redaction cannot scrub pixels. Oversized attachments are omitted from recovery, with their crop references removed (also when recovery switches to metadata-only); an oversized metadata snapshot is deleted. These recovery bounds do not remove attachments from the current live report.
+Screenshot and crop blobs are **not persisted by default**. Set `persistence.attachments: true` to retain them in IndexedDB. Only masked images are stored: sensitive elements and reporter-hidden areas are covered ([Privacy and masking](./privacy.md)). Typed form values and other unmarked content remain visible in pixels; mark those fields sensitive. Text redaction cannot scrub pixels. Oversized attachments are omitted from recovery, with their crop references removed (also when recovery switches to metadata-only); an oversized metadata snapshot is deleted. These recovery bounds do not remove attachments from the current live report.
 
 Successful send and Discard clear the stored draft and collector buffers. Successful send also clears edits and events made while it was in flight; custom editors should await send before starting another report. A failed or vetoed send retains current edits and buffers. Discard or widget destruction while a send is still waiting for screenshot/crop jobs cancels that send; transport already in progress is not aborted. `await lightback.clearPersistence()` also clears both, for example on logout before destroying the client. Pending fetch/XHR requests and body reads cannot repopulate cleared buffers. Collection of new activity continues until `destroy()`, which also invalidates pending captures without aborting application requests. Multiple clients can be destroyed in any order without stopping each other’s collectors. Disabling persistence avoids reading or writing recovery storage; it does not erase old records, which expire normally.
 

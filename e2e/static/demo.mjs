@@ -76,6 +76,7 @@ try {
   assert(payload.network.some((n) => n.status === 500 && n.url.endsWith('/api/fail')), 'simulated payment failure captured');
   assert(payload.network.some((n) => n.kind === 'xhr' && n.status === 200), 'simulated XHR captured');
   assert(!JSON.stringify(payload).includes('eyJhbGci'), 'demo authorization token redacted');
+  assert(payload.masks?.some((m) => m.reason === 'sensitive') && !JSON.stringify(payload).includes('dana@initech'), 'sensitive sidebar account is masked and withheld');
   await page.click('[data-action=tab-summary]');
   await page.waitForFunction(() => [...document.querySelectorAll('img.crop')].length === 2 && [...document.querySelectorAll('img.crop')].every((img) => img.complete && img.naturalWidth > 0));
   await page.screenshot({ path: OUT + 'inbox.png', fullPage: true });
@@ -84,6 +85,17 @@ try {
   await page.click('[data-action=tab-screenshot]');
   await page.waitForFunction(() => document.querySelector('.shot-wrap img')?.naturalWidth > 0);
   assert(await page.locator('.shot-box:not(.child)').count() === 2, 'screenshot overlays render both selections');
+  const accountPixel = await page.evaluate(async (size) => {
+    const img = document.querySelector('.shot-wrap img');
+    const bitmap = await createImageBitmap(await (await fetch(img.src)).blob());
+    const canvas = document.createElement('canvas'); canvas.width = bitmap.width; canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d'); ctx.drawImage(bitmap, 0, 0);
+    // The sidebar does not move between reporting and the inbox, so its current rect is its captured rect.
+    const r = document.querySelector('[data-testid=account]').getBoundingClientRect();
+    const scale = bitmap.width / size.width;
+    return Array.from(ctx.getImageData(Math.round((r.x + r.width / 2 + scrollX) * scale), Math.round((r.y + r.height / 2 + scrollY) * scale), 1, 1).data.slice(0, 3)).join(',');
+  }, payload.page.size);
+  assert(accountPixel === '17,24,39', `sidebar account pixels are masked in the real capture (${accountPixel})`);
   await page.reload();
   await page.locator('[data-ref=submission]').waitFor();
   assert(page.url().endsWith('#/inbox'), 'inbox refresh works without server rewrites');

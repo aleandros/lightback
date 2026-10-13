@@ -17,6 +17,8 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 .nav-item { padding: 8px 10px; border-radius: 8px; color: var(--fg); text-decoration: none; }
 .nav-item:hover { background: var(--bg); }
 .nav-item.active { background: var(--accent); color: #fff; }
+.account { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.account-name { font-weight: 600; font-size: 13px; }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: auto; }
 .main { padding: 24px 32px; max-width: 1100px; min-width: 0; width: 100%; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }

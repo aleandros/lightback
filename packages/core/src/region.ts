@@ -8,6 +8,8 @@ export interface RegionOptions {
   isIgnored?: (el: Element) => boolean;
   /** Max children listed in the region. */
   maxChildren?: number;
+  /** CSS selector of sensitive subtrees (see `InspectOptions`). */
+  sensitive?: string;
 }
 
 const MIN_STEP = 6;
@@ -37,14 +39,14 @@ export function describeRegion(rect: Rect, opts: RegionOptions = {}): ElementSel
   const container = commonAncestor(hits) ?? document.body;
   const children = containedChildren(hits, rect, container).slice(0, maxChildren);
 
-  const base = describeElement(container);
+  const base = describeElement(container, { sensitive: opts.sensitive });
   return {
     ...base,
     kind: 'region',
     region: {
       rect,
       docRect: toDocRect(rect),
-      children: children.map(summarizeElement),
+      children: children.map((child) => summarizeElement(child, { sensitive: opts.sensitive })),
     },
   };
 }
