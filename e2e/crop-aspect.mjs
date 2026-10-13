@@ -1,7 +1,7 @@
 // Region crops keep their natural proportions in widget thumbnails and inbox previews, at DPR 1 and 2.
 import { launch, W, BASE_URL } from './lib.mjs';
 
-const { browser, page: page1, OUT, assert, received, reset, finish } = await launch('crop-aspect');
+const { browser, page: page1, OUT, assert, received, reset, finish, pageErrors } = await launch('crop-aspect');
 const PAD = 16; // default cropPadding
 
 // Content-box size of each matching image next to its natural size.
@@ -47,7 +47,7 @@ async function drag(page, x0, y0, x1, y1) {
 async function run(page, dpr) {
   await reset();
   await page.goto(BASE_URL + '/');
-  await page.waitForSelector('text=Invoices');
+  await page.waitForSelector('tr[data-invoice-id]');
   const table = await page.locator('table').first().boundingBox();
   await page.click(W + '.lb-pill [data-action=pick]');
   await page.waitForSelector(W + '.lb-pickbar');
@@ -82,26 +82,29 @@ async function run(page, dpr) {
   }))), files);
   sels.forEach((s, i) => {
     const d = s.region.docRect;
-    const w = (Math.min(d.x + d.width + PAD, sub.payload.page.size?.width ?? Infinity) - Math.max(0, d.x - PAD)) * dpr;
-    const h = (d.height + 2 * PAD) * dpr;
+    const size = sub.payload.page.size;
+    const w = (Math.min(d.x + d.width + PAD, size.width) - Math.max(0, d.x - PAD)) * dpr;
+    const h = (Math.min(d.y + d.height + PAD, size.height) - Math.max(0, d.y - PAD)) * dpr;
     console.log(`export dpr${dpr} ${names[i]}: ${dims[i][0]}×${dims[i][1]} for docRect ${d.width}×${d.height}`);
     assert(Math.abs(dims[i][0] - w) <= 2 * dpr && Math.abs(dims[i][1] - h) <= 2 * dpr, `dpr${dpr}: exported ${names[i]} crop matches its region plus padding`);
   });
 
-  await page.click('text=Feedback inbox');
-  await page.waitForSelector('.inbox-list li.active');
+  await page.click('[data-action=nav-inbox]');
+  await page.waitForSelector('[data-ref=submission].active');
   await page.waitForFunction(() => {
-    const imgs = document.querySelectorAll('img.crop');
+    const imgs = document.querySelectorAll('[data-ref=crop]');
     return imgs.length === 3 && Array.from(imgs).every((i) => i.complete && i.naturalWidth > 0);
   });
   await page.screenshot({ path: OUT + `dpr${dpr}-2-inbox.png`, fullPage: true });
   // The inbox does not know the capture scale, so it may show device pixels 1:1, never more.
-  checkPreviews(`inbox dpr${dpr}`, await measure(page, false, 'img.crop'), 1, names);
+  checkPreviews(`inbox dpr${dpr}`, await measure(page, false, '[data-ref=crop]'), 1, names);
 }
 
 await run(page1, 1);
 const context2 = await browser.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 2 });
 const page2 = await context2.newPage();
+page2.on('pageerror', (e) => pageErrors.push(e.message));
 await run(page2, 2);
+await context2.close();
 
 await finish();
