@@ -13,6 +13,7 @@ Framework-agnostic in-app feedback capture. Users pick the elements they are tal
 | `@lightback/core` | Collectors, ring buffers, redaction, element inspection, payload builder, transport. No UI, no dependencies. |
 | `@lightback/widget` | Drop-in UI: trigger button, element picker, notes, screenshot, review and send. Vanilla TypeScript inside a Shadow DOM. |
 | `@lightback/react` | `LightbackProvider`, `useLightback()`, `useLightbackWidget()`. |
+| `@lightback/source` | Optional build-time JSX/TSX source stamping, with Vite and Babel adapters. |
 | `examples/playground` | Vite + React demo app with a mock backend and an inbox that renders what arrived. |
 | `e2e` | Playwright suites for Chromium, Firefox and WebKit. |
 
@@ -250,7 +251,9 @@ Every selection has a numbered pin on the page with a remove button on hover; ho
 
 **Long pages.** DOM-cloning capturers freeze the page while they copy it, for time proportional to its elements (25 seconds for a 93,000-element page). Set `screenshotArea: 'viewport'` and wrap the library in `domCapturer`: only what is on screen is copied (about 1 second on that page) and images stay small. Selections made after scrolling get a fresh capture for their crop, and each image attachment reports the document `area` it shows. Above `screenshotMaxElements` (default 8000 elements to copy) the automatic capture is skipped with a notice, and the panel's Screenshot button still works. See [Screenshot capturer](docs/guide/customization.md#screenshot-capturer). Every capture is masked before it is previewed, stored or sent (see [Privacy](#privacy-sensitive-elements-and-hidden-areas)); **▨ Hide area** in the pick bar lets the reporter cover anything else.
 
-Each selection carries, when a dev build exposes them, a **source location** (JSX call site, from React's debug info, Vue's `__file`, or a `data-source="file:line:col"` attribute a build plugin can stamp) and a **props snapshot** of the nearest component (functions, elements and children stripped, depth-limited, redacted like every other string).
+Each selection carries a **source location** when exposed by React's debug info, Vue's `__file`, or a `data-source="file:line:col"` attribute. Explicit source attributes take precedence over framework debug paths. A **props snapshot** of the nearest component is included when available (functions, elements and children stripped, depth-limited, redacted like every other string).
+
+For production JSX/TSX, install the optional build-time `@lightback/source` package and add `lightbackSource()` from `@lightback/source/vite` before your React plugin. It stamps native tags with project-relative paths and original one-based line/column positions. `@lightback/source/babel` supports Babel pipelines, including Webpack's `babel-loader`; `transformSource` is available for other build adapters. All entries support `root`, `include` and `exclude`. Use identical settings on client and server for hydration. Source paths become visible in the DOM and bundle. Vue/Svelte templates retain the manual `data-source` fallback. See the [source-location guide](docs/guide/source-locations.md) for configuration and the support matrix.
 
 ## How element selection works
 

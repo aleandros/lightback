@@ -71,6 +71,9 @@ try {
   const payload = JSON.parse(await page.locator('[data-ref=payload-json]').textContent());
   assert(payload.selections.length === 2 && payload.selections.some((s) => s.kind === 'region'), 'element and region selections saved');
   assert(payload.selections[0].components.includes('StatCard'), 'production demo preserves readable component names');
+  const selectedSource = payload.selections[0].source;
+  const dashboardSource = await readFile(new URL('../../examples/playground/src/Dashboard.tsx', import.meta.url), 'utf8');
+  assert(selectedSource?.file === 'src/Dashboard.tsx' && dashboardSource.split('\n')[selectedSource.line - 1]?.slice(selectedSource.column - 1).startsWith('<' + payload.selections[0].tag), 'production selection source points to the original JSX opening tag with a project-relative path');
   assert(payload.selections.map((s) => s.note).join('|') === 'The overdue payment fails|Please check this total too', 'selection notes saved');
   assert(payload.attachments.length === 3, 'base screenshot and both crops saved');
   assert(payload.network.some((n) => n.status === 500 && n.url.endsWith('/api/fail')), 'simulated payment failure captured');

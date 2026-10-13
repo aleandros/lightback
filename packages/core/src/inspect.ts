@@ -216,9 +216,9 @@ export function frameworkInfo(el: Element, sensitive = DEFAULT_SENSITIVE, withPr
   try { anySensitive = el.ownerDocument.querySelector(sensitive) !== null; } catch { /* fail closed */ }
   const guard = anySensitive ? sensitive : null;
   const react = reactInfo(el, guard, withProps);
-  if (react.chain.length || react.source) return { framework: 'react', ...react, source: react.source ?? stamped };
+  if (react.chain.length || react.source) return { framework: 'react', ...react, source: stamped ?? react.source };
   const vue = vueInfo(el, guard, withProps);
-  if (vue.chain.length) return { framework: 'vue', ...vue, source: vue.source ?? stamped };
+  if (vue.chain.length) return { framework: 'vue', ...vue, source: stamped ?? vue.source };
   return { framework: null, chain: [], source: stamped };
 }
 

@@ -16,6 +16,7 @@ export default defineConfig({
       { text: 'Getting started', link: '/guide/getting-started' },
       { text: 'Customization', link: '/guide/customization' },
       { text: 'Privacy and masking', link: '/guide/privacy' },
+      { text: 'Source locations', link: '/guide/source-locations' },
       { text: 'Backend', link: '/guide/backend' },
       { text: 'Texts and i18n', link: '/guide/texts-and-i18n' },
       { text: 'Payload reference', link: '/guide/payload' },
