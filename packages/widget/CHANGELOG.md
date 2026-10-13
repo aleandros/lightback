@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Hovering an existing selection pin no longer draws the page highlight on top of it, which buried the pin's number badge and ✕ under a tinted overlay. Pins style their own hover, and hovering a selection card in the panel now lights up its pin instead of covering it.
+- Hovering an existing selection pin no longer leaves the page highlight on top of it, which buried the pin's number badge and ✕ under a tinted overlay. In pick mode the highlight clears as soon as the pointer moves onto widget UI (pins, popover, pick bar), and hovering a selection card in the panel lights up its pin instead of covering it.
 
 ## 0.2.0
 
