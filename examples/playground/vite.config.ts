@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import lightbackSource from '../../packages/source/src/vite';
 import path from 'node:path';
 import type { IncomingMessage } from 'node:http';
 
@@ -90,7 +91,7 @@ export default defineConfig(({ mode }) => ({
   base: mode === 'demo' ? '/lightback/demo/' : '/',
   // Keep the demo's component chains readable in its production bundle.
   esbuild: { keepNames: mode === 'demo' },
-  plugins: [react(), ...(mode === 'demo' ? [] : [mockApi()])],
+  plugins: [lightbackSource(), react(), ...(mode === 'demo' ? [] : [mockApi()])],
   resolve: {
     alias: {
       '@lightback/core': path.resolve(__dirname, '../../packages/core/src/index.ts'),

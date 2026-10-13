@@ -158,9 +158,11 @@ describe('props and source', () => {
       return: { type: Row, memoizedProps: { id: 'r1', onSelect: () => {} }, _debugSource: { fileName: '/app/src/Table.tsx', lineNumber: 8 }, return: null },
     };
     const info = frameworkInfo(btn);
-    expect(info.source).toEqual({ file: '/app/src/Row.tsx', line: 40, column: 9 });
+    expect(info.source).toEqual({ file: 'src/Row.tsx', line: 12, column: 5 });
     expect(info.chain).toEqual([{ name: 'Row', source: { file: '/app/src/Table.tsx', line: 8, column: undefined } }]);
     expect(info.props).toEqual({ id: 'r1', onSelect: '[fn onSelect]' });
+    btn.removeAttribute('data-source');
+    expect(frameworkInfo(btn).source).toEqual({ file: '/app/src/Row.tsx', line: 40, column: 9 });
 
     document.body.innerHTML = '<div data-source="src/Plain.tsx:3"></div>';
     expect(frameworkInfo(document.querySelector('div')!).source).toEqual({ file: 'src/Plain.tsx', line: 3, column: undefined });

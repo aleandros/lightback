@@ -1,6 +1,6 @@
 # Architecture
 
-Three published packages, one playground, one browser test harness. Dependency direction is `core ← widget ← react`. Nothing in `core` touches the UI; nothing in `widget` knows about React.
+Three runtime packages, an optional build-time source package, one playground, one browser test harness. Runtime dependency direction is `core ← widget ← react`; `@lightback/source` is independent. Nothing in `core` touches the UI; nothing in `widget` knows about React.
 
 ## Data flow
 
@@ -109,6 +109,12 @@ Every capture (automatic or manual) goes through `capture()`: sensitive rects ar
 ## `@lightback/react`
 
 `LightbackProvider({ client, widget, context })` mounts a lazy widget handle once, pushes `context` through `setContext` on change, and exposes `useLightback()` (the client) and `useLightbackWidget()` (the handle). Nothing else.
+
+## `@lightback/source`
+
+An independent Node build package; it adds no runtime dependency. `shared.ts` owns project-relative filtering and a Babel JSX visitor. `transformSource` parses original JSX/TSX with isolated Babel configuration and returns code plus a source map. The Vite adapter runs before JSX lowering with the resolved project root on both client and SSR builds. The Babel adapter traverses the original program before JSX visitors, supporting existing Babel pipelines such as Webpack's `babel-loader`. Both preserve explicit source attributes and stamp only native tags, after spreads. Core prefers stamped element locations over framework debug locations; component-chain metadata is unchanged. Payload version remains 1.
+
+Default filters include JSX/TSX; dependencies, outside-root paths and virtual/query modules are always skipped. Vue/Svelte templates need separate compiler adapters and remain manual. Production fixtures build JSX/TSX through Vite, compare minified client/SSR output, hydrate and inspect stamped elements. Packed checks cover ESM/CJS and all three exports. See [the guide](guide/source-locations.md) for supported syntax and filtering.
 
 ## Playground (`examples/playground`)
 

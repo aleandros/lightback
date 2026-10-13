@@ -14,6 +14,7 @@ A framework-agnostic in-app feedback library. A user points at elements or drags
 packages/core      @lightback/core    collectors, redaction, inspection, payload, transport. Zero deps. No DOM UI.
 packages/widget    @lightback/widget  <lightback-widget> custom element, Shadow DOM, vanilla TS. Depends on core only.
 packages/react     @lightback/react   LightbackProvider, useLightback, useLightbackWidget. Thin.
+packages/source    @lightback/source  optional build-time JSX/TSX stamping; Vite/Babel adapters. No runtime dependency.
 examples/playground                   Vite + React demo with a mock API (vite.config.ts) and an inbox page.
 e2e                                   Playwright suites against the playground. Not unit tests.
 docs                                  Architecture, decisions, user guides (docs/guide), screenshots (docs/assets).
