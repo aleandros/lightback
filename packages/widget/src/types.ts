@@ -1,15 +1,39 @@
-import type { FeedbackPayload, LightbackClient } from '@lightback/core';
+import type { FeedbackPayload, LightbackClient, Rect } from '@lightback/core';
 import type { WidgetStrings } from './strings';
+
+export interface ScreenshotRequest {
+  /**
+   * Document area to capture, in CSS pixels (the space of `ElementSelection.docRect`): the whole page, or the
+   * viewport with `screenshotArea: 'viewport'`. The image must show exactly this area, at any scale.
+   */
+  area: Rect;
+}
 
 export interface WidgetOptions {
   client: LightbackClient;
-  /** Return an image blob of the full page. Called with the widget hidden. Omit to disable screenshots. */
-  screenshot?: () => Promise<Blob | null>;
+  /**
+   * Return an image blob of `request.area` (the full page unless `screenshotArea` is 'viewport'). Called with the
+   * widget hidden. Omit to disable screenshots.
+   */
+  screenshot?: (request: ScreenshotRequest) => Promise<Blob | null>;
+  /**
+   * What a capture covers. 'page' (default) asks for the whole document. 'viewport' asks for what is on screen:
+   * images stay small on long pages, and capturers can skip content below it. Selections outside the first capture
+   * get a fresh capture for their crop.
+   */
+  screenshotArea?: 'page' | 'viewport';
   /**
    * Capture a screenshot automatically when pick mode starts and attach a padded crop of every selection.
    * Defaults to true when `screenshot` is provided.
    */
   autoScreenshot?: boolean;
+  /**
+   * Skip automatic captures when the capturer would have to clone more elements than this: DOM-cloning capturers
+   * block the page for time proportional to it. Counts the whole document, or with 'viewport' what `domCapturer`
+   * clones (elements on screen, plus an empty box for each outermost element off it). The Screenshot button still
+   * captures on request. Default 8000; `Infinity` disables the check.
+   */
+  screenshotMaxElements?: number;
   /** Padding in CSS pixels around a selection in its crop. Default 16. */
   cropPadding?: number;
   /**

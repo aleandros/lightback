@@ -62,7 +62,7 @@ For a script-tag install, build and serve `packages/widget/dist/lightback.iife.j
 </script>
 ```
 
-The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations. The current release is widget `0.2.1` with core and React `0.2.0`; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.1/dist/lightback.iife.js` in the script tag above.
+The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations, and since `0.2.2` `Lightback.domCapturer`. The current release is widget `0.2.2`, core `0.2.1` and React `0.2.0`; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.2/dist/lightback.iife.js` in the script tag above.
 
 ## Validation and releases
 
@@ -111,7 +111,7 @@ For contributors and agents:
 ```ts
 // lightback.ts, imported once at app start so buffers are warm
 import { createLightback } from '@lightback/core';
-import { mountWidget } from '@lightback/widget';
+import { mountWidget, domCapturer } from '@lightback/widget';
 
 export const lightback = createLightback({
   endpoint: '/api/feedback',               // or send: async (payload, attachments) => {...}
@@ -126,7 +126,9 @@ lightback.setContext({ user: { id: 'u_1' }, session: 'sess_1' });
 
 mountWidget({
   client: lightback,
-  screenshot: () => import('modern-screenshot').then((m) => m.domToBlob(document.documentElement)),
+  // Capture what is on screen; domCapturer keeps DOM-cloning libraries fast on long pages.
+  screenshotArea: 'viewport',
+  screenshot: domCapturer((root, options) => import('modern-screenshot').then((m) => m.domToBlob(root, options))),
 });
 ```
 
@@ -219,7 +221,7 @@ interface FeedbackPayload {
   page: { url; title; referrer; scroll: { x; y }; size: { width; height } };
   note: { text: string; transcript?: string };
   selections: ElementSelection[];   // selector, tag, text, attrs, rect, docRect, framework, components[], note
-  attachments: { name; type; size }[];
+  attachments: { name; type; size; area? }[];  // area: document rect an image shows
   env: { userAgent; language; timezone; viewport; screen; devicePixelRatio; online };
   console: ConsoleEntry[];
   errors: ErrorEntry[];
@@ -244,7 +246,9 @@ Every selection has a numbered pin on the page with a remove button on hover; ho
 
 **Sending is optimistic.** Send does not open a review step. It shows a small "Sending feedback…" card with a summary and a draining bar, and the report goes out when the bar empties (`sendDelay`, default 5000 ms, 0 for immediate). **Edit** opens the full panel with the draft, which is where the prompt and JSON preview still live. **Cancel** stops the send and keeps the draft; the pill then reads "Review & send". The panel has **Discard** to drop a draft.
 
-**Screenshots are automatic** when a `screenshot` capturer is configured: entering pick mode captures the full page once (collectors are muted during capture so the capturer's own requests never reach the report), and each selection gets a padded crop with the selected rect outlined, attached as `selection-N.png` and referenced from `selection.crop`. Crops are in capture pixels (2× on a Retina display with a 2× capturer); previews keep their natural proportions. Set `autoScreenshot: false` to go back to manual capture. Every capture is masked before it is previewed, stored or sent (see [Privacy](#privacy-sensitive-elements-and-hidden-areas)); **▨ Hide area** in the pick bar lets the reporter cover anything else.
+**Screenshots are automatic** when a `screenshot` capturer is configured: entering pick mode captures once (collectors are muted during capture so the capturer's own requests never reach the report), and each selection gets a padded crop with the selected rect outlined, attached as `selection-N.png` and referenced from `selection.crop`. Crops are in capture pixels (2× on a Retina display with a 2× capturer); previews keep their natural proportions. Set `autoScreenshot: false` to go back to manual capture.
+
+**Long pages.** DOM-cloning capturers freeze the page while they copy it, for time proportional to its elements (25 seconds for a 93,000-element page). Set `screenshotArea: 'viewport'` and wrap the library in `domCapturer`: only what is on screen is copied (about 1 second on that page) and images stay small. Selections made after scrolling get a fresh capture for their crop, and each image attachment reports the document `area` it shows. Above `screenshotMaxElements` (default 8000 elements to copy) the automatic capture is skipped with a notice, and the panel's Screenshot button still works. See [Screenshot capturer](docs/guide/customization.md#screenshot-capturer). Every capture is masked before it is previewed, stored or sent (see [Privacy](#privacy-sensitive-elements-and-hidden-areas)); **▨ Hide area** in the pick bar lets the reporter cover anything else.
 
 Each selection carries, when a dev build exposes them, a **source location** (JSX call site, from React's debug info, Vue's `__file`, or a `data-source="file:line:col"` attribute a build plugin can stamp) and a **props snapshot** of the nearest component (functions, elements and children stripped, depth-limited, redacted like every other string).
 

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import fc from 'fast-check';
 import { createLightback, type Attachment, type Draft, type FeedbackPayload } from '@lightback/core';
 import { mountWidget } from '../src/ui';
+import type { WidgetOptions } from '../src/types';
 import { propertyParameters } from '../../../test/property';
 
 // Rasterization is a platform boundary: a 200x100 bitmap for a 100x50 page (2x), recorded canvas calls.
@@ -56,21 +57,58 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function setup(options: { draft?: Draft; screenshot?: boolean } = {}) {
+function setup(options: { draft?: Draft; screenshot?: boolean; widget?: Partial<WidgetOptions> } = {}) {
   const raw = new Blob(['raw-pixels'], { type: 'image/png' });
+  const capturer = vi.fn(async () => raw);
   const send = vi.fn(async (_payload: FeedbackPayload, _attachments: Attachment[]) => {});
   const onError = vi.fn();
   const client = createLightback({ persistence: false, capture: { console: false, errors: false, network: false, breadcrumbs: false }, send });
   if (options.draft) client.saveDraft(options.draft);
-  const widget = mountWidget({ client, sendDelay: 0, onError, ...(options.screenshot === false ? {} : { screenshot: async () => raw }) });
+  const widget = mountWidget({ client, sendDelay: 0, onError, ...(options.screenshot === false ? {} : { screenshot: capturer }), ...options.widget });
   cleanup.push(() => widget.destroy(), () => client.destroy());
   const root = widget.element.shadowRoot!;
   const q = (ref: string) => root.querySelector<HTMLElement>(`[data-ref=${ref}]`)!;
   const action = (name: string) => root.querySelector<HTMLButtonElement>(`[data-action=${name}]`)!.click();
   const attachment = (name: string) => client.getDraft()?.attachments.find((a) => a.name === name)?.blob;
   const fills = () => calls.filter((c) => c.op === 'fillRect').map((c) => c.args);
-  return { raw, client, widget, q, action, attachment, fills, send, onError };
+  const area = (name: string) => client.getDraft()?.attachments.find((a) => a.name === name)?.area;
+  return { raw, client, widget, q, action, attachment, area, fills, send, onError, capturer };
 }
+
+it('captures the viewport on request and maps masks and crops by its offset', async () => {
+  // A 100x50 viewport scrolled 20px down; the capturer's 200x100 bitmap is that viewport at 2x.
+  for (const [dimension, value] of [['clientWidth', 100], ['clientHeight', 50]] as const) {
+    Object.defineProperty(document.documentElement, dimension, { configurable: true, value });
+  }
+  vi.stubGlobal('scrollY', 20);
+  cleanup.push(() => { for (const d of ['clientWidth', 'clientHeight']) delete (document.documentElement as unknown as Record<string, unknown>)[d]; });
+  const { widget, attachment, area, fills, capturer } = setup({ widget: { screenshotArea: 'viewport' } });
+  await settle(); widget.startPicking();
+  await vi.waitFor(() => expect(attachment('screenshot.png')).toBeDefined());
+  expect(capturer).toHaveBeenCalledWith({ area: { x: 0, y: 20, width: 100, height: 50 } });
+  expect(area('screenshot.png')).toEqual({ x: 0, y: 20, width: 100, height: 50 });
+  // The sensitive element sits at document {10,25,20,10}: 5px into the viewport, so the same pixels as unscrolled.
+  expect(fills()).toEqual([[16, 6, 48, 28]]);
+  document.getElementById('target')!.click();
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  // Target at document {50,40,10,10} plus 16px padding, clipped to the captured area.
+  expect(area('selection-1.png')).toEqual({ x: 34, y: 24, width: 42, height: 42 });
+  const stroke = calls.filter((c) => c.op === 'strokeRect').at(-1)!;
+  expect(stroke.args).toEqual([32, 32, 20, 20]);
+});
+
+it('skips the automatic capture over the element budget and says so', async () => {
+  const { widget, q, attachment, capturer } = setup({ widget: { screenshotMaxElements: 1 } });
+  await settle(); widget.startPicking();
+  await settle();
+  expect(capturer).not.toHaveBeenCalled();
+  expect(q('toast').hidden).toBe(false);
+  expect(q('toast').textContent).toContain('Large page');
+  document.getElementById('target')!.click();
+  await settle();
+  expect(attachment('screenshot.png')).toBeUndefined();
+  expect(attachment('selection-1.png')).toBeUndefined();
+});
 
 it('paints sensitive elements out of the screenshot and every crop before anything is stored', async () => {
   const { raw, widget, attachment, fills, client } = setup();

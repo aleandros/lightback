@@ -3,7 +3,7 @@
 Everything below is set on `mountWidget()` or `mountLazyWidget()` or, in React, on the `widget` prop of `LightbackProvider`.
 
 ::: info Release availability
-`strings`, `theme`, `hideTrigger` and styling parts are available in `@lightback/widget` starting with **0.1.1**.
+`strings`, `theme`, `hideTrigger` and styling parts are available in `@lightback/widget` starting with **0.1.1**; `screenshotArea`, `screenshotMaxElements`, `domCapturer` and the capturer's `{ area }` argument starting with **0.2.2**.
 :::
 
 ## Options
@@ -11,8 +11,10 @@ Everything below is set on `mountWidget()` or `mountLazyWidget()` or, in React, 
 | Option | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `client` | `LightbackClient` | required | The client from `createLightback()`. |
-| `screenshot` | `() => Promise<Blob \| null>` | none | Captures the page. Omit to disable screenshots entirely. |
+| `screenshot` | `({ area }) => Promise<Blob \| null>` | none | Captures `area` of the document. Omit to disable screenshots entirely. See [Screenshot capturer](#screenshot-capturer). |
+| `screenshotArea` | `'page' \| 'viewport'` | `'page'` | What a capture covers. `'viewport'` keeps captures fast and small on long pages. |
 | `autoScreenshot` | `boolean` | `true` when `screenshot` is set | Capture when pick mode starts and crop every selection. The panel also offers manual capture/retake whenever a capturer is supplied. |
+| `screenshotMaxElements` | `number` | `8000` | Skip the automatic capture when it would clone more elements than this; the panel's Screenshot button still works. `Infinity` turns the check off. |
 | `cropPadding` | `number` | `16` | CSS pixels of context around a selection in its crop. |
 | `sendDelay` | `number` | `5000` | Milliseconds the "Sending…" card stays cancellable. `0` sends immediately. |
 | `position` | `'bottom-right' \| 'bottom-left'` | `'bottom-right'` | Corner for the pill, panel and pending card. |
@@ -68,21 +70,38 @@ In React, `useLightbackWidget()` returns the lazy handle once the mounting effec
 
 ## Screenshot capturer
 
-Any function that resolves to a PNG or JPEG `Blob` of the page works. The widget hides itself and mutes the collectors while the function runs, so the capturer's own network calls never appear in the report.
+The capturer receives `{ area }`, a document rect in CSS pixels, and resolves to a PNG or JPEG `Blob` showing exactly that area, at any uniform scale. With `screenshotArea: 'page'` (the default) the area is the whole document; with `'viewport'` it is what is on screen. The widget hides itself and mutes the collectors while the function runs, so the capturer's own network calls never appear in the report.
+
+The recommended setup wraps a DOM-cloning library with `domCapturer` and captures the viewport:
 
 ```ts
-// modern-screenshot (used by the playground)
-screenshot: () => import('modern-screenshot').then((m) =>
-  m.domToBlob(document.documentElement, { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }))
+import { domCapturer } from '@lightback/widget'; // also exported by '@lightback/widget/lazy'
 
-// html2canvas
-screenshot: () => import('html2canvas').then(async (m) => {
-  const canvas = await m.default(document.body);
+mountWidget({
+  client: lightback,
+  screenshotArea: 'viewport',
+  screenshot: domCapturer((root, options) =>
+    import('modern-screenshot').then((m) => m.domToBlob(root, { ...options, scale: Math.min(devicePixelRatio, 2) }))),
+});
+```
+
+`domCapturer` passes `width`, `height`, `style` and `filter`, which both `modern-screenshot` (`domToBlob`) and `html-to-image` (`toBlob`) accept. Libraries like these copy every element they render, and the page stays frozen while they do: around 2.5 seconds per 10,000 elements. For a viewport area, `domCapturer` keeps elements entirely off screen as empty boxes. Their size holds the layout in place and nothing inside them is copied, so the cost follows what is on screen rather than the page's length. Fixed and sticky elements are always kept and render where they are on screen. On a 93,000-element page a whole-page capture took 25 seconds and a 23 MB PNG; a viewport capture took about 1 second and 250 KB.
+
+With viewport captures, a selection outside the first capture (because the page scrolled) gets a fresh capture for its crop. Every image attachment reports the area it shows as `attachments[].area`, so consumers can lay `docRect`s over it.
+
+**Large pages.** Before an automatic capture the widget estimates how many elements the capturer will copy: the whole document for `'page'`, or what `domCapturer` copies for `'viewport'`. Above `screenshotMaxElements` (default 8000) it skips the capture and says so; the report still has every selection and its context, and the panel's Screenshot button captures on request.
+
+Any other capturer works if it honours `area`:
+
+```ts
+// html2canvas, whole page
+screenshot: ({ area }) => import('html2canvas').then(async (m) => {
+  const canvas = await m.default(document.documentElement, { x: area.x, y: area.y, width: area.width, height: area.height });
   return new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
 })
 ```
 
-Full-page size matters: crops and privacy masks are placed on this image using document coordinates, so a capture that stops at the viewport will produce blank crops, and misplaced masks, for anything below the fold. The widget masks sensitive elements and reporter-hidden areas after the capturer returns; see [Privacy and masking](./privacy.md#contract-with-your-capturer).
+Capturers written for earlier versions ignore the argument and return the whole page, which is what `'page'` asks for. Crops and privacy masks are placed on the image by document coordinates, so the image must show exactly the requested area. The widget masks sensitive elements and reporter-hidden areas after the capturer returns; see [Privacy and masking](./privacy.md#contract-with-your-capturer).
 
 ## Keeping the widget out of its own reports
 

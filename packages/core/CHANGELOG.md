@@ -1,5 +1,11 @@
 # @lightback/core
 
+## 0.2.1
+
+### Added
+
+- Image attachments can carry `area`, the document rect they show, so consumers can place selection `docRect`s on viewport screenshots and crops. It is kept through drafts, recovery, the payload and the transport only as four finite numbers with a positive size, and `toPromptContext` lists it. Payload `version` stays 1; a `screenshot.png` without `area` still covers `page.size`.
+
 ## 0.2.0
 
 ### Added

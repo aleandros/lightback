@@ -1,5 +1,21 @@
 # @lightback/widget
 
+## 0.2.2
+
+### Fixed
+
+- Large pages stay responsive while picking. Entering pick mode ran the capturer over the whole document, and DOM-cloning capturers freeze the page for time proportional to its size (25 seconds and a 23 MB PNG on a 93,000-element page). The automatic capture is now skipped, with a notice, when it would copy more than `screenshotMaxElements` elements (default 8000); the panel's Screenshot button still captures on request. New string: `screenshotSkipped`.
+
+### Added
+
+- `screenshotArea: 'viewport'` captures what is on screen instead of the whole page. Selections outside the first capture (the page scrolled) get a fresh capture for their crop.
+- `domCapturer(render)` adapts `modern-screenshot`, `html-to-image` and similar DOM-cloning renderers. For a viewport area it copies only what is on screen, keeping off-screen elements as empty boxes so the layout does not move, and draws fixed and sticky elements where they are: about 1 second and a few hundred KB on the same page. Exported from `@lightback/widget`, `@lightback/widget/lazy` and both standalone scripts.
+- Screenshot and crop attachments record the document `area` they show; restored drafts use it to size crop previews and to repaint recovered screenshots under new hidden areas.
+
+### Changed
+
+- The capturer is called with `{ area }`, the document rect to capture. Whole-page capture stays the default, so capturers that ignore the argument keep working.
+
 ## 0.2.1
 
 ### Fixed

@@ -24,12 +24,11 @@ export async function decodeScreenshot(blob: Blob): Promise<ImageBitmap | HTMLCa
 }
 
 export type Drawable = ImageBitmap | HTMLCanvasElement;
-export interface Page { width: number; height: number }
 export interface Shot {
   blob: Blob;
   bitmap: Drawable;
-  /** Document size when captured, so document-space rects map onto the bitmap. */
-  page: Page;
+  /** Document area the bitmap shows (the whole page, or the viewport), so document-space rects map onto it. */
+  area: Rect;
 }
 
 /** CSS pixels added around every mask to cover antialiased edges and subpixel layout. */
@@ -37,13 +36,13 @@ const MASK_BLEED = 2;
 export const MASK_FILL = '#111827';
 
 /** Bitmap pixels covered by a document-space rect, clamped to the image. */
-export function maskBounds(rect: Rect, page: Page, size: { width: number; height: number }): Rect | null {
-  const sx = size.width / page.width;
-  const sy = size.height / page.height;
-  const x0 = Math.max(0, Math.floor((rect.x - MASK_BLEED) * sx));
-  const y0 = Math.max(0, Math.floor((rect.y - MASK_BLEED) * sy));
-  const x1 = Math.min(size.width, Math.ceil((rect.x + rect.width + MASK_BLEED) * sx));
-  const y1 = Math.min(size.height, Math.ceil((rect.y + rect.height + MASK_BLEED) * sy));
+export function maskBounds(rect: Rect, area: Rect, size: { width: number; height: number }): Rect | null {
+  const sx = size.width / area.width;
+  const sy = size.height / area.height;
+  const x0 = Math.max(0, Math.floor((rect.x - area.x - MASK_BLEED) * sx));
+  const y0 = Math.max(0, Math.floor((rect.y - area.y - MASK_BLEED) * sy));
+  const x1 = Math.min(size.width, Math.ceil((rect.x - area.x + rect.width + MASK_BLEED) * sx));
+  const y1 = Math.min(size.height, Math.ceil((rect.y - area.y + rect.height + MASK_BLEED) * sy));
   return x1 > x0 && y1 > y0 ? { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } : null;
 }
 
@@ -52,7 +51,7 @@ export function maskBounds(rect: Rect, page: Page, size: { width: number; height
  * returning unmasked pixels. The caller releases the source once it has switched to the result (see `release`).
  */
 export async function maskShot(shot: Shot, rects: Rect[]): Promise<Shot> {
-  const boxes = rects.map((r) => maskBounds(r, shot.page, shot.bitmap)).filter((b): b is Rect => b !== null);
+  const boxes = rects.map((r) => maskBounds(r, shot.area, shot.bitmap)).filter((b): b is Rect => b !== null);
   if (!boxes.length) return shot;
   const canvas = document.createElement('canvas');
   canvas.width = shot.bitmap.width;
@@ -64,7 +63,12 @@ export async function maskShot(shot: Shot, rects: Rect[]): Promise<Shot> {
   for (const b of boxes) ctx.fillRect(b.x, b.y, b.width, b.height);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) throw new Error('Lightback: masked screenshot could not be encoded');
-  return { blob, bitmap: canvas, page: shot.page };
+  return { blob, bitmap: canvas, area: shot.area };
+}
+
+/** True when `inner` lies entirely inside `outer`. */
+export function covers(outer: Rect, inner: Rect): boolean {
+  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
 }
 
 export function release(bitmap: Drawable): void {

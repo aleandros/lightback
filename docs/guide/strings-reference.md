@@ -19,6 +19,7 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | <code>screenshot</code> | <code>"📷 Screenshot"</code> |
 | <code>retakeScreenshot</code> | <code>"📷 Retake screenshot"</code> |
 | <code>screenshotPreview</code> | <code>"Screenshot preview"</code> |
+| <code>screenshotSkipped</code> | <code>"Large page: no automatic screenshot. Add one from the panel if it helps."</code> |
 | <code>reviewSummary</code> | <code>"Review what will be sent"</code> |
 | <code>tabPrompt</code> | <code>"Prompt"</code> |
 | <code>tabJson</code> | <code>"JSON"</code> |

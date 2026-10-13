@@ -5,11 +5,14 @@ import { lightback, screenshot } from './lightback';
 import { App } from './App';
 import './styles.css';
 
+// Viewport captures stay fast on long pages; `?shot=page` switches to whole-page captures (e2e covers both).
+const screenshotArea = new URLSearchParams(location.search).get('shot') === 'page' ? 'page' : 'viewport';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <LightbackProvider
       client={lightback}
-      widget={{ screenshot, onSent: (p) => console.info('[playground] sent', p.id) }}
+      widget={{ screenshot, screenshotArea, onSent: (p) => console.info('[playground] sent', p.id) }}
       context={{ user: { id: 'u_123', email: 'demo@example.com', plan: 'pro' }, session: 'sess_abc' }}
     >
       <App />

@@ -186,7 +186,13 @@ function Summary({ s }: { s: Submission }) {
 function Screenshot({ s }: { s: Submission }) {
   const src = s.files['screenshot.png'];
   if (!src) return <p className="muted">No screenshot attached.</p>;
-  const { width, height } = s.payload.page.size;
+  // The image shows `area` (the viewport for the playground); older reports cover the whole page.
+  const ref = s.payload.attachments.find((a) => a.name === 'screenshot.png');
+  const area = ref?.area ?? { x: 0, y: 0, ...s.payload.page.size };
+  const box = (r: { x: number; y: number; width: number; height: number }) => ({
+    left: `${((r.x - area.x) / area.width) * 100}%`, top: `${((r.y - area.y) / area.height) * 100}%`,
+    width: `${(r.width / area.width) * 100}%`, height: `${(r.height / area.height) * 100}%`,
+  });
   return (
     <div className="shot-wrap">
       <img src={src} alt="screenshot" />
@@ -197,7 +203,7 @@ function Screenshot({ s }: { s: Submission }) {
             <div
               className={`shot-box${sel.kind === 'region' ? ' region' : ''}`}
               title={sel.components.join(' < ') || sel.selector}
-              style={{ left: `${(r.x / width) * 100}%`, top: `${(r.y / height) * 100}%`, width: `${(r.width / width) * 100}%`, height: `${(r.height / height) * 100}%` }}
+              style={box(r)}
             >
               <span>{i + 1}</span>
             </div>
@@ -206,7 +212,7 @@ function Screenshot({ s }: { s: Submission }) {
                 key={j}
                 className="shot-box child"
                 title={c.selector}
-                style={{ left: `${(c.docRect.x / width) * 100}%`, top: `${(c.docRect.y / height) * 100}%`, width: `${(c.docRect.width / width) * 100}%`, height: `${(c.docRect.height / height) * 100}%` }}
+                style={box(c.docRect)}
               />
             ))}
           </div>

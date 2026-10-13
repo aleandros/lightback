@@ -1,4 +1,5 @@
 import { createLightback } from '@lightback/core';
+import { domCapturer } from '@lightback/widget/lazy';
 import { isDemo } from './mode';
 import { saveSubmission } from './submissions';
 
@@ -15,11 +16,6 @@ export const lightback = createLightback({
   },
 });
 
-export const screenshot = () =>
-  import('modern-screenshot').then(({ domToBlob }) => domToBlob(document.documentElement, {
-    type: 'image/png',
-    scale: Math.min(window.devicePixelRatio, 2),
-    // Match the dimensions the core reports in payload.page.size so docRects map 1:1.
-    width: document.documentElement.scrollWidth,
-    height: document.documentElement.scrollHeight,
-  }));
+/** Captures what Lightback asks for (the viewport, see `screenshotArea` in main.tsx), so docRects map onto the image. */
+export const screenshot = domCapturer((root, options) =>
+  import('modern-screenshot').then(({ domToBlob }) => domToBlob(root, { ...options, type: 'image/png', scale: Math.min(window.devicePixelRatio, 2) })));

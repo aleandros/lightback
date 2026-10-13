@@ -191,7 +191,7 @@ it('stores opted-in attachments as bounded binary data and restores exact bytes'
   const large = new Blob(['x'.repeat(5000)], { type: 'image/png' });
   first.saveDraft({ text: 'images', selections: [selection], attachments: [
     { name: 'screenshot.png', type: large.type, size: large.size, blob: large },
-    { name: 'selection-1.png', type: small.type, size: small.size, blob: small },
+    { name: 'selection-1.png', type: small.type, size: small.size, area: { x: 4, y: 900, width: 80, height: 40 }, blob: small },
   ] });
   await first.flushPersistence();
   read.mockRejectedValue(new DOMException('Blob revoked on navigation', 'NotReadableError'));
@@ -204,6 +204,7 @@ it('stores opted-in attachments as bounded binary data and restores exact bytes'
   const recovered = second.getDraft()!;
   expect(recovered.attachments).toHaveLength(1);
   expect(await recovered.attachments[0]!.blob.text()).toBe('exact image bytes');
+  expect(recovered.attachments[0]!.area).toEqual({ x: 4, y: 900, width: 80, height: 40 });
   expect(recovered.selections[0]!.crop).toBe('selection-1.png');
   const metadataOnly = client(); await metadataOnly.ready;
   expect(metadataOnly.getDraft()?.attachments).toEqual([]);

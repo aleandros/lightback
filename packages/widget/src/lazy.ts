@@ -2,8 +2,9 @@ import { createLazyWidget, type LazyWidgetHandle } from './lazy-controller';
 import type { WidgetOptions } from './types';
 import { importWidget } from './module-loader';
 export type { LazyWidgetHandle } from './lazy-controller';
-export type { WidgetOptions, WidgetHandle } from './types';
+export type { WidgetOptions, WidgetHandle, ScreenshotRequest } from './types';
 export { defaultStrings, type WidgetStrings } from './strings';
+export { domCapturer, type DomCaptureOptions } from './capture';
 
 // Replaced by the package build. Source imports use the dev server's TS transform.
 declare const __LIGHTBACK_CJS__: boolean;

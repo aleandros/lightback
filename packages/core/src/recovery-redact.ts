@@ -46,8 +46,12 @@ export function isRecoveredSelection(value: unknown): boolean {
       Array.isArray(value.region.children) && value.region.children.every(summary)));
 }
 
+export function isRect(value: unknown): value is import('./types').Rect {
+  const v = value as Record<string, unknown> | null;
+  return !!v && typeof v === 'object' && ['x', 'y', 'width', 'height'].every((key) => Number.isFinite(v[key]));
+}
+
 export function isScreenshotMask(value: unknown): value is import('./types').ScreenshotMask {
   const v = value as Record<string, any> | null;
-  return !!v && typeof v === 'object' && (v.reason === 'sensitive' || v.reason === 'reporter') && !!v.docRect &&
-    ['x', 'y', 'width', 'height'].every((key) => Number.isFinite(v.docRect[key]));
+  return !!v && typeof v === 'object' && (v.reason === 'sensitive' || v.reason === 'reporter') && isRect(v.docRect);
 }

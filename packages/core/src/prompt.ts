@@ -98,7 +98,10 @@ export function toPromptContext(p: FeedbackPayload, opts: { maxLogLines?: number
   }
   if (p.attachments.length) {
     lines.push('', `## Attachments`);
-    for (const a of p.attachments) lines.push(`- ${a.name} (${a.type}, ${a.size} bytes)`);
+    for (const a of p.attachments) {
+      const area = a.area ? `, shows document area x=${a.area.x} y=${a.area.y} ${a.area.width}×${a.area.height}` : '';
+      lines.push(`- ${a.name} (${a.type}, ${a.size} bytes${area})`);
+    }
   }
   return lines.join('\n');
 }

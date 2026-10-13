@@ -5,12 +5,15 @@ import {
 import { defaultStrings, type WidgetStrings } from './strings';
 export { defaultStrings, type WidgetStrings } from './strings';
 import { styles } from './styles';
-import { decodeScreenshot, maskShot, release, type Page, type Shot } from './screenshot';
+import { covers, decodeScreenshot, maskShot, release, type Shot } from './screenshot';
+import { captureCost } from './capture';
 
 import type { WidgetOptions, WidgetHandle } from './types';
 import { createHost } from './shell';
 
 const DRAG_THRESHOLD = 5;
+/** Default `screenshotMaxElements`: roughly 2 s of a DOM-cloning capturer on an ordinary laptop. */
+const DEFAULT_MAX_ELEMENTS = 8000;
 
 const template = (s: WidgetStrings) => /* html */ `
 <div class="lb-pill" part="pill" data-ref="pill" role="group" aria-label="${esc(s.feedback)}">
@@ -68,7 +71,7 @@ const template = (s: WidgetStrings) => /* html */ `
   <div class="lb-pending-summary" data-ref="pendingSummary"></div>
   <div class="lb-pending-bar"><i data-ref="pendingBar"></i></div>
 </div>
-<div class="lb-toast" hidden></div>
+<div class="lb-toast" data-ref="toast" hidden></div>
 `;
 
 export function mountWidget(options: WidgetOptions, element?: HTMLElement): WidgetHandle {
@@ -96,9 +99,9 @@ class Widget implements WidgetHandle {
   private liveEls = new Map<string, Element>();
   private screenshot: Blob | null = null;
   private screenshotUrl: string | null = null;
-  /** Document size of the current screenshot; null when restored from storage (its geometry is unknown). */
-  private screenshotPage: Page | null = null;
-  /** Full-page capture taken when pick mode starts; crops are cut from it. Masks repaint it in place. */
+  /** Document area the current screenshot shows; null when restored without one (its geometry is unknown). */
+  private screenshotArea: Rect | null = null;
+  /** Capture taken when pick mode starts; crops are cut from it. Masks repaint it in place. */
   private base: Promise<Shot | null> | null = null;
   /** Bumped whenever base pixels change, so an in-flight crop of older pixels is dropped. */
   private baseVersion = 0;
@@ -110,7 +113,9 @@ class Widget implements WidgetHandle {
   private maskJob: Promise<void> = Promise.resolve();
   private maskMode = false;
   /** `width` is the crop's extent in CSS pixels, so a high-DPR crop previews at page size instead of doubled. */
-  private crops = new Map<string, { blob: Blob; url: string; width: number }>();
+  private crops = new Map<string, { blob: Blob; url: string; width: number; area?: Rect }>();
+  /** Captures run one at a time: each hides the widget, and an overlapping one would restore it mid-capture. */
+  private captureQueue: Promise<unknown> = Promise.resolve();
   private cropJobs = new Map<string, Promise<void>>();
   private pendingTimer: number | null = null;
   private autoShot: boolean;
@@ -621,19 +626,19 @@ class Widget implements WidgetHandle {
           this.baseVersion++;
           repainted = true;
           release(old);
-          if (live() && this.screenshot === previous) this.setScreenshot(next.blob, shot.page, this.shotMasks);
+          if (live() && this.screenshot === previous) this.setScreenshot(next.blob, shot.area, this.shotMasks);
         }
       }
       if (!live()) return;
       const current = this.screenshot;
       if (current && current !== shot?.blob) {
-        if (!this.screenshotPage) this.setScreenshot(null); // Restored image: its geometry is unknown, so drop it.
+        if (!this.screenshotArea) this.setScreenshot(null); // Restored image: its geometry is unknown, so drop it.
         else {
-          const page = this.screenshotPage;
+          const area = this.screenshotArea;
           const bitmap = await decodeScreenshot(current);
           try {
-            const next = await maskShot({ blob: current, bitmap, page }, [rect]);
-            if (live() && this.screenshot === current) this.setScreenshot(next.blob, page, this.shotMasks);
+            const next = await maskShot({ blob: current, bitmap, area }, [rect]);
+            if (live() && this.screenshot === current) this.setScreenshot(next.blob, area, this.shotMasks);
             if (next.bitmap !== bitmap) release(next.bitmap);
           } finally { release(bitmap); }
         }
@@ -748,19 +753,25 @@ class Widget implements WidgetHandle {
    * Hide the widget, run the consumer's capturer, restore, then mask sensitive elements and reporter areas.
    * The capturer's unmasked blob and bitmap never leave this method.
    */
-  private async capture(): Promise<{ shot: Shot; sensitive: Rect[] } | null> {
-    if (!this.opts.screenshot) return null;
-    const page = { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight };
+  private capture(): Promise<{ shot: Shot; sensitive: Rect[] } | null> {
+    const run = this.captureQueue.then(() => this.captureNow());
+    this.captureQueue = run.catch(() => {});
+    return run;
+  }
+
+  private async captureNow(): Promise<{ shot: Shot; sensitive: Rect[] } | null> {
+    if (!this.opts.screenshot || this.destroyed) return null;
     this.element.style.visibility = 'hidden';
     await nextFrame();
     await nextFrame();
     let blob: Blob | null;
     let sensitive: Rect[];
+    const area = this.captureArea();
     try {
       // Measure on both sides: content can appear, move or become sensitive while the capturer runs.
       const before = this.sensitiveRects();
       // Screenshot libraries fetch fonts, images and blob URLs; none of that belongs in the report.
-      blob = await this.client.mute(() => this.opts.screenshot!());
+      blob = await this.client.mute(() => this.opts.screenshot!({ area }));
       sensitive = uniqueRects([...before, ...this.sensitiveRects()]);
     } finally {
       this.element.style.visibility = '';
@@ -769,7 +780,7 @@ class Widget implements WidgetHandle {
     const bitmap = await decodeScreenshot(blob);
     let shot: Shot;
     try {
-      shot = await maskShot({ blob, bitmap, page }, [...sensitive, ...this.masks]);
+      shot = await maskShot({ blob, bitmap, area }, [...sensitive, ...this.masks]);
     } catch (err) {
       release(bitmap);
       throw err;
@@ -778,9 +789,30 @@ class Widget implements WidgetHandle {
     return { shot, sensitive };
   }
 
-  /** Full-page capture for the current pick session. Also becomes the attached screenshot. */
+  /** What to capture: the whole document, or with `screenshotArea: 'viewport'` what is on screen. */
+  private captureArea(): Rect {
+    const root = document.documentElement;
+    if (this.opts.screenshotArea !== 'viewport') return { x: 0, y: 0, width: root.scrollWidth, height: root.scrollHeight };
+    return { x: Math.round(window.scrollX), y: Math.round(window.scrollY), width: root.clientWidth, height: root.clientHeight };
+  }
+
+  /**
+   * Automatic captures stop at `screenshotMaxElements`: DOM-cloning capturers block the page for time proportional
+   * to the elements they copy, which on large pages means seconds to minutes.
+   */
+  private withinBudget(): boolean {
+    const max = this.opts.screenshotMaxElements ?? DEFAULT_MAX_ELEMENTS;
+    if (max === Infinity) return true;
+    return captureCost(this.captureArea()) <= max;
+  }
+
+  /** Capture for the current pick session. Also becomes the attached screenshot. */
   private async captureBase(): Promise<Shot | null> {
     const generation = this.captureGeneration;
+    if (!this.withinBudget()) {
+      this.toast(this.strings.screenshotSkipped);
+      return null;
+    }
     try {
       const result = await this.capture();
       if (!result) return null;
@@ -788,7 +820,7 @@ class Widget implements WidgetHandle {
         release(result.shot.bitmap);
         return null;
       }
-      this.setScreenshot(result.shot.blob, result.shot.page, result.sensitive);
+      this.setScreenshot(result.shot.blob, result.shot.area, result.sensitive);
       this.baseMasks = result.sensitive;
       return result.shot;
     } catch (err) {
@@ -797,49 +829,71 @@ class Widget implements WidgetHandle {
     }
   }
 
-  /** Cut a padded crop of the selection out of the base capture and outline the selected rect. */
+  /**
+   * Cut a padded crop of the selection out of the base capture and outline the selected rect. A viewport base that
+   * does not show the selection (the page scrolled since) is replaced, for this crop only, by a capture of the screen.
+   */
   private async cropSelection(sel: ElementSelection): Promise<void> {
     const base = await this.base;
     if (this.destroyed || !base || !this.selections.includes(sel)) return;
     const version = this.baseVersion;
-    const r = sel.region ? sel.region.docRect : sel.docRect;
-    const area = this.cropArea(sel, base.page);
-    const sx = base.bitmap.width / base.page.width;
-    const sy = base.bitmap.height / base.page.height;
-    const x0 = Math.max(0, Math.floor(area.x * sx));
-    const y0 = Math.max(0, Math.floor(area.y * sy));
-    const x1 = Math.min(base.bitmap.width, Math.ceil((area.x + area.width) * sx));
-    const y1 = Math.min(base.bitmap.height, Math.ceil((area.y + area.height) * sy));
-    const w = x1 - x0;
-    const h = y1 - y0;
-    if (w <= 0 || h <= 0) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(base.bitmap, x0, y0, w, h, 0, 0, w, h);
-    ctx.strokeStyle = getComputedStyle(this.element).getPropertyValue('--lb-accent').trim() || '#4f46e5';
-    ctx.lineWidth = Math.max(2, 2 * sx);
-    if (sel.kind === 'region') ctx.setLineDash([6 * sx, 4 * sx]);
-    ctx.strokeRect(r.x * sx - x0, r.y * sy - y0, r.width * sx, r.height * sy);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-    // A mask landed meanwhile: the mask job re-cuts this crop from the repainted base.
-    if (this.destroyed || !blob || !this.selections.includes(sel) || version !== this.baseVersion) return;
-    const prev = this.crops.get(sel.id);
-    if (prev) URL.revokeObjectURL(prev.url);
-    this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob), width: w / sx });
-    this.renderSelections();
-    this.persistDraft();
+    let shot = base;
+    let own: Shot | null = null;
+    if (this.opts.screenshotArea === 'viewport' && !covers(base.area, this.cropArea(sel, pageRect()))) {
+      if (!this.withinBudget()) return;
+      const result = await this.capture();
+      if (!result) return;
+      own = result.shot;
+      shot = own;
+      this.baseMasks = uniqueRects([...this.baseMasks, ...result.sensitive]);
+    }
+    try {
+      const r = sel.region ? sel.region.docRect : sel.docRect;
+      const area = this.cropArea(sel, shot.area);
+      const sx = shot.bitmap.width / shot.area.width;
+      const sy = shot.bitmap.height / shot.area.height;
+      const x0 = Math.max(0, Math.floor((area.x - shot.area.x) * sx));
+      const y0 = Math.max(0, Math.floor((area.y - shot.area.y) * sy));
+      const x1 = Math.min(shot.bitmap.width, Math.ceil((area.x - shot.area.x + area.width) * sx));
+      const y1 = Math.min(shot.bitmap.height, Math.ceil((area.y - shot.area.y + area.height) * sy));
+      const w = x1 - x0;
+      const h = y1 - y0;
+      if (w <= 0 || h <= 0) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(shot.bitmap, x0, y0, w, h, 0, 0, w, h);
+      ctx.strokeStyle = getComputedStyle(this.element).getPropertyValue('--lb-accent').trim() || '#4f46e5';
+      ctx.lineWidth = Math.max(2, 2 * sx);
+      if (sel.kind === 'region') ctx.setLineDash([6 * sx, 4 * sx]);
+      ctx.strokeRect((r.x - shot.area.x) * sx - x0, (r.y - shot.area.y) * sy - y0, r.width * sx, r.height * sy);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      // A mask landed meanwhile: the mask job re-cuts this crop from the repainted base.
+      if (this.destroyed || !blob || !this.selections.includes(sel) || version !== this.baseVersion) return;
+      const prev = this.crops.get(sel.id);
+      if (prev) URL.revokeObjectURL(prev.url);
+      const cut = { x: shot.area.x + x0 / sx, y: shot.area.y + y0 / sy, width: w / sx, height: h / sy };
+      this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob), width: w / sx, area: roundRect(cut) });
+      this.renderSelections();
+      this.persistDraft();
+    } finally {
+      if (own) release(own.bitmap);
+    }
   }
 
-  /** A selection's crop in document CSS pixels: its rect plus `cropPadding`, clipped to the page. */
-  private cropArea(sel: ElementSelection, page: Page): Rect {
+  /** A selection's crop in document CSS pixels: its rect plus `cropPadding`, clipped to `bounds`. */
+  private cropArea(sel: ElementSelection, bounds: Rect): Rect {
     const pad = this.opts.cropPadding ?? 16;
     const r = sel.region ? sel.region.docRect : sel.docRect;
-    const x = Math.max(0, r.x - pad);
-    const y = Math.max(0, r.y - pad);
-    return { x, y, width: Math.min(page.width, r.x + r.width + pad) - x, height: Math.min(page.height, r.y + r.height + pad) - y };
+    const x = Math.max(bounds.x, r.x - pad);
+    const y = Math.max(bounds.y, r.y - pad);
+    return {
+      x, y,
+      width: Math.min(bounds.x + bounds.width, r.x + r.width + pad) - x,
+      height: Math.min(bounds.y + bounds.height, r.y + r.height + pad) - y,
+    };
   }
 
   private async takeScreenshot(): Promise<void> {
@@ -852,7 +906,7 @@ class Widget implements WidgetHandle {
     try {
       const result = await this.capture();
       if (result) release(result.shot.bitmap);
-      if (!this.destroyed && generation === this.captureGeneration) this.setScreenshot(result?.shot.blob ?? null, result?.shot.page, result?.sensitive);
+      if (!this.destroyed && generation === this.captureGeneration) this.setScreenshot(result?.shot.blob ?? null, result?.shot.area, result?.sensitive);
     } catch (err) {
       this.setStatus(this.strings.screenshotFailed(err instanceof Error ? err.message : String(err)), true);
       this.opts.onError?.(err);
@@ -861,10 +915,10 @@ class Widget implements WidgetHandle {
     }
   }
 
-  private setScreenshot(blob: Blob | null, page: Page | null = null, sensitive?: Rect[]): void {
+  private setScreenshot(blob: Blob | null, area: Rect | null = null, sensitive?: Rect[]): void {
     if (this.screenshotUrl) URL.revokeObjectURL(this.screenshotUrl);
     this.screenshot = blob;
-    this.screenshotPage = blob ? page : null;
+    this.screenshotArea = blob ? area : null;
     if (sensitive) this.shotMasks = sensitive;
     this.screenshotUrl = blob ? URL.createObjectURL(blob) : null;
     const box = this.q('[data-ref=shot]');
@@ -898,14 +952,14 @@ class Widget implements WidgetHandle {
       for (const selection of this.selections) {
         const crop = draft.attachments.find((a) => a.name === selection.crop);
         if (crop) {
-          // The capture scale is not stored; estimate the CSS width from the selection against the current page.
-          const page = { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight };
-          const width = this.cropArea(selection, page).width;
-          this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob), width });
+          // Older drafts have no crop area; estimate the CSS width from the selection against the current page.
+          const width = crop.area?.width ?? this.cropArea(selection, pageRect()).width;
+          this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob), width, area: crop.area });
         }
         // Coordinates remain the captured coordinates; a selector may now point at different content.
       }
-      this.setScreenshot(draft.attachments.find((a) => a.name === 'screenshot.png')?.blob ?? null);
+      const shot = draft.attachments.find((a) => a.name === 'screenshot.png');
+      this.setScreenshot(shot?.blob ?? null, shot?.area ?? null);
       this.renderSelections();
       this.renderPins();
       this.updateCount();
@@ -918,13 +972,14 @@ class Widget implements WidgetHandle {
   private draft() {
     const attachments: Attachment[] = [];
     if (this.screenshot) {
-      attachments.push({ name: 'screenshot.png', type: this.screenshot.type || 'image/png', size: this.screenshot.size, blob: this.screenshot });
+      const area = this.screenshotArea ? { area: this.screenshotArea } : {};
+      attachments.push({ name: 'screenshot.png', type: this.screenshot.type || 'image/png', size: this.screenshot.size, ...area, blob: this.screenshot });
     }
     const selections = this.selections.map((sel, i) => {
       const crop = this.crops.get(sel.id);
       if (!crop) return { ...sel, crop: undefined };
       const name = `selection-${i + 1}.png`;
-      attachments.push({ name, type: 'image/png', size: crop.blob.size, blob: crop.blob });
+      attachments.push({ name, type: 'image/png', size: crop.blob.size, ...(crop.area ? { area: crop.area } : {}), blob: crop.blob });
       return { ...sel, crop: name };
     });
     const masks: ScreenshotMask[] = [
@@ -1156,6 +1211,17 @@ function uniqueRects(rects: Rect[]): Rect[] {
 
 function clip(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) + `\n… truncated (${s.length} chars total)` : s;
+}
+
+/** The document in CSS pixels. */
+function pageRect(): Rect {
+  return { x: 0, y: 0, width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight };
+}
+
+function roundRect(r: Rect): Rect {
+  const x = Math.round(r.x);
+  const y = Math.round(r.y);
+  return { x, y, width: Math.round(r.x + r.width) - x, height: Math.round(r.y + r.height) - y };
 }
 
 function nextFrame(): Promise<void> {
