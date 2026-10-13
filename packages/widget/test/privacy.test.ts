@@ -16,12 +16,15 @@ let calls: Call[] = [];
 let encoded: Blob[] = [];
 const canvasOf = new Map<Blob, HTMLCanvasElement>();
 let noContext = false;
+/** Hold encoder callbacks to complete them later; or encode `null` from the given call index on. */
+let held: Array<() => void> | null = null;
+let nullFrom = Infinity;
 const cleanup: Array<() => void> = [];
 const rect = (x: number, y: number, width: number, height: number) => ({ x, y, width, height, left: x, top: y, right: x + width, bottom: y + height, toJSON() {} });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
-  calls = []; encoded = []; canvasOf.clear(); noContext = false;
+  calls = []; encoded = []; canvasOf.clear(); noContext = false; held = null; nullFrom = Infinity;
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { queueMicrotask(() => callback(0)); return 0; });
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
     if (noContext) return null;
@@ -32,7 +35,8 @@ beforeEach(() => {
     const blob = new Blob([`encoded-${encoded.length}`], { type: 'image/png' });
     encoded.push(blob);
     canvasOf.set(blob, this);
-    queueMicrotask(() => callback(blob));
+    const done = () => callback(encoded.indexOf(blob) >= nullFrom ? null : blob);
+    if (held) held.push(done); else queueMicrotask(done);
   });
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:test') });
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
@@ -196,3 +200,68 @@ it('property: every sensitive element and reporter mask is painted into the line
     } finally { widget.destroy(); }
   }), { ...propertyParameters(), numRuns: runs });
 }, 120_000);
+
+const area = (x0: number, y0: number, x1: number, y1: number) => {
+  for (const [type, x, y] of [['mousedown', x0, y0], ['mousemove', x1, y1], ['mouseup', x1, y1], ['click', x1, y1]] as const) {
+    document.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true }));
+  }
+};
+
+it('regression: a failed mask also discards a crop that was still being cut', async () => {
+  const { widget, action, attachment, onError } = setup();
+  await settle(); widget.startPicking();
+  await vi.waitFor(() => expect(attachment('screenshot.png')).toBeDefined());
+  held = [];
+  document.getElementById('target')!.click(); // crop encoding is held
+  await settle();
+  action('pop-more'); action('mask-mode');
+  noContext = true;
+  area(40, 15, 70, 35);
+  await vi.waitFor(() => expect(onError).toHaveBeenCalled());
+  for (const done of held.splice(0)) done();
+  held = null;
+  await settle();
+  expect(attachment('screenshot.png')).toBeUndefined();
+  expect(attachment('selection-1.png')).toBeUndefined();
+});
+
+it('regression: an overlapping crop is dropped before re-cutting, so a failed re-cut leaves no stale crop', async () => {
+  const { widget, action, attachment } = setup();
+  await settle(); widget.startPicking();
+  document.getElementById('target')!.click();
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  nullFrom = encoded.length + 1; // the repaint encodes; the re-cut fails
+  action('pop-more'); action('mask-mode');
+  area(40, 15, 70, 35);
+  await vi.waitFor(() => expect(encoded.length).toBe(nullFrom + 1));
+  await settle();
+  expect(attachment('selection-1.png')).toBeUndefined();
+  expect(attachment('screenshot.png')).toBe(encoded[nullFrom - 1]);
+});
+
+it('keeps crops that a new mask does not touch', async () => {
+  const { widget, action, attachment } = setup();
+  await settle(); widget.startPicking();
+  document.getElementById('target')!.click();
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  const crop = attachment('selection-1.png');
+  const encodes = encoded.length;
+  action('pop-more'); action('mask-mode');
+  area(80, 0, 95, 10); // outside the target's padded crop
+  await vi.waitFor(() => expect(encoded.length).toBe(encodes + 1)); // only the repaint
+  await settle();
+  expect(attachment('selection-1.png')).toBe(crop);
+});
+
+it('a click mask covers content overflowing the element box', async () => {
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => rect(50, 20, 45, 12) });
+  try {
+    const { widget, action, client } = setup();
+    await settle(); widget.startPicking();
+    action('mask-mode');
+    document.getElementById('target')!.click();
+    expect(client.getDraft()!.masks!.find((m) => m.reason === 'reporter')!.docRect).toEqual({ x: 50, y: 20, width: 45, height: 12 });
+  } finally {
+    delete (Range.prototype as Partial<Range>).getBoundingClientRect;
+  }
+});

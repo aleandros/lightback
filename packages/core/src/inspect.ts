@@ -209,22 +209,23 @@ export interface FrameworkInfo {
  * Walk framework internals to find the component tree above an element, plus source and props when exposed.
  * Props are omitted when the owning component renders sensitive content: they are likely its data source.
  */
-export function frameworkInfo(el: Element, sensitive = DEFAULT_SENSITIVE): FrameworkInfo {
+export function frameworkInfo(el: Element, sensitive = DEFAULT_SENSITIVE, withProps = true): FrameworkInfo {
   const stamped = parseSourceAttr(el.getAttribute('data-source') ?? el.getAttribute('data-lb-source'));
   // Cheap global check first: most pages have nothing sensitive and skip the subtree walks.
   let anySensitive = true;
   try { anySensitive = el.ownerDocument.querySelector(sensitive) !== null; } catch { /* fail closed */ }
   const guard = anySensitive ? sensitive : null;
-  const react = reactInfo(el, guard);
+  const react = reactInfo(el, guard, withProps);
   if (react.chain.length || react.source) return { framework: 'react', ...react, source: react.source ?? stamped };
-  const vue = vueInfo(el, guard);
+  const vue = vueInfo(el, guard, withProps);
   if (vue.chain.length) return { framework: 'vue', ...vue, source: vue.source ?? stamped };
   return { framework: null, chain: [], source: stamped };
 }
 
 /** Backwards-compatible helper: just the names. */
 export function componentChain(el: Element): { framework: 'react' | 'vue' | null; components: string[] } {
-  const info = frameworkInfo(el);
+  // Names only: skips props snapshots and their sensitivity walks (used on every hover).
+  const info = frameworkInfo(el, DEFAULT_SENSITIVE, false);
   return { framework: info.framework, components: info.chain.map((c) => c.name) };
 }
 
@@ -239,6 +240,7 @@ function parseSourceAttr(value: string | null): SourceLocation | undefined {
 interface Fiber {
   type: unknown;
   return: Fiber | null;
+  tag?: number;
   child?: Fiber | null;
   sibling?: Fiber | null;
   stateNode?: unknown;
@@ -272,21 +274,32 @@ const WITHHELD: Record<string, unknown> = Object.freeze({});
 const shown = (props?: Record<string, unknown>) => (props === WITHHELD ? undefined : props);
 
 /** Does a component's rendered output contain sensitive DOM? Unknown or oversized subtrees count as sensitive. */
+const HOST_PORTAL = 4;
+
+/**
+ * Does a component's rendered output contain sensitive DOM? Unknown or oversized subtrees count as sensitive.
+ * A clean host node vouches for its DOM subtree, so only portals below it need their own DOM checks.
+ */
 function fiberRendersSensitive(fiber: Fiber, sensitive: string): boolean {
-  const stack: Fiber[] = fiber.child ? [fiber.child] : [];
+  const stack: Array<[Fiber, boolean]> = fiber.child ? [[fiber.child, false]] : [];
   let seen = 0;
   while (stack.length) {
-    const f = stack.pop()!;
+    const [f, covered] = stack.pop()!;
     if (++seen > MAX_SUBTREE) return true;
+    let childCovered = covered && f.tag !== HOST_PORTAL;
     const node = f.stateNode as Element | null | undefined;
-    if (node && typeof node === 'object' && node.nodeType === 1 && (isSensitive(node, sensitive) || containsSensitive(node, sensitive))) return true;
-    if (f.sibling) stack.push(f.sibling);
-    if (f.child) stack.push(f.child);
+    if (!covered && node && typeof node === 'object' && node.nodeType === 1) {
+      if (isSensitive(node, sensitive) || containsSensitive(node, sensitive)) return true;
+      childCovered = true;
+    }
+    if (f.tag === HOST_PORTAL) childCovered = false;
+    if (f.sibling) stack.push([f.sibling, covered]);
+    if (f.child) stack.push([f.child, childCovered]);
   }
   return false;
 }
 
-function reactInfo(el: Element, sensitive: string | null): Omit<FrameworkInfo, 'framework'> {
+function reactInfo(el: Element, sensitive: string | null, withProps = true): Omit<FrameworkInfo, 'framework'> {
   const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
   if (!key) return { chain: [] };
   let fiber = (el as unknown as Record<string, Fiber | undefined>)[key] ?? null;
@@ -297,7 +310,7 @@ function reactInfo(el: Element, sensitive: string | null): Omit<FrameworkInfo, '
     const name = reactTypeName(fiber.type);
     if (name && chain[chain.length - 1]?.name !== name) {
       chain.push({ name, source: fiberSource(fiber) });
-      if (!props && fiber.memoizedProps && typeof fiber.memoizedProps === 'object') {
+      if (withProps && !props && fiber.memoizedProps && typeof fiber.memoizedProps === 'object') {
         // Only the nearest component's props are considered; withheld props stay withheld.
         props = sensitive !== null && fiberRendersSensitive(fiber, sensitive) ? WITHHELD : snapshotProps(fiber.memoizedProps as Record<string, unknown>);
       }
@@ -358,7 +371,7 @@ function snapshotValue(v: unknown, depth: number): unknown {
   return String(v);
 }
 
-interface VueNode { el?: unknown; children?: unknown }
+interface VueNode { el?: unknown; children?: unknown; component?: { subTree?: VueNode } | null }
 interface VueInstance {
   subTree?: VueNode;
   $el?: unknown;
@@ -370,20 +383,40 @@ interface VueInstance {
   $props?: Record<string, unknown>;
 }
 
-/** Vue exposes rendered roots, not a walkable tree; fragments contribute each root. Unknown roots count as sensitive. */
+const isElement = (n: unknown): n is Element => !!n && typeof n === 'object' && (n as Node).nodeType === 1;
+
+/**
+ * Vue 3 rendered roots: an element vnode vouches for its DOM subtree; fragments (v-for, v-if, templates) and
+ * fragment-rooted child components are searched through their children. Unknown or oversized trees count as sensitive.
+ */
 function vueRendersSensitive(instance: VueInstance, sensitive: string): boolean {
-  const tree = instance.subTree;
-  const roots = tree ? [tree.el, ...(Array.isArray(tree.children) ? (tree.children as VueNode[]).map((c) => c?.el) : [])] : [instance.$el];
-  const elements = roots.filter((n): n is Element => !!n && typeof n === 'object' && (n as Node).nodeType === 1);
-  if (!elements.length) return true;
-  return elements.some((root) => isSensitive(root, sensitive) || containsSensitive(root, sensitive));
+  if (!instance.subTree) {
+    const root = instance.$el; // Vue 2
+    return !isElement(root) || isSensitive(root, sensitive) || containsSensitive(root, sensitive);
+  }
+  const stack: VueNode[] = [instance.subTree];
+  let seen = 0;
+  let found = false;
+  while (stack.length) {
+    const vnode = stack.pop();
+    if (!vnode || typeof vnode !== 'object') continue;
+    if (++seen > MAX_SUBTREE) return true;
+    if (isElement(vnode.el)) {
+      found = true;
+      if (isSensitive(vnode.el, sensitive) || containsSensitive(vnode.el, sensitive)) return true;
+      continue;
+    }
+    if (vnode.component?.subTree) stack.push(vnode.component.subTree);
+    if (Array.isArray(vnode.children)) stack.push(...(vnode.children as VueNode[]));
+  }
+  return !found;
 }
 
 function vueProps(instance: VueInstance, raw: Record<string, unknown>, sensitive: string | null): Record<string, unknown> {
   return sensitive !== null && vueRendersSensitive(instance, sensitive) ? WITHHELD : snapshotProps(raw);
 }
 
-function vueInfo(el: Element, sensitive: string | null): Omit<FrameworkInfo, 'framework'> {
+function vueInfo(el: Element, sensitive: string | null, withProps = true): Omit<FrameworkInfo, 'framework'> {
   const anyEl = el as unknown as { __vueParentComponent?: VueInstance; __vue__?: VueInstance };
   const chain: ComponentInfo[] = [];
   let props: Record<string, unknown> | undefined;
@@ -400,7 +433,7 @@ function vueInfo(el: Element, sensitive: string | null): Omit<FrameworkInfo, 'fr
     const name = v3.type?.name || v3.type?.__name || fileName(v3.type?.__file);
     if (name && chain[chain.length - 1]?.name !== name) {
       chain.push({ name, source: v3.type?.__file ? { file: v3.type.__file } : undefined });
-      if (!props && v3.props) props = vueProps(v3, v3.props, sensitive);
+      if (withProps && !props && v3.props) props = vueProps(v3, v3.props, sensitive);
     }
     v3 = v3.parent;
   }
@@ -411,7 +444,7 @@ function vueInfo(el: Element, sensitive: string | null): Omit<FrameworkInfo, 'fr
     const name = v2.$options?.name || v2.$options?._componentTag || fileName(v2.$options?.__file);
     if (name && chain[chain.length - 1]?.name !== name) {
       chain.push({ name, source: v2.$options?.__file ? { file: v2.$options.__file } : undefined });
-      if (!props && v2.$props) props = vueProps(v2, v2.$props, sensitive);
+      if (withProps && !props && v2.$props) props = vueProps(v2, v2.$props, sensitive);
     }
     v2 = v2.$parent;
   }

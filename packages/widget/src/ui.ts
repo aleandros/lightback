@@ -1,5 +1,5 @@
 import {
-  shortSelector, toPromptContext,
+  componentChain, shortSelector, toPromptContext,
   type Attachment, type ElementSelection, type LightbackClient, type Rect, type ScreenshotMask,
 } from '@lightback/core';
 import { defaultStrings, type WidgetStrings } from './strings';
@@ -103,8 +103,9 @@ class Widget implements WidgetHandle {
   private baseVersion = 0;
   /** Areas the reporter hid, in document coordinates. Applied to every later capture too. */
   private masks: Rect[] = [];
-  /** Sensitive element rects painted into the current images. */
+  /** Sensitive element rects painted into the current screenshot, and into the base that crops are cut from. */
   private shotMasks: Rect[] = [];
+  private baseMasks: Rect[] = [];
   private maskJob: Promise<void> = Promise.resolve();
   private maskMode = false;
   private crops = new Map<string, { blob: Blob; url: string }>();
@@ -335,7 +336,7 @@ class Widget implements WidgetHandle {
     // Clicking the page while a popover is open commits the comment and continues picking.
     if (this.popoverFor) this.savePopover();
     const el = this.targetAt(e.clientX, e.clientY);
-    if (el && this.maskMode) this.addMask(el.getBoundingClientRect());
+    if (el && this.maskMode) this.addMask(renderedBounds(el));
     else if (el) this.addSelection(el);
   };
   private swallow = (e: Event) => {
@@ -512,7 +513,8 @@ class Widget implements WidgetHandle {
       return;
     }
     tip.hidden = false;
-    const chain = this.client.describeElement(el).components.slice(0, 3);
+    // Names only: a full description (props, HTML, sensitivity walks) on every mousemove is too slow.
+    const chain = componentChain(el).components.slice(0, 3);
     tip.textContent = `${chain.length ? chain.join(' ‹ ') + '  ' : ''}${shortSelector(el)}  ${Math.round(r.width)}×${Math.round(r.height)}`;
     tip.classList.toggle('below', r.y < 32);
   }
@@ -570,6 +572,7 @@ class Widget implements WidgetHandle {
     for (const m of this.masks) {
       const el = document.createElement('div');
       el.className = 'lb-mask';
+      el.dataset.ref = 'mask';
       el.style.left = `${m.x - window.scrollX}px`;
       el.style.top = `${m.y - window.scrollY}px`;
       el.style.width = `${m.width}px`;
@@ -595,6 +598,7 @@ class Widget implements WidgetHandle {
     this.maskJob = this.maskJob.then(async () => {
       const shot = await this.base;
       if (!live()) return;
+      let repainted = false;
       if (shot) {
         const previous = shot.blob;
         const old = shot.bitmap;
@@ -604,6 +608,7 @@ class Widget implements WidgetHandle {
           shot.blob = next.blob;
           shot.bitmap = next.bitmap;
           this.baseVersion++;
+          repainted = true;
           release(old);
           if (live() && this.screenshot === previous) this.setScreenshot(next.blob, shot.page, this.shotMasks);
         }
@@ -624,21 +629,29 @@ class Widget implements WidgetHandle {
       }
       if (!live()) return;
       const pad = this.opts.cropPadding ?? 16;
+      let dropped = false;
       for (const sel of this.selections) {
         const job = this.cropJobs.get(sel.id);
-        if (shot && job) {
-          this.cropJobs.set(sel.id, job.then(() => this.cropSelection(sel)).catch(() => {}));
-        } else if (this.crops.has(sel.id) && overlaps(sel.region ? sel.region.docRect : sel.docRect, rect, pad)) {
-          // A restored crop cannot be re-cut; drop it rather than keep pixels the reporter hid.
+        const hit = overlaps(sel.region ? sel.region.docRect : sel.docRect, rect, pad);
+        // Drop an affected crop first: if re-cutting fails, nothing showing the hidden area remains.
+        if (hit && this.crops.has(sel.id)) {
           URL.revokeObjectURL(this.crops.get(sel.id)!.url);
           this.crops.delete(sel.id);
-          this.renderSelections();
-          this.persistDraft();
+          dropped = true;
         }
+        // Re-cut affected crops, and in-flight ones discarded by the repaint (restored crops have no job).
+        if (repainted && job && (hit || !this.crops.has(sel.id))) {
+          this.cropJobs.set(sel.id, job.then(() => this.cropSelection(sel)).catch(() => {}));
+        }
+      }
+      if (dropped) {
+        this.renderSelections();
+        this.persistDraft();
       }
     }).catch((err: unknown) => {
       if (!live()) return;
-      // Fail closed: without a masked version, no image is kept.
+      // Fail closed: without a masked version, no image is kept, including crops still being cut.
+      this.baseVersion++;
       this.base = null;
       this.setScreenshot(null);
       for (const c of this.crops.values()) URL.revokeObjectURL(c.url);
@@ -765,6 +778,7 @@ class Widget implements WidgetHandle {
         return null;
       }
       this.setScreenshot(result.shot.blob, result.shot.page, result.sensitive);
+      this.baseMasks = result.sensitive;
       return result.shot;
     } catch (err) {
       this.opts.onError?.(err);
@@ -860,6 +874,7 @@ class Widget implements WidgetHandle {
       const masks = draft.masks ?? [];
       this.masks = masks.filter((m) => m.reason === 'reporter').map((m) => m.docRect);
       this.shotMasks = masks.filter((m) => m.reason === 'sensitive').map((m) => m.docRect);
+      this.baseMasks = this.shotMasks;
       for (const selection of this.selections) {
         const crop = draft.attachments.find((a) => a.name === selection.crop);
         if (crop) this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob) });
@@ -888,7 +903,9 @@ class Widget implements WidgetHandle {
       return { ...sel, crop: name };
     });
     const masks: ScreenshotMask[] = [
-      ...(attachments.length ? this.shotMasks.map((docRect) => ({ docRect, reason: 'sensitive' as const })) : []),
+      // Sensitive boxes painted into whichever images are attached; reporter masks are kept for later captures.
+      ...uniqueRects([...(this.screenshot ? this.shotMasks : []), ...(this.crops.size ? this.baseMasks : [])])
+        .map((docRect) => ({ docRect, reason: 'sensitive' as const })),
       ...this.masks.map((docRect) => ({ docRect, reason: 'reporter' as const })),
     ];
     return { text: this.text, selections, attachments, ...(masks.length ? { masks } : {}) };
@@ -996,6 +1013,7 @@ class Widget implements WidgetHandle {
     this.base = null;
     this.masks = [];
     this.shotMasks = [];
+    this.baseMasks = [];
     this.maskJob = Promise.resolve();
     this.renderMasks();
     this.setScreenshot(null);
@@ -1076,6 +1094,21 @@ function fmtSource(s: { file: string; line?: number; column?: number }): string 
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+}
+
+/** Border box plus contents, so overflowing text and positioned descendants are covered too. */
+function renderedBounds(el: Element): Rect {
+  const boxes: Array<{ left: number; top: number; right: number; bottom: number; width: number; height: number }> = [el.getBoundingClientRect()];
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    if (typeof range.getBoundingClientRect === 'function') boxes.push(range.getBoundingClientRect());
+  } catch { /* unsupported */ }
+  const visible = boxes.filter((b) => b.width > 0 && b.height > 0);
+  if (!visible.length) return { x: 0, y: 0, width: 0, height: 0 };
+  const left = Math.min(...visible.map((b) => b.left));
+  const top = Math.min(...visible.map((b) => b.top));
+  return { x: left, y: top, width: Math.max(...visible.map((b) => b.right)) - left, height: Math.max(...visible.map((b) => b.bottom)) - top };
 }
 
 function overlaps(a: Rect, b: Rect, pad: number): boolean {

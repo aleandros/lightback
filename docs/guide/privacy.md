@@ -46,7 +46,7 @@ The rules apply before anything is stored, previewed or sent: the panel's Prompt
 
 ### Component props
 
-React props come from the nearest named component above the element. Lightback walks that component's rendered fiber subtree; if any host element in it is sensitive, the props are omitted. Vue components are checked through their rendered roots; fragments contribute each root. Unknown roots, and React subtrees larger than 5000 fibers, count as sensitive. When nothing on the page is sensitive the check is skipped.
+React props come from the nearest named component above the element. Lightback walks that component's rendered fiber subtree, including portals; if any host element in it is sensitive, the props are omitted. Vue components are checked through their rendered roots; fragments (`v-for`, `v-if`, `<template>`) and fragment-rooted child components are searched through their children. Unknown roots, and trees larger than 5000 nodes, count as sensitive. When nothing on the page is sensitive the check is skipped.
 
 ## Screenshot masking
 
@@ -58,11 +58,11 @@ With a `screenshot` capturer configured, the widget masks every capture before i
 
 If masking cannot run (no 2D canvas, or encoding fails), the image is dropped and `onError` is called. An unmasked image is never kept as a fallback.
 
-`payload.masks` lists the boxes painted into the attached images, each with a document rect and a `reason` (`sensitive` or `reporter`). The prompt summarises them.
+`payload.masks` lists the boxes painted into the attached images, each with a document rect and a `reason` (`sensitive` or `reporter`). It is present only when images are attached. Up to 300 sensitive and 100 reporter masks are kept, bounded separately so many sensitive matches never evict the reporter's own areas. The prompt summarises them.
 
 ## Hidden areas (reporter masks)
 
-When a capturer is configured, the pick bar shows **▨ Hide area** (`data-action="mask-mode"`). While it is on, clicking an element or dragging a rectangle hides that area instead of selecting it. Hidden areas show as hatched boxes while picking. They are painted into the current screenshot and existing crops at once (crops are re-cut), and into every later capture of the same draft.
+When a capturer is configured, the pick bar shows **▨ Hide area** (`data-action="mask-mode"`). While it is on, clicking an element (its box plus any overflowing content) or dragging a rectangle hides that area instead of selecting it. Hidden areas show as hatched boxes while picking. They are painted into the current screenshot at once. Crops that overlap the area are discarded and re-cut, so a failed re-cut leaves no crop rather than a stale one. Every later capture of the same draft uses them too.
 
 Masks only add pixels: a hidden area cannot be un-hidden in an image already captured. Discard clears them. Reporter masks are saved with the draft and restored after reload. A restored screenshot, or a restored crop, whose geometry is unknown is dropped when a new hidden area overlaps it, rather than kept with the area visible.
 

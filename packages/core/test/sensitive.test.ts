@@ -69,6 +69,15 @@ it('rejects invalid privacy selectors instead of failing open', () => {
   expect(() => client({ privacy: { selectors: ['.ok', 'div >>> span'] } })).toThrow(/invalid privacy selector/);
 });
 
+it('keeps the configured privacy selector when region options try to override it', () => {
+  const $ = mount(`<div class="billing" id="box"><span class="card">secret-card</span> total</div>`);
+  const instance = client({ privacy: { selectors: ['.billing .card'] } });
+  for (const opts of [{ sensitive: undefined }, { sensitive: '.nothing' }]) {
+    const region = instance.describeRegion({ x: 0, y: 0, width: 10, height: 10 }, { hitTest: () => $('.card'), ...opts })!;
+    expect(JSON.stringify(region)).not.toMatch(SECRET);
+  }
+});
+
 it('sanitizes region containers and children', () => {
   const $ = mount(`<form id="pay"><label>Card</label><input id="num" data-lightback-sensitive aria-label="secret-label">
     <p id="note" data-lightback-sensitive role="note">secret-note</p><button>Pay</button></form>`);
@@ -113,6 +122,15 @@ it('omits props of components that render sensitive content', () => {
   expect(describeElement(span).props).toBeUndefined();
   (span as unknown as Record<string, unknown>).__vueParentComponent = vue($('#plain'), { greeting: 'hello' });
   expect(describeElement(span).props).toEqual({ greeting: 'hello' });
+  // Multi-root component whose second root is a v-for fragment (text anchor) of sensitive items.
+  const anchor = document.createTextNode('');
+  const fragment = { ...vue($('#plain'), { customers: ['secret-4111'] }), subTree: { el: anchor, children: [{ el: $('#plain') }, { el: anchor, children: [{ el: $('#num') }] }] } };
+  (span as unknown as Record<string, unknown>).__vueParentComponent = fragment;
+  expect(describeElement(span).props).toBeUndefined();
+  // A child component rooted in a fragment is searched through its own subtree.
+  const nested = { ...vue($('#plain'), { customers: ['secret-4111'] }), subTree: { el: anchor, children: [{ el: anchor, component: { subTree: { el: anchor, children: [{ el: $('#num') }] } } }] } };
+  (span as unknown as Record<string, unknown>).__vueParentComponent = nested;
+  expect(describeElement(span).props).toBeUndefined();
 });
 
 it('records clicks on sensitive elements and their ancestors without their text', () => {
@@ -151,9 +169,18 @@ it('carries screenshot masks into the payload and prompt, dropping malformed one
     { docRect: { x: 1, y: 1, width: 1, height: 1 }, reason: 'other' },
   ] as never;
   const picked = { ...selection('one'), text: '', attrs: {}, sensitive: true };
-  const payload = instance.buildPayload({ text: 'n', selections: [picked], masks });
+  const blob = new Blob(['png'], { type: 'image/png' });
+  const attachments = [{ name: 'screenshot.png', type: blob.type, size: blob.size, blob }];
+  const payload = instance.buildPayload({ text: 'n', selections: [picked], masks, attachments });
   expect(payload.masks).toEqual([masks[0], masks[1]]);
   expect(instance.buildPayload({ text: 'n' }).masks).toBeUndefined();
+  // Masks describe images: without attachments they are kept for later captures but not reported.
+  expect(instance.buildPayload({ text: 'n', masks }).masks).toBeUndefined();
+  // Many sensitive matches never evict the reporter's own areas.
+  const many = Array.from({ length: 400 }, (_, i) => ({ docRect: { x: i, y: 0, width: 1, height: 1 }, reason: 'sensitive' as const }));
+  const reporter = { docRect: { x: 9, y: 9, width: 9, height: 9 }, reason: 'reporter' as const };
+  instance.saveDraft({ text: 'n', selections: [], attachments: [], masks: [...many, reporter] });
+  expect(instance.getDraft()!.masks!.filter((m) => m.reason === 'reporter')).toEqual([reporter]);
   const prompt = toPromptContext(payload);
   expect(prompt).toContain('Sensitive: content withheld');
   expect(prompt).toContain('2 area(s) are covered by opaque boxes (1 sensitive, 1 hidden by the reporter)');

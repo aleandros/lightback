@@ -68,9 +68,12 @@ export interface LightbackClient {
 
 function cleanMasks(masks: unknown): ScreenshotMask[] {
   if (!Array.isArray(masks)) return [];
-  return masks.filter(isScreenshotMask).slice(0, 200).map((m) => ({
-    docRect: { x: m.docRect.x, y: m.docRect.y, width: m.docRect.width, height: m.docRect.height }, reason: m.reason,
-  }));
+  const valid = masks.filter(isScreenshotMask);
+  // Bound each reason separately: many sensitive matches must not evict the reporter's own areas.
+  return [
+    ...valid.filter((m) => m.reason === 'sensitive').slice(0, 300),
+    ...valid.filter((m) => m.reason === 'reporter').slice(0, 100),
+  ].map((m) => ({ docRect: { x: m.docRect.x, y: m.docRect.y, width: m.docRect.width, height: m.docRect.height }, reason: m.reason }));
 }
 
 export function createLightback(options: LightbackOptions = {}): LightbackClient {
@@ -114,11 +117,12 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
 
   const clean = <T>(value: T): T => scrubRecovery(value, redact, limits.string) as T;
   const cleanDraft = (draft: Draft): Draft => {
-    const { attachments, ...metadata } = draft;
+    // Masks are rebuilt from validated numbers and an enum, so they need no string scrubbing or its array cap.
+    const { attachments, masks, ...metadata } = draft;
     const result = clean(metadata);
     return {
       ...result,
-      ...(result.masks !== undefined ? { masks: cleanMasks(result.masks) } : {}),
+      ...(masks !== undefined ? { masks: cleanMasks(masks) } : {}),
       selections: result.selections.slice(0, 50),
       attachments: attachments.slice(0, 51).filter((a) => a && typeof a.name === 'string' && a.blob instanceof Blob).map((a) => ({
         name: clean(a.name), type: clean(a.blob.type), size: a.blob.size, blob: a.blob,
@@ -179,7 +183,8 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
       breadcrumbBuf.push({ t: Date.now(), type: 'custom', message, data });
     },
     describeElement: (el) => describeElement(el, { sensitive }),
-    describeRegion: (rect, opts) => describeRegion(rect, { isIgnored, sensitive, ...opts }),
+    // The configured privacy selector cannot be overridden or cleared per call.
+    describeRegion: (rect, opts) => describeRegion(rect, { isIgnored, ...opts, sensitive }),
     isIgnored,
     isSensitive: (el) => isSensitive(el, sensitive),
     sensitiveRects: () => sensitiveRects(sensitive, isIgnored),
@@ -217,7 +222,8 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
         network: networkBuf.toArray(),
         breadcrumbs: breadcrumbBuf.toArray(),
         context,
-        ...(draft.masks?.length ? { masks: cleanMasks(draft.masks) } : {}),
+        // Masks describe images; a draft without attachments keeps them only for later captures.
+        ...(draft.masks?.length && attachments.length ? { masks: cleanMasks(draft.masks) } : {}),
       }, redact) as FeedbackPayload;
     },
     async send(draft) {

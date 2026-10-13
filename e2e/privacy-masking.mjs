@@ -80,7 +80,7 @@ await page.click(W + '[data-action=pop-more]');
 await page.click(W + '[data-action=mask-mode]');
 assert(await page.getAttribute(W + '[data-ref=maskMode]', 'aria-pressed') === 'true', 'mask mode toggles on');
 await page.click('#hideme');
-assert(await page.locator(W + '.lb-mask').count() === 1, 'hidden area is drawn on the page while picking');
+assert(await page.locator(W + '[data-ref=mask]').count() === 1, 'hidden area is drawn on the page while picking');
 assert(await page.locator(W + '.lb-pin').count() === 6, 'a click in mask mode does not add a selection');
 await page.screenshot({ path: OUT + '1-picking.png' });
 await page.click(W + '[data-action=done]');
