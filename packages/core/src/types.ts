@@ -125,6 +125,12 @@ export interface AttachmentRef {
   name: string;
   type: string;
   size: number;
+  /**
+   * For images: the document area the image shows, in CSS pixels (the space of `ElementSelection.docRect`).
+   * Map a docRect onto the image by subtracting `area.x`/`area.y` and scaling by `imageWidth / area.width`.
+   * Absent for non-images and for older senders; a `screenshot.png` without it covers the whole page (`page.size`).
+   */
+  area?: Rect;
 }
 
 export interface Attachment extends AttachmentRef {

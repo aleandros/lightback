@@ -101,6 +101,7 @@ Default ring-buffer limits are 200 console entries, 50 errors, 100 network entri
 | <code>name</code> | <code>string</code> |  |
 | <code>type</code> | <code>string</code> |  |
 | <code>size</code> | <code>number</code> |  |
+| <code>area?</code> | <code>Rect</code> | For images: the document area the image shows, in CSS pixels (the space of &#96;ElementSelection.docRect&#96;). Map a docRect onto the image by subtracting &#96;area.x&#96;/&#96;area.y&#96; and scaling by &#96;imageWidth / area.width&#96;. Absent for non-images and for older senders; a &#96;screenshot.png&#96; without it covers the whole page (&#96;page.size&#96;). |
 
 ## Env
 

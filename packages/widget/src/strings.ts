@@ -13,6 +13,7 @@ export const defaultStrings = {
   screenshot: "📷 Screenshot",
   retakeScreenshot: "📷 Retake screenshot",
   screenshotPreview: "Screenshot preview",
+  screenshotSkipped: "Large page: no automatic screenshot. Add one from the panel if it helps.",
   reviewSummary: "Review what will be sent",
   tabPrompt: "Prompt",
   tabJson: "JSON",

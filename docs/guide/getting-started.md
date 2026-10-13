@@ -12,7 +12,7 @@ pnpm add modern-screenshot
 pnpm add @lightback/react
 ```
 
-Packages are ESM and CommonJS, with matching TypeScript types. The current release is widget `0.2.1` with core and React `0.2.0`; React `0.2` requires widget `0.2`. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
+Packages are ESM and CommonJS, with matching TypeScript types. The current release is widget `0.2.2`, core `0.2.1` and React `0.2.0`; React `0.2` requires widget `0.2`. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
 
 ## Mount it
 
@@ -21,7 +21,7 @@ Create the client once, as early as possible, so the buffers have recent context
 ```ts
 // lightback.ts
 import { createLightback } from '@lightback/core';
-import { mountLazyWidget } from '@lightback/widget/lazy';
+import { mountLazyWidget, domCapturer } from '@lightback/widget/lazy';
 
 export const lightback = createLightback({
   endpoint: '/api/feedback',
@@ -30,22 +30,24 @@ export const lightback = createLightback({
 
 const widget = mountLazyWidget({
   client: lightback,
-  screenshot: () => import('modern-screenshot').then((m) => m.domToBlob(document.documentElement)),
+  screenshotArea: 'viewport',
+  screenshot: domCapturer((root, options) => import('modern-screenshot').then((m) => m.domToBlob(root, options))),
 });
 ```
 
-Import `lightback.ts` from your entry file. Install `modern-screenshot` for the example above, or omit `screenshot` for reports without images. The capturer is optional and injectable: pass any function that returns a `Promise<Blob>` of the page.
+Import `lightback.ts` from your entry file. Install `modern-screenshot` for the example above, or omit `screenshot` for reports without images. The capturer is optional and injectable: `domCapturer` adapts DOM-cloning libraries, and any function that returns a `Promise<Blob>` of the requested area works. Viewport captures stay fast on long pages; see [Screenshot capturer](./customization.md#screenshot-capturer).
 
 ### React
 
 ```tsx
 import { LightbackProvider } from '@lightback/react';
 import { createLightback } from '@lightback/core';
-const screenshot = () => import('modern-screenshot').then((m) => m.domToBlob(document.documentElement));
+import { domCapturer } from '@lightback/widget/lazy';
+const screenshot = domCapturer((root, options) => import('modern-screenshot').then((m) => m.domToBlob(root, options)));
 // In the React integration, let the provider mount the widget.
 const lightback = createLightback({ endpoint: '/api/feedback' });
 
-<LightbackProvider client={lightback} widget={{ screenshot }} context={{ user: { id: user.id } }}>
+<LightbackProvider client={lightback} widget={{ screenshot, screenshotArea: 'viewport' }} context={{ user: { id: user.id } }}>
   <App />
 </LightbackProvider>
 ```

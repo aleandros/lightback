@@ -70,17 +70,16 @@ Masks only add pixels: a hidden area cannot be un-hidden in an image already cap
 
 Lightback masks after your capturer returns. For the masks to line up:
 
-- Return an image of the **full document** (`scrollWidth` × `scrollHeight`), scaled uniformly. This is the same contract crops already rely on.
-- Render elements where they are at the current scroll position. Fixed-position elements are measured in the viewport, offset by the scroll position.
+- Return an image of exactly the requested `area` (the whole document, or the viewport with `screenshotArea: 'viewport'`), scaled uniformly. This is the same contract crops rely on.
+- Render elements where they are at the current scroll position. Fixed-position elements are measured in the viewport, offset by the scroll position. `domCapturer` does this for viewport captures.
 
-The unmasked image exists briefly in memory, inside your capturer and during decoding. If your capturer sends the page to a service, exclude sensitive nodes there too. `modern-screenshot`, for example, accepts a `filter` option:
+The unmasked image exists briefly in memory, inside your capturer and during decoding. If your capturer sends the page to a service, exclude sensitive nodes there too. With `domCapturer`, combine its `filter` with your own:
 
 ```ts
-screenshot: () => import('modern-screenshot').then((m) => m.domToBlob(document.documentElement, {
-  width: document.documentElement.scrollWidth,
-  height: document.documentElement.scrollHeight,
-  filter: (node) => !(node instanceof Element && node.matches('[data-lightback-sensitive]')),
-}))
+screenshot: domCapturer((root, options) => import('modern-screenshot').then((m) => m.domToBlob(root, {
+  ...options,
+  filter: (node) => options.filter(node) && !(node instanceof Element && node.matches('[data-lightback-sensitive]')),
+})))
 ```
 
 `persistence.attachments: true` remains an explicit opt-in. Lightback stores only masked images. Content you have not marked is not masked.
@@ -100,6 +99,6 @@ screenshot: () => import('modern-screenshot').then((m) => m.domToBlob(document.d
 
 - Masking covers marked elements and reporter areas. Text redaction rules (`redact.patterns`) do not apply to pixels, and form-control values, which the data side never records, are visible in screenshots unless their fields are marked.
 - Elements inside iframes or the host's own shadow roots are not inspected or measured.
-- A capturer that renders fixed or sticky elements somewhere other than their current position produces misaligned masks. Verify with your capturer and add margin via a wrapping sensitive element if needed.
-- The base screenshot is captured at pick start. A sensitive element that appears later is masked only in later captures (retake the screenshot).
+- A capturer that renders fixed or sticky elements somewhere other than their current position produces misaligned masks. Whole-page DOM captures draw them where they would be with the page scrolled to the top; viewport captures through `domCapturer` draw them where they are. Verify with your capturer and add margin via a wrapping sensitive element if needed.
+- The base screenshot is captured at pick start. A sensitive element that appears later is masked only in later captures (retake the screenshot). With viewport captures, crops of selections outside the first capture come from a later capture.
 - Older `@lightback/core` versions without privacy support: the widget still masks `[data-lightback-sensitive]` pixels, but the data side needs the new core.

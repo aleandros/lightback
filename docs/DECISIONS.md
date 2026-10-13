@@ -36,7 +36,7 @@ Modelled on Claude artifacts' element annotation: click an element, the comment 
 
 ## 9. Automatic screenshot and per-selection crops
 
-When a capturer is configured the widget captures the full page once at pick start and cuts an outlined crop per selection. Visual reference is cheap and valuable for both humans and vision models. The capturer is injected (`screenshot: () => Promise<Blob>`) so the packages have no dependency on `modern-screenshot` or html2canvas.
+When a capturer is configured the widget captures once at pick start and cuts an outlined crop per selection. Visual reference is cheap and valuable for both humans and vision models. The capturer is injected (`screenshot: ({ area }) => Promise<Blob>`) so the packages have no dependency on `modern-screenshot` or html2canvas. On long pages "cheap" stops being true; see decision 24.
 
 ## 10. Optimistic send with a cancel window instead of a review step
 
@@ -106,3 +106,13 @@ Require both the request origin and the final response origin before recording a
 Hosts mark sensitive subtrees with `data-lightback-sensitive` or `privacy.selectors`. Selectors are combined, validated at client creation (invalid configuration throws) and matched on the live DOM at describe and capture time, so dynamic and late-marked content is covered and ancestor context works. A sensitive selection keeps what locates it (selector, tag, rects, component names and sources) and withholds text, classes, attributes, HTML and props. A flag tells a model the absence is deliberate. Ancestors drop only their sensitive descendants, through a clone matched index-for-index with the live tree. Props are withheld whenever the owning component renders sensitive DOM, since they are the likely data source. Unknown cases fail closed. Ids and test ids remain in selectors; this is documented rather than hashed, because selectors are the product's locator.
 
 Pixels are masked in the widget after capture, not delegated to each capturer. Rects are measured on both sides of the asynchronous capture. The image is painted with opaque fills (blur can be reversible) and re-encoded, and the unmasked bitmap is released before anything is previewed, cropped, persisted or sent. Masking failure drops the image. Reporter masks are additive: they repaint the base in place, re-cut crops and apply to later captures. Removing one could not restore pixels without retaining an unmasked copy. Restored images without known geometry are dropped when a new mask overlaps them. `payload.masks` (optional, payload version stays 1) records the boxes. `data-lightback-ignore` keeps its separate meaning: Lightback's own UI is not pickable or recorded.
+
+## 24. Viewport captures and an element budget for DOM-cloning capturers
+
+DOM-cloning capturers (`modern-screenshot`, `html-to-image`) compute and inline styles for every element they render, on the main thread. Measured on a 93,000-element page: 25 seconds of frozen page and a 23 MB PNG for a whole-page capture at pick start, while every other step stayed under a quarter second. Lightback cannot make the capturer faster, so it now controls what the capturer is asked for and whether it runs.
+
+- The capturer receives `{ area }`. `screenshotArea: 'page'` stays the default so existing capturers, which ignore the argument and return the whole page, keep working. `'viewport'` is the recommended setting.
+- Images record the document area they show (`attachments[].area`, optional, payload version stays 1). Consumers can no longer assume `screenshot.png` covers `page.size`.
+- `domCapturer` ships the viewport recipe because the obvious versions are wrong. Skipping elements below the fold stretches tables and grids (cloners inline the container's full height), and translating the root moves fixed elements off the image. Empty boxes for off-screen elements, negative root margins and an exemption for fixed and sticky ancestors match the live page, at about 1 second on the same page.
+- A selection outside the first viewport capture gets its own capture for the crop instead of a blank crop.
+- An element budget (`screenshotMaxElements`, default 8000, roughly 2 seconds) skips the automatic capture when the estimated clone is larger. A capture cannot be interrupted once started, so the decision is made before it begins, from a count that mirrors what `domCapturer` clones. The manual Screenshot button remains for when the reporter decides the wait is worth it.

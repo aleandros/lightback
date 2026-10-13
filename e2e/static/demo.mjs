@@ -85,16 +85,20 @@ try {
   await page.click('[data-action=tab-screenshot]');
   await page.waitForFunction(() => document.querySelector('.shot-wrap img')?.naturalWidth > 0);
   assert(await page.locator('.shot-box:not(.child)').count() === 2, 'screenshot overlays render both selections');
-  const accountPixel = await page.evaluate(async (size) => {
+  // The screenshot shows `area` (the viewport in the demo); older reports covered the whole page.
+  const shotArea = payload.attachments.find((a) => a.name === 'screenshot.png').area ?? { x: 0, y: 0, ...payload.page.size };
+  const accountPixel = await page.evaluate(async (area) => {
     const img = document.querySelector('.shot-wrap img');
     const bitmap = await createImageBitmap(await (await fetch(img.src)).blob());
     const canvas = document.createElement('canvas'); canvas.width = bitmap.width; canvas.height = bitmap.height;
     const ctx = canvas.getContext('2d'); ctx.drawImage(bitmap, 0, 0);
     // The sidebar does not move between reporting and the inbox, so its current rect is its captured rect.
     const r = document.querySelector('[data-testid=account]').getBoundingClientRect();
-    const scale = bitmap.width / size.width;
-    return Array.from(ctx.getImageData(Math.round((r.x + r.width / 2 + scrollX) * scale), Math.round((r.y + r.height / 2 + scrollY) * scale), 1, 1).data.slice(0, 3)).join(',');
-  }, payload.page.size);
+    const scale = bitmap.width / area.width;
+    const x = (r.x + r.width / 2 + scrollX - area.x) * scale;
+    const y = (r.y + r.height / 2 + scrollY - area.y) * scale;
+    return Array.from(ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data.slice(0, 3)).join(',');
+  }, shotArea);
   assert(accountPixel === '17,24,39', `sidebar account pixels are masked in the real capture (${accountPixel})`);
   await page.reload();
   await page.locator('[data-ref=submission]').waitFor();

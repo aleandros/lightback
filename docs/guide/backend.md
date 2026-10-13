@@ -13,10 +13,10 @@ The default transport posts to `endpoint` with `POST`.
 | Field | Content |
 | --- | --- |
 | `payload` | The `FeedbackPayload` as a JSON string. |
-| `screenshot.png` | Full-page capture, when one was taken. |
+| `screenshot.png` | The capture taken when picking started: the whole page, or the viewport with `screenshotArea: 'viewport'`. Its entry in `payload.attachments` has `area`, the document rect it shows; place `docRect`s on it by subtracting `area.x`/`area.y` and scaling by image width ÷ `area.width`. Older reports omit `area` and cover the whole page (`page.size`). |
 | `selection-1.png`, `selection-2.png`, … | One outlined crop per selection that has one. The selection's `crop` field names its file. Crops are in capture pixels and can be very wide, tall or small; display them with `width: auto; height: auto` and only `max-width`/`max-height` limits (and `align-self: flex-start` inside a flex column) so they are not stretched. |
 
-`payload.attachments` lists every file with `name`, `type` and `size` so you can verify nothing was dropped.
+`payload.attachments` lists every file with `name`, `type` and `size` (and `area` for images) so you can verify nothing was dropped.
 
 Extra headers go through `headers`:
 
@@ -27,7 +27,7 @@ createLightback({
 });
 ```
 
-That key is public by nature: it ships in the browser. Treat the endpoint like any public form: rate limit it, cap body size (a report with a retina full-page PNG can reach a few MB), and validate `payload.version === 1`.
+That key is public by nature: it ships in the browser. Treat the endpoint like any public form: rate limit it, cap body size (a report with a retina full-page PNG can reach tens of MB on long pages; viewport captures stay in the hundreds of KB), and validate `payload.version === 1`.
 
 ## A minimal receiver
 

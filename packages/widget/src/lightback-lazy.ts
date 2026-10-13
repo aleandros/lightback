@@ -3,6 +3,7 @@ import type { WidgetOptions } from './types';
 import { importWidget } from './module-loader';
 export { createLightback } from '@lightback/core';
 export { defaultStrings } from './strings';
+export { domCapturer } from './capture';
 
 // Capture while the classic script executes, before any visitor interaction.
 const scriptUrl = typeof document === 'undefined' ? undefined : (document.currentScript as HTMLScriptElement | null)?.src;

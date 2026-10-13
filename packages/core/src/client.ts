@@ -14,7 +14,7 @@ import { describeRegion, type RegionOptions } from './region';
 import { fetchTransport } from './transport';
 import { uid } from './format';
 import { createPersistence, type RecoveryState } from './persistence';
-import { scrubRecovery, isRecoveredSelection, isScreenshotMask } from './recovery-redact';
+import { scrubRecovery, isRecoveredSelection, isRect, isScreenshotMask } from './recovery-redact';
 import { isSensitive, sensitiveRects, sensitiveSelector } from './sensitive';
 
 const DEFAULT_LIMITS: Limits = { console: 200, errors: 50, network: 100, breadcrumbs: 100, string: 2000 };
@@ -76,6 +76,12 @@ function cleanMasks(masks: unknown): ScreenshotMask[] {
   ].map((m) => ({ docRect: { x: m.docRect.x, y: m.docRect.y, width: m.docRect.width, height: m.docRect.height }, reason: m.reason }));
 }
 
+/** A copy of a valid, non-empty image area, so attachment metadata carries only numbers. */
+function cleanArea(area: unknown): { area: Rect } | Record<string, never> {
+  if (!isRect(area) || area.width <= 0 || area.height <= 0) return {};
+  return { area: { x: area.x, y: area.y, width: area.width, height: area.height } };
+}
+
 export function createLightback(options: LightbackOptions = {}): LightbackClient {
   const limits: Limits = { ...DEFAULT_LIMITS, ...options.limits };
   const redact = mergeRedact(options.redact);
@@ -125,7 +131,7 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
       ...(masks !== undefined ? { masks: cleanMasks(masks) } : {}),
       selections: result.selections.slice(0, 50),
       attachments: attachments.slice(0, 51).filter((a) => a && typeof a.name === 'string' && a.blob instanceof Blob).map((a) => ({
-        name: clean(a.name), type: clean(a.blob.type), size: a.blob.size, blob: a.blob,
+        name: clean(a.name), type: clean(a.blob.type), size: a.blob.size, ...cleanArea(a.area), blob: a.blob,
       })),
     };
   };
@@ -215,7 +221,7 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
         },
         note: { text: draft.text ?? '', transcript: draft.transcript },
         selections: draft.selections ?? [],
-        attachments: attachments.map(({ name, type, size }) => ({ name, type, size })),
+        attachments: attachments.map(({ name, type, size, area }) => ({ name, type, size, ...cleanArea(area) })),
         env: captureEnv(),
         console: consoleBuf.toArray(),
         errors: errorBuf.toArray(),
@@ -234,8 +240,8 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
         if (!result) return null;
         payload = result;
       }
-      const attachments = (draft.attachments ?? []).map(({ blob, ...ref }) => ({
-        ...redactDeep(ref, redact) as Omit<Attachment, 'blob'>, blob,
+      const attachments = (draft.attachments ?? []).map(({ blob, area, ...ref }) => ({
+        ...redactDeep(ref, redact) as Omit<Attachment, 'blob'>, ...cleanArea(area), blob,
       }));
       if (options.send) {
         await options.send(payload, attachments);

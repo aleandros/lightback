@@ -4,6 +4,7 @@ import { redactString, redactUrl, DEFAULT_REDACT } from '../src/redact';
 import { uniqueSelector, componentChain, describeElement } from '../src/inspect';
 import { createLightback } from '../src/client';
 import { toPromptContext } from '../src/prompt';
+import type { Attachment } from '../src/types';
 
 describe('RingBuffer', () => {
   it('keeps only the newest items', () => {
@@ -90,6 +91,25 @@ describe('client', () => {
     const md = toPromptContext(payload!);
     expect(md).toContain('## Errors (1)');
     expect(md).toContain('The save button does nothing');
+  });
+
+  it('reports the document area each image shows, and drops malformed areas', async () => {
+    const sent: Attachment[][] = [];
+    const client = createLightback({ persistence: false, send: async (_p, attachments) => { sent.push(attachments); } });
+    const blob = new Blob(['png'], { type: 'image/png' });
+    const area = { x: 0, y: 1500, width: 1280, height: 860 };
+    const payload = await client.send({
+      text: 'scrolled',
+      attachments: [
+        { name: 'screenshot.png', type: 'image/png', size: 3, blob, area: { ...area, extra: 'x' } as never },
+        { name: 'selection-1.png', type: 'image/png', size: 3, blob, area: { x: 1, y: 2, width: Infinity, height: 4 } },
+        { name: 'selection-2.png', type: 'image/png', size: 3, blob, area: { x: 1, y: 2, width: 0, height: 4 } },
+      ],
+    });
+    client.destroy();
+    expect(payload!.attachments.map((a) => a.area)).toEqual([area, undefined, undefined]);
+    expect(sent[0]!.map((a) => a.area)).toEqual([area, undefined, undefined]);
+    expect(toPromptContext(payload!)).toContain('screenshot.png (image/png, 3 bytes, shows document area x=0 y=1500 1280×860)');
   });
 
   it('mute() pauses console and network capture', async () => {
