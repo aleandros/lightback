@@ -1,6 +1,6 @@
 {
   "name": "@lightback/source",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Build-time JSX/TSX source locations for Lightback, with Vite and Babel adapters.",
   "license": "MIT",
   "type": "module",
@@ -10,8 +10,12 @@
   "types": "./dist/index.d.ts",
   "typesVersions": {
     "*": {
-      "vite": ["./dist/vite.d.ts"],
-      "babel": ["./dist/babel.d.ts"]
+      "vite": [
+        "./dist/vite.d.ts"
+      ],
+      "babel": [
+        "./dist/babel.d.ts"
+      ]
     }
   },
   "exports": {
