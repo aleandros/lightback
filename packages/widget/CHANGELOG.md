@@ -1,5 +1,25 @@
 # @lightback/widget
 
+## 0.2.0
+
+### Minor Changes
+
+- d488e50: Mark sensitive elements with `data-lightback-sensitive` or `privacy.selectors`. Selections, region children, breadcrumbs, previews, prompts and recovery records keep their selector and component names but withhold text, attributes, HTML and component props, and are flagged `sensitive`. Invalid privacy selectors throw.
+
+  The widget masks sensitive elements in every screenshot and crop with opaque boxes before anything is previewed, stored or sent, and drops an image it cannot mask. Reporters can hide any other area from the pick bar; earlier crops are re-cut and later captures reuse the mask. Payloads list masks in an optional `masks` field when images are attached. Region selection now sees elements under existing pins.
+
+- e9742b6: Restore bounded, redacted collector buffers and unfinished drafts after reload using session-scoped IndexedDB. Add expiry/schema handling, a storage opt-out, custom-editor recovery APIs, and explicit opt-in for privacy-safe screenshot/crop blobs. Clear drafts and old context after successful send or discard; keep the editor usable if storage is unavailable.
+
+  Restore widget notes and selections without resuming pending sends. Show recovered counts before the lazy UI loads and guard late screenshot jobs after discard or teardown. Exclude form values from inspection snapshots and persisted metadata. Support the compatible core 0.2 API in widget and React peer ranges, retaining memory-only operation with older core versions.
+
+### Patch Changes
+
+- b12d7be: Add a lightweight `@lightback/widget/lazy` entry and lazy standalone script that load the editor and picker on first interaction. Preserve collectors, customization and host identity, coalesce concurrent activation, cancel pending activation on close/destroy, and retry failed native imports with a fresh asset URL.
+
+  The React provider now mounts the lazy trigger by default. Its handle exposes promise-returning `open()` and `startPicking()` methods. The eager `mountWidget()` and standalone bundle remain available.
+
+- 7d91479: Fix recovery and send races found by generated stateful tests: clear wins over a pending database open, recovered timestamps are sorted before applying smaller buffer limits, metadata-only recovery drops orphaned crop references, and tiny string limits preserve recovery field names. Cancel widget sends discarded or destroyed while waiting for image jobs and ignore late transport callbacks for invalidated widgets.
+
 ## Unreleased
 
 ### Added
