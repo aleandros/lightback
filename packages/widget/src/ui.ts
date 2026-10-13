@@ -79,6 +79,7 @@ export function mountWidget(options: WidgetOptions, element?: HTMLElement): Widg
 class Widget implements WidgetHandle {
   readonly element: HTMLElement;
   private root: ShadowRoot;
+  private hoveredPin: string | null = null;
   private client: LightbackClient;
   private opts: WidgetOptions;
   private strings: WidgetStrings;
@@ -157,11 +158,9 @@ class Widget implements WidgetHandle {
     });
     this.q<HTMLDetailsElement>('[data-ref=review]').addEventListener('toggle', () => this.refreshReview());
     const list = this.q('[data-ref=selections]');
+    // Cards light up their pin; pins style their own hover. A highlight overlay would bury the pin's badge and ✕.
     list.addEventListener('mouseover', (e) => this.onSelectionHover(e));
-    list.addEventListener('mouseout', () => this.hideHighlight());
-    const pins = this.q('[data-ref=pins]');
-    pins.addEventListener('mouseover', (e) => this.onSelectionHover(e));
-    pins.addEventListener('mouseout', () => this.hideHighlight());
+    list.addEventListener('mouseout', () => this.markPinHover(null));
     const popText = this.q<HTMLTextAreaElement>('[data-ref=popText]');
     popText.addEventListener('input', () => {
       const selection = this.selections.find((s) => s.id === this.popoverFor);
@@ -276,8 +275,12 @@ class Widget implements WidgetHandle {
   private onSelectionHover(e: Event): void {
     const card = (e.target as Element).closest('[data-id]') as HTMLElement | null;
     if (!card) return;
-    const sel = this.selections.find((s) => s.id === card.dataset.id);
-    if (sel) this.drawHighlightRect(this.currentRect(sel), false);
+    this.markPinHover(card.dataset.id ?? null);
+  }
+
+  private markPinHover(id: string | null): void {
+    this.hoveredPin = id;
+    for (const pin of this.root.querySelectorAll<HTMLElement>('.lb-pin')) pin.classList.toggle('hover', pin.dataset.id === id);
   }
 
   /* ---------- picking ---------- */
@@ -540,7 +543,7 @@ class Widget implements WidgetHandle {
     this.selections.forEach((sel, i) => {
       const r = this.currentRect(sel);
       const pin = document.createElement('div');
-      pin.className = `lb-pin${sel.kind === 'region' ? ' region' : ''}${this.popoverFor === sel.id ? ' active' : ''}`;
+      pin.className = `lb-pin${sel.kind === 'region' ? ' region' : ''}${this.popoverFor === sel.id ? ' active' : ''}${this.hoveredPin === sel.id ? ' hover' : ''}`;
       pin.dataset.id = sel.id;
       pin.dataset.action = 'pin';
       pin.style.left = `${r.x}px`;

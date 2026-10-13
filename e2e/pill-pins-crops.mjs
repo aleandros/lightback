@@ -47,6 +47,12 @@ assert(countText === '2 selected', `pickbar shows count (${countText})`);
 const pin2 = page.locator(W + '.lb-pin').nth(1);
 await pin2.hover();
 await page.screenshot({ path: OUT + '1-pin-hover.png' });
+assert(await page.locator(W + '.lb-highlight').isHidden(), 'hovering a pin draws no highlight over its badge and ✕');
+const onTop = await pin2.locator('.lb-pin-x').evaluate((x) => {
+  const r = x.getBoundingClientRect();
+  return x.getRootNode().elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === x;
+});
+assert(onTop, 'hovered pin ✕ is the topmost element under the pointer');
 await pin2.locator('.lb-pin-x').click();
 assert((await pinCount()) === 1, 'pin ✕ removes that selection');
 

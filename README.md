@@ -62,7 +62,7 @@ For a script-tag install, build and serve `packages/widget/dist/lightback.iife.j
 </script>
 ```
 
-The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations. The current release is `0.2.0` for widget, core and React; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.0/dist/lightback.iife.js` in the script tag above.
+The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations. The current release is widget `0.2.1` with core and React `0.2.0`; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.1/dist/lightback.iife.js` in the script tag above.
 
 ## Validation and releases
 
