@@ -127,14 +127,14 @@ pre.lb-preview {
 }
 .lb-pin.region { outline-style: dashed; }
 .lb-pins.passive .lb-pin { pointer-events: none !important; }
-.lb-pin.active, .lb-pin:hover { background: color-mix(in srgb, var(--lb-accent) 14%, transparent); }
+.lb-pin.active, .lb-pin.hover, .lb-pin:hover { background: color-mix(in srgb, var(--lb-accent) 14%, transparent); }
 .lb-pin .lb-badge { position: absolute; top: -10px; left: -10px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
 .lb-pin-x {
   position: absolute; top: -10px; right: -10px; width: 20px; height: 20px; border-radius: 999px; border: 0;
   background: var(--lb-fg); color: var(--lb-bg); font-size: 11px; line-height: 20px; padding: 0; text-align: center;
   box-shadow: 0 2px 6px rgba(0,0,0,.25); opacity: 0; transition: opacity .12s;
 }
-.lb-pin:hover .lb-pin-x, .lb-pin.active .lb-pin-x { opacity: 1; }
+.lb-pin:hover .lb-pin-x, .lb-pin.hover .lb-pin-x, .lb-pin.active .lb-pin-x { opacity: 1; }
 .lb-pin-x:hover { background: var(--lb-danger); color: #fff; }
 .lb-popover {
   position: fixed; width: 300px; max-width: calc(100vw - 24px);

@@ -44,10 +44,17 @@ await page.click(W + '[data-action=pop-more]');
 assert((await pinCount()) === 2, 'two pins');
 const countText = await page.locator(W + '[data-ref=count]').textContent();
 assert(countText === '2 selected', `pickbar shows count (${countText})`);
-const pin2 = page.locator(W + '.lb-pin').nth(1);
-await pin2.hover();
+const pin2 = page.locator(W + '[data-ref=pins] [data-action=pin]').nth(1);
+const highlight = page.locator(W + '[data-ref=highlight]');
+// Real path: the stat grid's gap highlights the grid, which contains this pin; then onto the pin.
+await page.mouse.move(card.x - 4, card.y + card.height / 2);
+const hb = await highlight.boundingBox();
+assert(hb && hb.x <= card.x && hb.x + hb.width >= card.x + card.width, 'page element around the pin is highlighted');
+const pb = await pin2.boundingBox();
+await page.mouse.move(pb.x + pb.width / 2, pb.y + pb.height / 2, { steps: 8 });
 await page.screenshot({ path: OUT + '1-pin-hover.png' });
-await pin2.locator('.lb-pin-x').click();
+assert(await highlight.isHidden(), 'moving onto a pin clears the page highlight over its badge and ✕');
+await pin2.locator('[data-action=sel-remove]').click();
 assert((await pinCount()) === 1, 'pin ✕ removes that selection');
 
 // ---- 4. Cancel leaves pick mode but keeps the draft; pill reflects it
@@ -80,6 +87,12 @@ assert(true, 'both selection cards show a crop thumbnail');
 const shotBtn = await page.locator(W + '[data-ref=shotBtn]').textContent();
 assert(shotBtn.includes('Retake'), 'screenshot button offers retake');
 await page.screenshot({ path: OUT + '3-panel-crops.png' });
+const pinHovered = (i) => page.locator(W + '[data-ref=pins] [data-action=pin]').nth(i).evaluate((el) => el.classList.contains('hover'));
+await page.locator(W + '[data-ref=selections] [data-id]').nth(1).hover();
+assert((await pinHovered(1)) && !(await pinHovered(0)), 'hovering a selection card lights up its pin');
+assert(await highlight.isHidden(), 'card hover draws no highlight over the pin');
+await page.locator(W + '[data-ref=text]').hover();
+assert(!(await pinHovered(1)), 'leaving the card clears the pin hover');
 await page.click(W + '[data-action=send]');
 await page.waitForSelector(W + '.lb-toast:not([hidden])');
 

@@ -87,8 +87,8 @@ The lazy standalone bootstrap (`lightback-lazy.iife.js`) includes core and the c
 | Panel | `.lb-panel` | Full editor: note textarea, pick button, screenshot preview, selection cards, collapsible review (Prompt / JSON tabs), Discard, Send (immediate). |
 | Pickbar | `.lb-pickbar` | Shown during pick mode: hint, count, Hide area toggle (with a capturer), Cancel (keep draft), Done (open panel). |
 | Masks | `.lb-masks` | Hatched boxes over reporter-hidden areas while picking. Pointer-transparent. |
-| Highlight / drag | `.lb-highlight`, `.lb-drag` | Hover outline with component tooltip; drag rectangle. |
-| Pins | `.lb-pins` | Numbered badges on each selection, re-anchored on scroll/resize, ✕ on hover removes. |
+| Highlight / drag | `.lb-highlight`, `.lb-drag` | Hover outline with component tooltip; drag rectangle. Hidden while the pointer is over widget UI, so it never covers pins or the popover. |
+| Pins | `.lb-pins` | Numbered badges on each selection, re-anchored on scroll/resize, ✕ on hover removes. Hovering a selection card in the panel lights up its pin (`.lb-pin.hover`). |
 | Popover | `.lb-popover` | Inline comment box anchored to the latest selection. Remove / Add more / Send. Enter sends, Shift+Enter newline, Esc skips. |
 | Pending | `.lb-pending` | "Sending feedback…" with summary and draining bar. Edit opens the panel, Cancel keeps the draft. |
 | Toast | `.lb-toast` | Result message; routed into the panel status line when the panel is open. |

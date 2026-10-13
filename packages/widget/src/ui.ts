@@ -43,7 +43,7 @@ const template = (s: WidgetStrings) => /* html */ `
   <button class="lb-pick-btn" type="button" data-action="cancel-pick">${esc(s.cancel)}</button>
   <button class="lb-pick-btn lb-pick-done" type="button" data-action="done">${esc(s.done(0))}</button>
 </div>
-<div class="lb-highlight" hidden><div class="lb-tip"></div></div>
+<div class="lb-highlight" data-ref="highlight" hidden><div class="lb-tip"></div></div>
 <div class="lb-drag" hidden></div>
 <div class="lb-masks" data-ref="masks" hidden></div>
 <div class="lb-pins" data-ref="pins"></div>
@@ -79,6 +79,7 @@ export function mountWidget(options: WidgetOptions, element?: HTMLElement): Widg
 class Widget implements WidgetHandle {
   readonly element: HTMLElement;
   private root: ShadowRoot;
+  private hoveredPin: string | null = null;
   private client: LightbackClient;
   private opts: WidgetOptions;
   private strings: WidgetStrings;
@@ -157,11 +158,9 @@ class Widget implements WidgetHandle {
     });
     this.q<HTMLDetailsElement>('[data-ref=review]').addEventListener('toggle', () => this.refreshReview());
     const list = this.q('[data-ref=selections]');
-    list.addEventListener('mouseover', (e) => this.onSelectionHover(e));
-    list.addEventListener('mouseout', () => this.hideHighlight());
-    const pins = this.q('[data-ref=pins]');
-    pins.addEventListener('mouseover', (e) => this.onSelectionHover(e));
-    pins.addEventListener('mouseout', () => this.hideHighlight());
+    // Cards light up their pin; pins style their own hover. A highlight overlay would bury the pin's badge and ✕.
+    list.addEventListener('mouseover', (e) => this.setHoveredPin(this.cardId(e.target)));
+    list.addEventListener('mouseout', (e) => this.setHoveredPin(this.cardId(e.relatedTarget)));
     const popText = this.q<HTMLTextAreaElement>('[data-ref=popText]');
     popText.addEventListener('input', () => {
       const selection = this.selections.find((s) => s.id === this.popoverFor);
@@ -209,6 +208,7 @@ class Widget implements WidgetHandle {
 
   close(): void {
     this.recoveryIntent = null;
+    this.setHoveredPin(null);
     this.q('.lb-panel').hidden = true;
     this.q('.lb-pill').hidden = Boolean(this.opts.hideTrigger);
     this.renderPill();
@@ -273,17 +273,27 @@ class Widget implements WidgetHandle {
     }
   }
 
-  private onSelectionHover(e: Event): void {
-    const card = (e.target as Element).closest('[data-id]') as HTMLElement | null;
-    if (!card) return;
-    const sel = this.selections.find((s) => s.id === card.dataset.id);
-    if (sel) this.drawHighlightRect(this.currentRect(sel), false);
+  /** The selection card under `target`, if it is inside the selection list. */
+  private cardId(target: EventTarget | null): string | null {
+    if (!(target instanceof Element)) return null;
+    const card = target.closest<HTMLElement>('[data-ref=selections] [data-id]');
+    return card?.dataset.id ?? null;
+  }
+
+  private setHoveredPin(id: string | null): void {
+    if (id === this.hoveredPin) return;
+    this.hoveredPin = id;
+    this.renderPins();
   }
 
   /* ---------- picking ---------- */
 
   private moveHandler = (e: MouseEvent) => {
-    if (this.isOwn(e)) return;
+    if (this.isOwn(e)) {
+      // Over a pin, the popover or the bars: a leftover page highlight would sit on top of them.
+      if (!this.dragging) this.hideHighlight();
+      return;
+    }
     if (this.dragStart) {
       const dx = e.clientX - this.dragStart.x;
       const dy = e.clientY - this.dragStart.y;
@@ -540,7 +550,7 @@ class Widget implements WidgetHandle {
     this.selections.forEach((sel, i) => {
       const r = this.currentRect(sel);
       const pin = document.createElement('div');
-      pin.className = `lb-pin${sel.kind === 'region' ? ' region' : ''}${this.popoverFor === sel.id ? ' active' : ''}`;
+      pin.className = `lb-pin${sel.kind === 'region' ? ' region' : ''}${this.popoverFor === sel.id ? ' active' : ''}${this.hoveredPin === sel.id ? ' hover' : ''}`;
       pin.dataset.id = sel.id;
       pin.dataset.action = 'pin';
       pin.style.left = `${r.x}px`;
@@ -1042,6 +1052,8 @@ class Widget implements WidgetHandle {
   /* ---------- rendering ---------- */
 
   private renderSelections(): void {
+    // Replaced cards never send mouseout; the next mouseover restores the hover.
+    this.setHoveredPin(null);
     const box = this.q('[data-ref=selections]');
     box.innerHTML = this.selections
       .map((s, i) => {

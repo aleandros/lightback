@@ -62,7 +62,7 @@ For a script-tag install, build and serve `packages/widget/dist/lightback.iife.j
 </script>
 ```
 
-The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations. The current release is `0.2.0` for widget, core and React; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.0/dist/lightback.iife.js` in the script tag above.
+The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations. The current release is widget `0.2.1` with core and React `0.2.0`; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.1/dist/lightback.iife.js` in the script tag above.
 
 ## Validation and releases
 
@@ -240,7 +240,7 @@ Pick mode has two gestures:
 - **Click an element.** A comment box opens right next to it, focused, with the component name as its title. Enter queues the send, Esc skips, clicking elsewhere saves and continues picking. A numbered pin stays on the element while the draft exists.
 - **Drag a rectangle.** The widget samples the browser's own hit testing on a grid inside the rectangle, so only elements that are actually visible and on top count. If a modal is open, the dragged area resolves to the modal, never to what sits behind its backdrop. The selection records the container (lowest common ancestor of what was hit, with surfaces the drag spilled onto discarded) and the largest visible elements fully inside the rectangle.
 
-Every selection has a numbered pin on the page with a remove button on hover. The top bar shows the count with **Cancel** (leave pick mode, keep the draft) and **Done** (open the panel). The comment box has **Remove**, **Add more** (save and keep pointing) and **Send**; Enter sends.
+Every selection has a numbered pin on the page with a remove button on hover; hovering its card in the panel lights the pin up. The top bar shows the count with **Cancel** (leave pick mode, keep the draft) and **Done** (open the panel). The comment box has **Remove**, **Add more** (save and keep pointing) and **Send**; Enter sends.
 
 **Sending is optimistic.** Send does not open a review step. It shows a small "Sending feedback…" card with a summary and a draining bar, and the report goes out when the bar empties (`sendDelay`, default 5000 ms, 0 for immediate). **Edit** opens the full panel with the draft, which is where the prompt and JSON preview still live. **Cancel** stops the send and keeps the draft; the pill then reads "Review & send". The panel has **Discard** to drop a draft.
 
