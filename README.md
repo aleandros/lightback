@@ -91,6 +91,7 @@ Published guides at [aleandros.github.io/lightback](https://aleandros.github.io/
 
 - `docs/guide/getting-started.md`: install, mount, first report.
 - `docs/guide/customization.md`: options, CSS variables, theme, your own trigger, screenshot capturers.
+- `docs/guide/privacy.md`: sensitive elements, hidden areas, screenshot masking and the capturer contract.
 - `docs/guide/backend.md`: wire contract, a receiver in Node, custom `send`, `beforeSend`, triage with a model.
 - [Texts and i18n](docs/guide/texts-and-i18n.md): the `strings` option and every label.
 - [Payload reference](docs/guide/payload.md): generated from the public TypeScript types.
@@ -117,6 +118,7 @@ export const lightback = createLightback({
   context: { release: '1.4.2' },
   capture: { networkBodies: false },       // default; bodies are opt-in and same-origin only
   redact: { headers: ['x-session'], patterns: [/acct_\w+/g] },
+  privacy: { selectors: ['.payment-form input'] }, // plus anything marked data-lightback-sensitive
   beforeSend: (payload) => payload,        // mutate or return null to veto
 });
 
@@ -184,7 +186,7 @@ createLightback({ endpoint: '/api/feedback', persistence: false });
 
 Text and metadata are redacted before storage using the configured rules. Inspection HTML and form-value props are omitted, and form controls are excluded from inspected ancestor text. Draft recovery keeps at most 50 selections; string values are capped by `limits.string` and collector counts by their buffer limits. App context is supplied fresh by the host and is not persisted. `beforeSend` runs only when sending, so put storage redaction rules in `redact`.
 
-Screenshot and crop blobs are **not persisted by default**. Set `persistence.attachments: true` to retain them in IndexedDB after your screenshot capturer has masked input values and sensitive content. Text redaction cannot scrub pixels. Oversized attachments are omitted from recovery, with their crop references removed (also when recovery switches to metadata-only); an oversized metadata snapshot is deleted. These recovery bounds do not remove attachments from the current live report.
+Screenshot and crop blobs are **not persisted by default**. Set `persistence.attachments: true` to retain them in IndexedDB. The widget stores only images already masked for [sensitive elements and hidden areas](docs/guide/privacy.md); unmarked content is not masked, and text redaction cannot scrub pixels. Oversized attachments are omitted from recovery, with their crop references removed (also when recovery switches to metadata-only); an oversized metadata snapshot is deleted. These recovery bounds do not remove attachments from the current live report.
 
 Successful send and Discard clear the stored draft and collector buffers. Successful send also clears edits and events made while it was in flight; custom editors should await send before starting another report. A failed or vetoed send retains current edits and buffers. Discard or widget destruction while a send is still waiting for screenshot/crop jobs cancels that send; transport already in progress is not aborted. `await lightback.clearPersistence()` also clears both, for example on logout before destroying the client. Collection continues until `destroy()`. Disabling persistence avoids reading or writing recovery storage; it does not erase old records, which expire normally.
 
@@ -242,7 +244,7 @@ Every selection has a numbered pin on the page with a remove button on hover. Th
 
 **Sending is optimistic.** Send does not open a review step. It shows a small "Sending feedback…" card with a summary and a draining bar, and the report goes out when the bar empties (`sendDelay`, default 5000 ms, 0 for immediate). **Edit** opens the full panel with the draft, which is where the prompt and JSON preview still live. **Cancel** stops the send and keeps the draft; the pill then reads "Review & send". The panel has **Discard** to drop a draft.
 
-**Screenshots are automatic** when a `screenshot` capturer is configured: entering pick mode captures the full page once (collectors are muted during capture so the capturer's own requests never reach the report), and each selection gets a padded crop with the selected rect outlined, attached as `selection-N.png` and referenced from `selection.crop`. Set `autoScreenshot: false` to go back to manual capture.
+**Screenshots are automatic** when a `screenshot` capturer is configured: entering pick mode captures the full page once (collectors are muted during capture so the capturer's own requests never reach the report), and each selection gets a padded crop with the selected rect outlined, attached as `selection-N.png` and referenced from `selection.crop`. Set `autoScreenshot: false` to go back to manual capture. Every capture is masked before it is previewed, stored or sent (see [Privacy](#privacy-sensitive-elements-and-hidden-areas)); **▨ Hide area** in the pick bar lets the reporter cover anything else.
 
 Each selection carries, when a dev build exposes them, a **source location** (JSX call site, from React's debug info, Vue's `__file`, or a `data-source="file:line:col"` attribute a build plugin can stamp) and a **props snapshot** of the nearest component (functions, elements and children stripped, depth-limited, redacted like every other string).
 
@@ -252,9 +254,15 @@ The picker uses `elementFromPoint` and describes the element with a unique selec
 
 ## Redaction
 
-Default rules replace `authorization`, `cookie` and similar secret-named fields, common secret query params, JWT-shaped strings and card-number-shaped digit runs. The complete payload is copied and redacted before preview, `beforeSend` and delivery, including page URL/referrer/title, context, breadcrumbs, errors, selections and attachment names. Embedded URLs and JSON bodies use the same rules. `beforeSend` is a trusted host hook and may further transform the redacted payload; screenshot pixels require masking in your capturer.
+Default rules replace `authorization`, `cookie` and similar secret-named fields, common secret query params, JWT-shaped strings and card-number-shaped digit runs. The complete payload is copied and redacted before preview, `beforeSend` and delivery, including page URL/referrer/title, context, breadcrumbs, errors, selections and attachment names. Embedded URLs and JSON bodies use the same rules. `beforeSend` is a trusted host hook and may further transform the redacted payload. Text rules do not apply to pixels; mark sensitive elements instead (below).
 
 Breadcrumbs and inspected text omit input, textarea, select and contenteditable contents, including clicks on their descendants or containing elements. Request and response bodies are off by default. With `capture.networkBodies: true`, request bodies require a same-origin request; response bodies additionally require a verified same-origin final response URL, so a redirect to another origin cannot expose its body.
+
+## Privacy: sensitive elements and hidden areas
+
+Mark elements whose content must never leave the page with `data-lightback-sensitive`, or pass CSS selectors as `privacy.selectors`. For a sensitive element and everything inside it, selections keep the selector, tag, rects and component names. Text, classes, attributes, HTML and props are withheld, and the selection is flagged `sensitive: true`. Ancestors lose only the sensitive part of their text and HTML. Props are dropped whenever the owning component renders sensitive content. Breadcrumbs record clicks without the text. The widget paints opaque boxes over sensitive elements in the screenshot and every crop before anything is previewed, persisted or sent. If masking fails, it drops the image instead.
+
+Reporters can also click **▨ Hide area** in the pick bar and click or drag to cover anything else; existing crops are re-cut and later captures reuse the mask. `payload.masks` lists every box with its document rect and reason. `data-lightback-ignore` is different: it hides Lightback's own UI from the picker and collectors, and does not mask anything. See the [privacy guide](docs/guide/privacy.md) for the capturer contract and limitations.
 
 Multiple clients can collect independently and be destroyed in any order. `destroy()` stops that client's collectors without replacing another client's or the host's wrappers. Pending fetch, XHR and body reads cannot add data after destruction or refill buffers cleared by `clearPersistence()`, Discard or successful send; the application's requests continue normally.
 

@@ -1,6 +1,6 @@
 import type {
   Attachment, Breadcrumb, ConsoleEntry, ElementSelection, ErrorEntry, FeedbackPayload,
-  LightbackOptions, Limits, NetworkEntry, RedactOptions,
+  LightbackOptions, Limits, NetworkEntry, Rect, RedactOptions, ScreenshotMask,
 } from './types';
 import { RingBuffer } from './ring';
 import { installConsole } from './collectors/console';
@@ -14,7 +14,8 @@ import { describeRegion, type RegionOptions } from './region';
 import { fetchTransport } from './transport';
 import { uid } from './format';
 import { createPersistence, type RecoveryState } from './persistence';
-import { scrubRecovery, isRecoveredSelection } from './recovery-redact';
+import { scrubRecovery, isRecoveredSelection, isScreenshotMask } from './recovery-redact';
+import { isSensitive, sensitiveRects, sensitiveSelector } from './sensitive';
 
 const DEFAULT_LIMITS: Limits = { console: 200, errors: 50, network: 100, breadcrumbs: 100, string: 2000 };
 
@@ -26,6 +27,8 @@ export interface Draft {
   transcript?: string;
   selections: ElementSelection[];
   attachments: Attachment[];
+  /** Screenshot masks to report and to reapply to later captures (the built-in widget records them). */
+  masks?: ScreenshotMask[];
 }
 
 export interface LightbackClient {
@@ -48,6 +51,10 @@ export interface LightbackClient {
   /** Describe a dragged viewport rectangle (see `describeRegion`). */
   describeRegion(rect: { x: number; y: number; width: number; height: number }, opts?: RegionOptions): ElementSelection | null;
   isIgnored(el: Element): boolean;
+  /** True for elements inside `data-lightback-sensitive` or a `privacy.selectors` match. */
+  isSensitive(el: Element): boolean;
+  /** Document-space rects of rendered sensitive elements, for masking screenshot pixels. */
+  sensitiveRects(): Rect[];
   /** Snapshot everything captured so far plus the draft into a payload. Does not send. */
   buildPayload(draft: Partial<Draft>): FeedbackPayload;
   /** Build, run beforeSend, and deliver. Resolves with the payload that was sent, or null if vetoed. */
@@ -59,9 +66,20 @@ export interface LightbackClient {
   destroy(): void;
 }
 
+function cleanMasks(masks: unknown): ScreenshotMask[] {
+  if (!Array.isArray(masks)) return [];
+  const valid = masks.filter(isScreenshotMask);
+  // Bound each reason separately: many sensitive matches must not evict the reporter's own areas.
+  return [
+    ...valid.filter((m) => m.reason === 'sensitive').slice(0, 300),
+    ...valid.filter((m) => m.reason === 'reporter').slice(0, 100),
+  ].map((m) => ({ docRect: { x: m.docRect.x, y: m.docRect.y, width: m.docRect.width, height: m.docRect.height }, reason: m.reason }));
+}
+
 export function createLightback(options: LightbackOptions = {}): LightbackClient {
   const limits: Limits = { ...DEFAULT_LIMITS, ...options.limits };
   const redact = mergeRedact(options.redact);
+  const sensitive = sensitiveSelector(options.privacy?.selectors);
   const capture = { console: true, errors: true, network: true, breadcrumbs: true, networkBodies: false, ...options.capture };
 
   let persistence: ReturnType<typeof createPersistence> | undefined;
@@ -95,14 +113,16 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
   if (capture.network) {
     undo.push(installNetwork(networkBuf, { bodies: capture.networkBodies, maxString: limits.string, redact, ignore: isOwnEndpoint, isMuted, epoch: () => destroyed ? undefined : networkEpoch }));
   }
-  if (capture.breadcrumbs) undo.push(installBreadcrumbs(breadcrumbBuf, isIgnored));
+  if (capture.breadcrumbs) undo.push(installBreadcrumbs(breadcrumbBuf, isIgnored, sensitive));
 
   const clean = <T>(value: T): T => scrubRecovery(value, redact, limits.string) as T;
   const cleanDraft = (draft: Draft): Draft => {
-    const { attachments, ...metadata } = draft;
+    // Masks are rebuilt from validated numbers and an enum, so they need no string scrubbing or its array cap.
+    const { attachments, masks, ...metadata } = draft;
     const result = clean(metadata);
     return {
       ...result,
+      ...(masks !== undefined ? { masks: cleanMasks(masks) } : {}),
       selections: result.selections.slice(0, 50),
       attachments: attachments.slice(0, 51).filter((a) => a && typeof a.name === 'string' && a.blob instanceof Blob).map((a) => ({
         name: clean(a.name), type: clean(a.blob.type), size: a.blob.size, blob: a.blob,
@@ -162,9 +182,12 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
     addBreadcrumb(message, data) {
       breadcrumbBuf.push({ t: Date.now(), type: 'custom', message, data });
     },
-    describeElement,
-    describeRegion: (rect, opts) => describeRegion(rect, { isIgnored, ...opts }),
+    describeElement: (el) => describeElement(el, { sensitive }),
+    // The configured privacy selector cannot be overridden or cleared per call.
+    describeRegion: (rect, opts) => describeRegion(rect, { isIgnored, ...opts, sensitive }),
     isIgnored,
+    isSensitive: (el) => isSensitive(el, sensitive),
+    sensitiveRects: () => sensitiveRects(sensitive, isIgnored),
     stats: () => ({ console: consoleBuf.size, errors: errorBuf.size, network: networkBuf.size, breadcrumbs: breadcrumbBuf.size }),
     async mute(fn) {
       muted++;
@@ -199,6 +222,8 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
         network: networkBuf.toArray(),
         breadcrumbs: breadcrumbBuf.toArray(),
         context,
+        // Masks describe images; a draft without attachments keeps them only for later captures.
+        ...(draft.masks?.length && attachments.length ? { masks: cleanMasks(draft.masks) } : {}),
       }, redact) as FeedbackPayload;
     },
     async send(draft) {

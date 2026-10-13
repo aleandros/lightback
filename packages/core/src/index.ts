@@ -2,6 +2,8 @@ export * from './types';
 export { createLightback, IGNORE_ATTR } from './client';
 export type { LightbackClient, Draft } from './client';
 export { describeElement, summarizeElement, uniqueSelector, shortSelector, componentChain, frameworkInfo, snapshotProps } from './inspect';
+export type { InspectOptions } from './inspect';
+export { SENSITIVE_ATTR } from './sensitive';
 export { describeRegion, commonAncestor } from './region';
 export type { RegionOptions } from './region';
 export { toPromptContext } from './prompt';

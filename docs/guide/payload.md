@@ -29,6 +29,7 @@ Default ring-buffer limits are 200 console entries, 50 errors, 100 network entri
 | <code>network</code> | <code>NetworkEntry[]</code> |  |
 | <code>breadcrumbs</code> | <code>Breadcrumb[]</code> |  |
 | <code>context</code> | <code>Record&lt;string, unknown&gt;</code> |  |
+| <code>masks?</code> | <code>ScreenshotMask[]</code> | Areas covered in the attached screenshots. Absent when nothing was masked. |
 
 ## ElementSelection
 
@@ -53,6 +54,7 @@ Default ring-buffer limits are 200 console entries, 50 errors, 100 network entri
 | <code>region?</code> | <code>{ rect: Rect; docRect: Rect; children: ElementSummary[] }</code> | Region selections only: the dragged rectangle and the visible elements it contains. |
 | <code>note?</code> | <code>string</code> | Note the reporter attached to this specific element. |
 | <code>html?</code> | <code>string</code> | Short HTML snippet (outerHTML trimmed) for extra context. |
+| <code>sensitive?</code> | <code>boolean</code> | Inside a sensitive subtree: text, classes, attributes, props and HTML are withheld. |
 
 ## ElementSummary
 
@@ -66,6 +68,7 @@ Default ring-buffer limits are 200 console entries, 50 errors, 100 network entri
 | <code>rect</code> | <code>Rect</code> |  |
 | <code>docRect</code> | <code>Rect</code> |  |
 | <code>source?</code> | <code>SourceLocation</code> |  |
+| <code>sensitive?</code> | <code>boolean</code> | Inside a sensitive subtree: text and role are withheld. |
 
 ## ComponentInfo
 

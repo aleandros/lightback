@@ -7,6 +7,8 @@ export const lightback = createLightback({
   ...(isDemo ? { send: saveSubmission } : { endpoint: '/api/feedback' }),
   context: { app: 'playground', build: isDemo ? 'demo' : 'dev', release: '0.0.1' },
   capture: { networkBodies: true },
+  // Typed customer names are masked in screenshots, like the sidebar account marked with data-lightback-sensitive.
+  privacy: { selectors: ['.chaos input'] },
   beforeSend: (payload) => {
     console.info('[playground] beforeSend', payload.id, payload);
     return payload;

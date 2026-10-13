@@ -1,15 +1,17 @@
 import type { Breadcrumb } from '../types';
 import { RingBuffer } from '../ring';
 import { elementText, shortSelector } from '../inspect';
+import { DEFAULT_SENSITIVE } from '../sensitive';
 import { patchMethod } from './patch';
 
-export function installBreadcrumbs(buffer: RingBuffer<Breadcrumb>, isIgnored: (el: Element) => boolean): () => void {
+export function installBreadcrumbs(buffer: RingBuffer<Breadcrumb>, isIgnored: (el: Element) => boolean, sensitive = DEFAULT_SENSITIVE): () => void {
   if (typeof window === 'undefined') return () => {};
 
   const onClick = (e: MouseEvent) => {
     const el = e.target instanceof Element ? e.target : null;
     if (!el || isIgnored(el)) return;
-    const text = elementText(el, 60);
+    // Sensitive targets yield no text; their sensitive descendants are dropped from ancestors' text.
+    const text = elementText(el, 60, sensitive);
     buffer.push({
       t: Date.now(),
       type: 'click',

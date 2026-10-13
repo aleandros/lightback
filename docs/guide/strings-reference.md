@@ -25,6 +25,10 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | <code>discard</code> | <code>"Discard"</code> |
 | <code>send</code> | <code>"Send"</code> |
 | <code>pickHint</code> | <code>"Click an element or drag an area"</code> |
+| <code>maskMode</code> | <code>"▨ Hide area"</code> |
+| <code>maskHint</code> | <code>"Click or drag over anything to hide it in screenshots"</code> |
+| <code>maskedLabel</code> | <code>"Hidden"</code> |
+| <code>sensitiveContent</code> | <code>"Sensitive content withheld"</code> |
 | <code>cancel</code> | <code>"Cancel"</code> |
 | <code>popoverPlaceholder</code> | <code>"What about this? (optional)"</code> |
 | <code>remove</code> | <code>"Remove"</code> |

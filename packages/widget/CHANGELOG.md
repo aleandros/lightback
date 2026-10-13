@@ -5,10 +5,15 @@
 ### Added
 
 - Restore report text, selections, in-progress selection notes and opted-in screenshot/crop blobs after reload. Show recovered counts in the lazy trigger, keep restored reports editable without restarting send timers, and prevent late capture jobs from reviving discarded drafts.
+- Mask sensitive elements in every screenshot and crop with opaque boxes before preview, storage or send, measuring them before and after capture; drop images that cannot be masked. Add a **Hide area** pick-bar mode for reporter masks that repaint the current images, re-cut crops, apply to later captures and survive reload. Mark withheld selections in their cards. New strings: `maskMode`, `maskHint`, `maskedLabel`, `sensitiveContent`.
 
 ### Changed
 
 - Add `mountLazyWidget()` through `@lightback/widget/lazy` and a lazy standalone script that load the editor and picker on first interaction while collectors keep running. Preserve custom triggers, strings, themes and host styling; share concurrent loads, retry failed downloads and prevent late mounting after teardown. The eager entry remains available.
+
+### Fixed
+
+- Region selection no longer skips page elements covered by existing pins.
 
 ## 0.1.1
 

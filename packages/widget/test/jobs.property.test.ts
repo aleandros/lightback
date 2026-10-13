@@ -5,7 +5,10 @@ import { mountWidget } from '../src/ui';
 import { deferred, propertyParameters, settle } from '../../../test/property';
 
 // Rasterization is a platform boundary; real browser coverage stays in e2e.
-vi.mock('../src/screenshot', () => ({ decodeScreenshot: async () => ({ width: 100, height: 100, close() {} }) }));
+vi.mock('../src/screenshot', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/screenshot')>(),
+  decodeScreenshot: async () => ({ width: 100, height: 100, close() {} }),
+}));
 
 async function run(steps: string[], send: boolean) {
   vi.useFakeTimers();

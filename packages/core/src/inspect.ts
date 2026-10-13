@@ -1,5 +1,6 @@
 import type { ComponentInfo, ElementSelection, ElementSummary, Rect, SourceLocation } from './types';
 import { uid } from './format';
+import { containsSensitive, DEFAULT_SENSITIVE, isSensitive, SENSITIVE_ATTR } from './sensitive';
 
 const MAX_COMPONENTS = 12;
 const MAX_TEXT = 200;
@@ -19,49 +20,61 @@ export function toDocRect(rect: Rect): Rect {
   return { ...rect, x: rect.x + sx, y: rect.y + sy };
 }
 
+export interface InspectOptions {
+  /** CSS selector of sensitive subtrees. Defaults to `[data-lightback-sensitive]`. */
+  sensitive?: string;
+}
+
 /** Describe a DOM element with enough context for a human or a model to locate it. */
-export function describeElement(el: Element): ElementSelection {
+export function describeElement(el: Element, opts: InspectOptions = {}): ElementSelection {
   if (typeof window === 'undefined' || typeof document === 'undefined') throw new Error('Lightback: describeElement requires a browser DOM');
+  const sensitive = opts.sensitive ?? DEFAULT_SENSITIVE;
   const rect = viewportRect(el);
-  const fw = frameworkInfo(el);
+  const fw = frameworkInfo(el, sensitive);
+  // Selectors, tags and component names locate the element; content, attributes and props are withheld.
+  const hidden = isSensitive(el, sensitive);
   return {
     id: uid(),
     kind: 'element',
     selector: uniqueSelector(el),
     tag: el.tagName.toLowerCase(),
     elementId: el.id || undefined,
-    classes: Array.from(el.classList),
-    text: elementText(el),
-    attrs: interestingAttrs(el),
+    classes: hidden ? [] : Array.from(el.classList),
+    text: elementText(el, MAX_TEXT, sensitive),
+    attrs: hidden ? {} : interestingAttrs(el),
     rect,
     docRect: toDocRect(rect),
     framework: fw.framework,
     components: fw.chain.map((c) => c.name),
     chain: fw.chain,
     source: fw.source,
-    props: fw.props,
-    html: trimmedHtml(el),
+    props: hidden ? undefined : fw.props,
+    html: hidden ? undefined : trimmedHtml(el, sensitive),
+    ...(hidden ? { sensitive: true } : {}),
   };
 }
 
 /** Lighter description used for the children of a region. */
-export function summarizeElement(el: Element): ElementSummary {
+export function summarizeElement(el: Element, opts: InspectOptions = {}): ElementSummary {
+  const sensitive = opts.sensitive ?? DEFAULT_SENSITIVE;
   const rect = viewportRect(el);
-  const fw = frameworkInfo(el);
-  const role = el.getAttribute('role') ?? undefined;
+  const fw = frameworkInfo(el, sensitive);
+  const hidden = isSensitive(el, sensitive);
   return {
     selector: uniqueSelector(el),
     tag: el.tagName.toLowerCase(),
-    text: elementText(el, 80),
-    role,
+    text: elementText(el, 80, sensitive),
+    role: hidden ? undefined : el.getAttribute('role') ?? undefined,
     components: fw.chain.slice(0, 4).map((c) => c.name),
     rect,
     docRect: toDocRect(rect),
     source: fw.source,
+    ...(hidden ? { sensitive: true } : {}),
   };
 }
 
-export function elementText(el: Element, max = MAX_TEXT): string {
+export function elementText(el: Element, max = MAX_TEXT, sensitive = DEFAULT_SENSITIVE): string {
+  if (isSensitive(el, sensitive)) return '';
   // Descendants of editors inherit their editable contents, even without their own attribute.
   if (el.closest('[contenteditable]')) return '';
   const input = el as HTMLInputElement;
@@ -70,7 +83,7 @@ export function elementText(el: Element, max = MAX_TEXT): string {
     return (input.placeholder || input.getAttribute('aria-label') || '').slice(0, max);
   }
   if (el.closest('textarea, select')) return '';
-  const clone = el.cloneNode(true) as Element;
+  const clone = safeClone(el, sensitive);
   clone.querySelectorAll('input, textarea, select, [contenteditable]').forEach((control) => control.remove());
   return (clone.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
@@ -87,9 +100,29 @@ function interestingAttrs(el: Element): Record<string, string> {
   return out;
 }
 
-function trimmedHtml(el: Element): string {
+/**
+ * Deep clone with sensitive descendants replaced by empty, attribute-free placeholders. Matching runs on the
+ * live tree so host selectors keep their ancestor context (`.billing .card` would not match inside a clone).
+ */
+function safeClone(el: Element, sensitive: string): Element {
+  const clone = el.cloneNode(true) as Element;
+  if (!containsSensitive(el, sensitive)) return clone;
+  const live = Array.from(el.querySelectorAll('*'));
+  const copy = Array.from(clone.querySelectorAll('*'));
+  const hits = new Set(Array.from(el.querySelectorAll(sensitive)));
+  live.forEach((node, i) => {
+    const target = copy[i];
+    if (!hits.has(node) || !target?.parentNode) return;
+    const placeholder = el.ownerDocument.createElement(node.tagName.toLowerCase());
+    placeholder.setAttribute(SENSITIVE_ATTR, '');
+    target.replaceWith(placeholder);
+  });
+  return clone;
+}
+
+function trimmedHtml(el: Element, sensitive: string): string {
   if (el.closest('[contenteditable], textarea, select')) return '';
-  const safe = el.cloneNode(true) as Element;
+  const safe = safeClone(el, sensitive);
   for (const control of [safe, ...Array.from(safe.querySelectorAll('input, textarea, select, [contenteditable]'))]) {
     control.removeAttribute('value');
     if (control.matches('textarea, select, [contenteditable]')) control.textContent = '';
@@ -172,19 +205,27 @@ export interface FrameworkInfo {
   props?: Record<string, unknown>;
 }
 
-/** Walk framework internals to find the component tree above an element, plus source and props when exposed. */
-export function frameworkInfo(el: Element): FrameworkInfo {
+/**
+ * Walk framework internals to find the component tree above an element, plus source and props when exposed.
+ * Props are omitted when the owning component renders sensitive content: they are likely its data source.
+ */
+export function frameworkInfo(el: Element, sensitive = DEFAULT_SENSITIVE, withProps = true): FrameworkInfo {
   const stamped = parseSourceAttr(el.getAttribute('data-source') ?? el.getAttribute('data-lb-source'));
-  const react = reactInfo(el);
+  // Cheap global check first: most pages have nothing sensitive and skip the subtree walks.
+  let anySensitive = true;
+  try { anySensitive = el.ownerDocument.querySelector(sensitive) !== null; } catch { /* fail closed */ }
+  const guard = anySensitive ? sensitive : null;
+  const react = reactInfo(el, guard, withProps);
   if (react.chain.length || react.source) return { framework: 'react', ...react, source: react.source ?? stamped };
-  const vue = vueInfo(el);
+  const vue = vueInfo(el, guard, withProps);
   if (vue.chain.length) return { framework: 'vue', ...vue, source: vue.source ?? stamped };
   return { framework: null, chain: [], source: stamped };
 }
 
 /** Backwards-compatible helper: just the names. */
 export function componentChain(el: Element): { framework: 'react' | 'vue' | null; components: string[] } {
-  const info = frameworkInfo(el);
+  // Names only: skips props snapshots and their sensitivity walks (used on every hover).
+  const info = frameworkInfo(el, DEFAULT_SENSITIVE, false);
   return { framework: info.framework, components: info.chain.map((c) => c.name) };
 }
 
@@ -199,6 +240,10 @@ function parseSourceAttr(value: string | null): SourceLocation | undefined {
 interface Fiber {
   type: unknown;
   return: Fiber | null;
+  tag?: number;
+  child?: Fiber | null;
+  sibling?: Fiber | null;
+  stateNode?: unknown;
   memoizedProps?: unknown;
   _debugSource?: { fileName: string; lineNumber?: number; columnNumber?: number } | null;
   _debugStack?: Error | null;
@@ -223,7 +268,38 @@ function firstUserFrame(stack: string): SourceLocation | undefined {
   return undefined;
 }
 
-function reactInfo(el: Element): Omit<FrameworkInfo, 'framework'> {
+const MAX_SUBTREE = 5000;
+/** Marks the nearest props as found but withheld, so outer components are not used instead. */
+const WITHHELD: Record<string, unknown> = Object.freeze({});
+const shown = (props?: Record<string, unknown>) => (props === WITHHELD ? undefined : props);
+
+/** Does a component's rendered output contain sensitive DOM? Unknown or oversized subtrees count as sensitive. */
+const HOST_PORTAL = 4;
+
+/**
+ * Does a component's rendered output contain sensitive DOM? Unknown or oversized subtrees count as sensitive.
+ * A clean host node vouches for its DOM subtree, so only portals below it need their own DOM checks.
+ */
+function fiberRendersSensitive(fiber: Fiber, sensitive: string): boolean {
+  const stack: Array<[Fiber, boolean]> = fiber.child ? [[fiber.child, false]] : [];
+  let seen = 0;
+  while (stack.length) {
+    const [f, covered] = stack.pop()!;
+    if (++seen > MAX_SUBTREE) return true;
+    let childCovered = covered && f.tag !== HOST_PORTAL;
+    const node = f.stateNode as Element | null | undefined;
+    if (!covered && node && typeof node === 'object' && node.nodeType === 1) {
+      if (isSensitive(node, sensitive) || containsSensitive(node, sensitive)) return true;
+      childCovered = true;
+    }
+    if (f.tag === HOST_PORTAL) childCovered = false;
+    if (f.sibling) stack.push([f.sibling, covered]);
+    if (f.child) stack.push([f.child, childCovered]);
+  }
+  return false;
+}
+
+function reactInfo(el: Element, sensitive: string | null, withProps = true): Omit<FrameworkInfo, 'framework'> {
   const key = Object.keys(el).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
   if (!key) return { chain: [] };
   let fiber = (el as unknown as Record<string, Fiber | undefined>)[key] ?? null;
@@ -234,13 +310,14 @@ function reactInfo(el: Element): Omit<FrameworkInfo, 'framework'> {
     const name = reactTypeName(fiber.type);
     if (name && chain[chain.length - 1]?.name !== name) {
       chain.push({ name, source: fiberSource(fiber) });
-      if (!props && fiber.memoizedProps && typeof fiber.memoizedProps === 'object') {
-        props = snapshotProps(fiber.memoizedProps as Record<string, unknown>);
+      if (withProps && !props && fiber.memoizedProps && typeof fiber.memoizedProps === 'object') {
+        // Only the nearest component's props are considered; withheld props stay withheld.
+        props = sensitive !== null && fiberRendersSensitive(fiber, sensitive) ? WITHHELD : snapshotProps(fiber.memoizedProps as Record<string, unknown>);
       }
     }
     fiber = fiber.return;
   }
-  return { chain, source, props };
+  return { chain, source, props: shown(props) };
 }
 
 function reactTypeName(type: unknown): string | null {
@@ -294,7 +371,10 @@ function snapshotValue(v: unknown, depth: number): unknown {
   return String(v);
 }
 
+interface VueNode { el?: unknown; children?: unknown; component?: { subTree?: VueNode } | null }
 interface VueInstance {
+  subTree?: VueNode;
+  $el?: unknown;
   type?: { name?: string; __name?: string; __file?: string };
   parent?: VueInstance | null;
   props?: Record<string, unknown>;
@@ -303,7 +383,40 @@ interface VueInstance {
   $props?: Record<string, unknown>;
 }
 
-function vueInfo(el: Element): Omit<FrameworkInfo, 'framework'> {
+const isElement = (n: unknown): n is Element => !!n && typeof n === 'object' && (n as Node).nodeType === 1;
+
+/**
+ * Vue 3 rendered roots: an element vnode vouches for its DOM subtree; fragments (v-for, v-if, templates) and
+ * fragment-rooted child components are searched through their children. Unknown or oversized trees count as sensitive.
+ */
+function vueRendersSensitive(instance: VueInstance, sensitive: string): boolean {
+  if (!instance.subTree) {
+    const root = instance.$el; // Vue 2
+    return !isElement(root) || isSensitive(root, sensitive) || containsSensitive(root, sensitive);
+  }
+  const stack: VueNode[] = [instance.subTree];
+  let seen = 0;
+  let found = false;
+  while (stack.length) {
+    const vnode = stack.pop();
+    if (!vnode || typeof vnode !== 'object') continue;
+    if (++seen > MAX_SUBTREE) return true;
+    if (isElement(vnode.el)) {
+      found = true;
+      if (isSensitive(vnode.el, sensitive) || containsSensitive(vnode.el, sensitive)) return true;
+      continue;
+    }
+    if (vnode.component?.subTree) stack.push(vnode.component.subTree);
+    if (Array.isArray(vnode.children)) stack.push(...(vnode.children as VueNode[]));
+  }
+  return !found;
+}
+
+function vueProps(instance: VueInstance, raw: Record<string, unknown>, sensitive: string | null): Record<string, unknown> {
+  return sensitive !== null && vueRendersSensitive(instance, sensitive) ? WITHHELD : snapshotProps(raw);
+}
+
+function vueInfo(el: Element, sensitive: string | null, withProps = true): Omit<FrameworkInfo, 'framework'> {
   const anyEl = el as unknown as { __vueParentComponent?: VueInstance; __vue__?: VueInstance };
   const chain: ComponentInfo[] = [];
   let props: Record<string, unknown> | undefined;
@@ -320,22 +433,22 @@ function vueInfo(el: Element): Omit<FrameworkInfo, 'framework'> {
     const name = v3.type?.name || v3.type?.__name || fileName(v3.type?.__file);
     if (name && chain[chain.length - 1]?.name !== name) {
       chain.push({ name, source: v3.type?.__file ? { file: v3.type.__file } : undefined });
-      if (!props && v3.props) props = snapshotProps(v3.props);
+      if (withProps && !props && v3.props) props = vueProps(v3, v3.props, sensitive);
     }
     v3 = v3.parent;
   }
-  if (chain.length) return { chain, props, source: chain[0]?.source };
+  if (chain.length) return { chain, props: shown(props), source: chain[0]?.source };
   // Vue 2
   let v2: VueInstance | null | undefined = anyEl.__vue__;
   while (v2 && chain.length < MAX_COMPONENTS) {
     const name = v2.$options?.name || v2.$options?._componentTag || fileName(v2.$options?.__file);
     if (name && chain[chain.length - 1]?.name !== name) {
       chain.push({ name, source: v2.$options?.__file ? { file: v2.$options.__file } : undefined });
-      if (!props && v2.$props) props = snapshotProps(v2.$props);
+      if (withProps && !props && v2.$props) props = vueProps(v2, v2.$props, sensitive);
     }
     v2 = v2.$parent;
   }
-  return { chain, props, source: chain[0]?.source };
+  return { chain, props: shown(props), source: chain[0]?.source };
 }
 
 function fileName(path?: string): string | null {

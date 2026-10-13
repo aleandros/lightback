@@ -113,6 +113,7 @@ function Summary({ s }: { s: Submission }) {
               <strong>{sel.components.length ? sel.components.join(' ‹ ') : `<${sel.tag}>`}</strong>
               {sel.kind === 'region' && <span className="pill">area · {sel.region?.children.length ?? 0} elements</span>}
               {sel.framework && <span className="pill">{sel.framework}</span>}
+              {sel.sensitive && <span className="pill" data-ref="sensitive-pill">sensitive</span>}
             </div>
             <code className="small">{sel.selector}</code>
             {sel.source && <span className="src">{sel.source.file.replace(/^.*?\/src\//, 'src/')}:{sel.source.line}:{sel.source.column}</span>}
@@ -132,6 +133,14 @@ function Summary({ s }: { s: Submission }) {
           </div>
         ))}
       </section>
+      {p.masks && p.masks.length > 0 && (
+        <section data-ref="masks">
+          <h3>Screenshot masks ({p.masks.length})</h3>
+          <p className="muted small">
+            {p.masks.filter((m) => m.reason === 'sensitive').length} sensitive · {p.masks.filter((m) => m.reason === 'reporter').length} hidden by the reporter
+          </p>
+        </section>
+      )}
       <section>
         <h3>Errors ({p.errors.length})</h3>
         {p.errors.map((e, i) => (
