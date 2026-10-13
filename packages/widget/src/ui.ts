@@ -761,6 +761,9 @@ class Widget implements WidgetHandle {
 
   private async captureNow(): Promise<{ shot: Shot; sensitive: Rect[] } | null> {
     if (!this.opts.screenshot || this.destroyed) return null;
+    // WebKit scrolls the page to the top when a focused element inside the fixed host becomes hidden.
+    const focused = this.root.activeElement instanceof HTMLElement ? this.root.activeElement : null;
+    focused?.blur();
     this.element.style.visibility = 'hidden';
     await nextFrame();
     await nextFrame();
@@ -775,6 +778,8 @@ class Widget implements WidgetHandle {
       sensitive = uniqueRects([...before, ...this.sensitiveRects()]);
     } finally {
       this.element.style.visibility = '';
+      // Give focus back unless the user moved it meanwhile (it is then no longer on the body).
+      if (focused?.isConnected && !this.root.activeElement && document.activeElement === document.body) focused.focus({ preventScroll: true });
     }
     if (!blob) return null;
     const bitmap = await decodeScreenshot(blob);

@@ -18,13 +18,18 @@ async function bigTable(query) {
   }, ROWS);
 }
 
-async function pickCell(row, col) {
+/** Select a cell, wait until `crops` crops exist (so any capture has finished), and report scrollY around it. */
+async function pickCell(row, col, crops) {
   const cell = page.locator(`#big tr:nth-child(${row}) td:nth-child(${col})`);
   await cell.scrollIntoViewIfNeeded();
   const b = await cell.boundingBox();
+  const before = await page.evaluate(() => scrollY);
   await page.mouse.click(b.x + 4, b.y + 4);
   await page.waitForSelector(W + '[data-ref=popover]:not([hidden])');
+  await page.waitForFunction((n) => document.querySelector('lightback-widget').shadowRoot.querySelectorAll('.lb-thumb').length === n, crops, { timeout: 20000 });
+  const after = await page.evaluate(() => scrollY);
   await page.click(W + '[data-action=pop-more]');
+  return { before, after };
 }
 
 const shotAttached = () => page.locator(W + '[data-ref=shot]').isVisible();
@@ -36,7 +41,7 @@ await page.click(W + '.lb-pill [data-action=pick]');
 await page.waitForSelector(W + '[data-ref=toast]:not([hidden])');
 const toast = await page.locator(W + '[data-ref=toast]').textContent();
 assert(toast.includes('Large page'), `skipped capture is explained (${toast})`);
-await pickCell(20, 3);
+await pickCell(20, 3, 0);
 await page.click(W + '[data-action=done]');
 await page.waitForSelector(W + '.lb-panel:not([hidden])');
 assert(Date.now() - t0 < 10000, `pick and select stay responsive (${Date.now() - t0} ms)`);
@@ -60,8 +65,10 @@ const firstRow = await page.evaluate(() => {
   const rows = [...document.querySelectorAll('#big tr')];
   return rows.findIndex((r) => r.getBoundingClientRect().top >= 0) + 1;
 });
-await pickCell(firstRow + 3, 2);
-await pickCell(firstRow + 400, 5); // off the first capture
+await pickCell(firstRow + 3, 2, 1);
+const scrolled = await pickCell(firstRow + 400, 5, 2); // off the first capture
+// WebKit scrolled to the top when the capture hid the widget while its comment box had focus.
+assert(scrolled.after === scrolled.before, `a fresh capture keeps the scroll position (${scrolled.before} -> ${scrolled.after})`);
 await page.click(W + '[data-action=done]');
 await page.waitForFunction(() => document.querySelector('lightback-widget').shadowRoot.querySelectorAll('.lb-thumb').length === 2, null, { timeout: 20000 });
 await page.screenshot({ path: OUT + '1-viewport-panel.png' });

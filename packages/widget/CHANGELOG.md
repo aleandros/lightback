@@ -5,6 +5,7 @@
 ### Fixed
 
 - Large pages stay responsive while picking. Entering pick mode ran the capturer over the whole document, and DOM-cloning capturers freeze the page for time proportional to its size (25 seconds and a 23 MB PNG on a 93,000-element page). The automatic capture is now skipped, with a notice, when it would copy more than `screenshotMaxElements` elements (default 8000); the panel's Screenshot button still captures on request. New string: `screenshotSkipped`.
+- Capturing no longer scrolls Safari to the top of the page when a widget control has focus. WebKit scrolls to the top when a focused element inside the fixed host is hidden, which the widget does during every capture; focus now leaves the widget for the capture and returns afterwards.
 
 ### Added
 

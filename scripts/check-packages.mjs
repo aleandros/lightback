@@ -52,13 +52,13 @@ try {
   const standalone = join(scratch, 'node_modules/@lightback/widget/dist/lightback.iife.js');
   const context = {};
   runInNewContext(readFileSync(standalone, 'utf8'), context);
-  assert.deepEqual(Object.keys(context.Lightback).sort(), ['createLightback', 'defaultStrings', 'mountWidget']);
+  assert.deepEqual(Object.keys(context.Lightback).sort(), ['createLightback', 'defaultStrings', 'domCapturer', 'mountWidget']);
   context.Lightback.createLightback().destroy();
   const dist = dirname(standalone);
   const lazyScript = readFileSync(join(dist, 'lightback-lazy.iife.js'), 'utf8');
   const lazyContext = {};
   runInNewContext(lazyScript, lazyContext);
-  assert.deepEqual(Object.keys(lazyContext.Lightback).sort(), ['createLightback', 'defaultStrings', 'mountLazyWidget']);
+  assert.deepEqual(Object.keys(lazyContext.Lightback).sort(), ['createLightback', 'defaultStrings', 'domCapturer', 'mountLazyWidget']);
   assert.throws(() => lazyContext.Lightback.mountLazyWidget({ client: lazyContext.Lightback.createLightback() }), /requires a browser DOM/);
   const ui = readFileSync(join(dist, 'lightback-ui.js'), 'utf8');
   assert.ok(ui.includes('lb-panel'));
