@@ -35,15 +35,20 @@ export interface Shot {
 const MASK_BLEED = 2;
 export const MASK_FILL = '#111827';
 
-/** Bitmap pixels covered by a document-space rect, clamped to the image. */
-export function maskBounds(rect: Rect, area: Rect, size: { width: number; height: number }): Rect | null {
+/** Bitmap pixels covered by a document-space rect (grown by `bleed` CSS px), on an image of `area`, clamped to it. */
+export function bitmapBounds(rect: Rect, area: Rect, size: { width: number; height: number }, bleed = 0): Rect | null {
   const sx = size.width / area.width;
   const sy = size.height / area.height;
-  const x0 = Math.max(0, Math.floor((rect.x - area.x - MASK_BLEED) * sx));
-  const y0 = Math.max(0, Math.floor((rect.y - area.y - MASK_BLEED) * sy));
-  const x1 = Math.min(size.width, Math.ceil((rect.x - area.x + rect.width + MASK_BLEED) * sx));
-  const y1 = Math.min(size.height, Math.ceil((rect.y - area.y + rect.height + MASK_BLEED) * sy));
+  const x0 = Math.max(0, Math.floor((rect.x - area.x - bleed) * sx));
+  const y0 = Math.max(0, Math.floor((rect.y - area.y - bleed) * sy));
+  const x1 = Math.min(size.width, Math.ceil((rect.x - area.x + rect.width + bleed) * sx));
+  const y1 = Math.min(size.height, Math.ceil((rect.y - area.y + rect.height + bleed) * sy));
   return x1 > x0 && y1 > y0 ? { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } : null;
+}
+
+/** Bitmap pixels a mask covers, with bleed against antialiased edges. */
+export function maskBounds(rect: Rect, area: Rect, size: { width: number; height: number }): Rect | null {
+  return bitmapBounds(rect, area, size, MASK_BLEED);
 }
 
 /**

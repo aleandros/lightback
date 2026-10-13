@@ -33,16 +33,15 @@ export function scrubRecovery(value: unknown, options: RedactOptions, maxString:
 export function isRecoveredSelection(value: unknown): boolean {
   const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
   const strings = (v: unknown) => Array.isArray(v) && v.every((s) => typeof s === 'string');
-  const rect = (v: unknown) => object(v) && ['x', 'y', 'width', 'height'].every((key) => Number.isFinite(v[key]));
   const source = (v: unknown) => v === undefined || (object(v) && typeof v.file === 'string' &&
     (v.line === undefined || Number.isFinite(v.line)) && (v.column === undefined || Number.isFinite(v.column)));
   const summary = (v: unknown) => object(v) && typeof v.selector === 'string' && typeof v.tag === 'string' &&
-    typeof v.text === 'string' && strings(v.components) && rect(v.rect) && rect(v.docRect) && source(v.source);
+    typeof v.text === 'string' && strings(v.components) && isRect(v.rect) && isRect(v.docRect) && source(v.source);
   return object(value) && summary(value) && typeof value.id === 'string' && ['element', 'region'].includes(value.kind) &&
     strings(value.classes) && object(value.attrs) && Object.values(value.attrs).every((v) => typeof v === 'string') &&
     Array.isArray(value.chain) && value.chain.every((v) => object(v) && typeof v.name === 'string' && source(v.source)) &&
     (value.note === undefined || typeof value.note === 'string') && (value.crop === undefined || typeof value.crop === 'string') &&
-    (value.kind !== 'region' || (object(value.region) && rect(value.region.rect) && rect(value.region.docRect) &&
+    (value.kind !== 'region' || (object(value.region) && isRect(value.region.rect) && isRect(value.region.docRect) &&
       Array.isArray(value.region.children) && value.region.children.every(summary)));
 }
 

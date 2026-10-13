@@ -5,12 +5,12 @@
 ### Fixed
 
 - Large pages stay responsive while picking. Entering pick mode ran the capturer over the whole document, and DOM-cloning capturers freeze the page for time proportional to its size (25 seconds and a 23 MB PNG on a 93,000-element page). The automatic capture is now skipped, with a notice, when it would copy more than `screenshotMaxElements` elements (default 8000); the panel's Screenshot button still captures on request. New string: `screenshotSkipped`.
-- Capturing no longer scrolls Safari to the top of the page when a widget control has focus. WebKit scrolls to the top when a focused element inside the fixed host is hidden, which the widget does during every capture; focus now leaves the widget for the capture and returns afterwards.
+- Capturing no longer scrolls Safari to the top of the page when a widget control has focus. WebKit scrolls to the top when a focused element inside the fixed host is hidden. `domCapturer` leaves the widget out of the image so it no longer hides at all (the comment box keeps focus and keystrokes during a capture); with other capturers, focus leaves the widget for the capture and returns afterwards.
 
 ### Added
 
-- `screenshotArea: 'viewport'` captures what is on screen instead of the whole page. Selections outside the first capture (the page scrolled) get a fresh capture for their crop.
-- `domCapturer(render)` adapts `modern-screenshot`, `html-to-image` and similar DOM-cloning renderers. For a viewport area it copies only what is on screen, keeping off-screen elements as empty boxes so the layout does not move, and draws fixed and sticky elements where they are: about 1 second and a few hundred KB on the same page. Exported from `@lightback/widget`, `@lightback/widget/lazy` and both standalone scripts.
+- `screenshotArea: 'viewport'` captures what is on screen instead of the whole page. A selection the first capture does not show (the page scrolled) gets its crop from a capture of the screen it was selected on, shared by other selections on that screen. Hiding an area over such a crop re-cuts it from a new capture.
+- `domCapturer(render)` adapts `modern-screenshot`, `html-to-image` and similar DOM-cloning renderers. For a viewport area it copies only what is on screen, keeping off-screen elements as empty boxes so the layout does not move (content that overflows its box, as in `height: 100%` app roots, is still copied), and draws fixed elements where they are; sticky elements render unstuck. It leaves the widget out of the image: about 1 second and a few hundred KB on the same page. Exported from `@lightback/widget`, `@lightback/widget/lazy` and both standalone scripts.
 - Screenshot and crop attachments record the document `area` they show; restored drafts use it to size crop previews and to repaint recovered screenshots under new hidden areas.
 
 ### Changed
