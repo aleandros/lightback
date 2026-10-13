@@ -1,6 +1,6 @@
 {
   "name": "@lightback/react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "React provider and hooks for Lightback.",
   "license": "MIT",
   "type": "module",
@@ -31,7 +31,7 @@
   },
   "peerDependencies": {
     "@lightback/core": "workspace:>=0.0.1 <0.3.0",
-    "@lightback/widget": "workspace:^",
+    "@lightback/widget": "workspace:>=0.2.0 <0.3.0",
     "react": ">=17"
   },
   "devDependencies": {

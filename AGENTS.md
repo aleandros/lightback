@@ -45,7 +45,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 1. `pnpm build` succeeds (9 module/declaration builds plus the standalone IIFE).
 2. `pnpm typecheck` is clean.
 3. `pnpm test` passes (core and widget).
-4. `pnpm e2e` passes all seven suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
+4. `pnpm e2e` passes all eight suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
 5. README and the relevant `docs/*.md` describe the new behaviour. A feature that is not in README does not exist for users.
 6. New UI hooks have a `data-action` or `data-ref` attribute and the e2e suites use those, never visible text.
 

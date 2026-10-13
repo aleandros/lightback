@@ -62,7 +62,7 @@ For a script-tag install, build and serve `packages/widget/dist/lightback.iife.j
 </script>
 ```
 
-The standalone script includes core and exposes `window.Lightback`. Widget `0.1.1` also exposes `Lightback.defaultStrings` for script-tag translations. The current npm versions are widget `0.1.1`, core `0.1.0`, and React `0.1.0`. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.1.1/dist/lightback.iife.js` in the script tag above.
+The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations. The current release is `0.2.0` for widget, core and React; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.0/dist/lightback.iife.js` in the script tag above.
 
 ## Validation and releases
 
@@ -244,7 +244,7 @@ Every selection has a numbered pin on the page with a remove button on hover. Th
 
 **Sending is optimistic.** Send does not open a review step. It shows a small "Sending feedback…" card with a summary and a draining bar, and the report goes out when the bar empties (`sendDelay`, default 5000 ms, 0 for immediate). **Edit** opens the full panel with the draft, which is where the prompt and JSON preview still live. **Cancel** stops the send and keeps the draft; the pill then reads "Review & send". The panel has **Discard** to drop a draft.
 
-**Screenshots are automatic** when a `screenshot` capturer is configured: entering pick mode captures the full page once (collectors are muted during capture so the capturer's own requests never reach the report), and each selection gets a padded crop with the selected rect outlined, attached as `selection-N.png` and referenced from `selection.crop`. Set `autoScreenshot: false` to go back to manual capture. Every capture is masked before it is previewed, stored or sent (see [Privacy](#privacy-sensitive-elements-and-hidden-areas)); **▨ Hide area** in the pick bar lets the reporter cover anything else.
+**Screenshots are automatic** when a `screenshot` capturer is configured: entering pick mode captures the full page once (collectors are muted during capture so the capturer's own requests never reach the report), and each selection gets a padded crop with the selected rect outlined, attached as `selection-N.png` and referenced from `selection.crop`. Crops are in capture pixels (2× on a Retina display with a 2× capturer); previews keep their natural proportions. Set `autoScreenshot: false` to go back to manual capture. Every capture is masked before it is previewed, stored or sent (see [Privacy](#privacy-sensitive-elements-and-hidden-areas)); **▨ Hide area** in the pick bar lets the reporter cover anything else.
 
 Each selection carries, when a dev build exposes them, a **source location** (JSX call site, from React's debug info, Vue's `__file`, or a `data-source="file:line:col"` attribute a build plugin can stamp) and a **props snapshot** of the nearest component (functions, elements and children stripped, depth-limited, redacted like every other string).
 

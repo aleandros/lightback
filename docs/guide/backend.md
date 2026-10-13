@@ -14,7 +14,7 @@ The default transport posts to `endpoint` with `POST`.
 | --- | --- |
 | `payload` | The `FeedbackPayload` as a JSON string. |
 | `screenshot.png` | Full-page capture, when one was taken. |
-| `selection-1.png`, `selection-2.png`, … | One outlined crop per selection that has one. The selection's `crop` field names its file. |
+| `selection-1.png`, `selection-2.png`, … | One outlined crop per selection that has one. The selection's `crop` field names its file. Crops are in capture pixels and can be very wide, tall or small; display them with `width: auto; height: auto` and only `max-width`/`max-height` limits (and `align-self: flex-start` inside a flex column) so they are not stretched. |
 
 `payload.attachments` lists every file with `name`, `type` and `size` so you can verify nothing was dropped.
 

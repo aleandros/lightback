@@ -56,7 +56,7 @@ ESM and CommonJS export conditions each point to their matching declaration form
 
 ## 14. Release only after the same checks used for pull requests
 
-The release workflow reuses the complete CI workflow before Changesets can publish. This duplicates CI on main, but ensures that browser and packed-package failures block a release. Changesets uses independent versions and public access. Lightback peer ranges cover the compatible 0.0.x and 0.1.x API; only out-of-range peer changes promote dependents to a major version. Initial npm creation and OIDC configuration must be completed before automated uploads can succeed.
+The release workflow reuses the complete CI workflow before Changesets can publish. This duplicates CI on main, but ensures that browser and packed-package failures block a release. Changesets uses independent versions and public access. Lightback peer ranges are explicit ranges (core `>=0.0.1 <0.3.0`; React on widget `>=0.2.0 <0.3.0`, since it imports the lazy entry). `workspace:^` on a 0.x package would put the next minor out of range and promote dependents to 1.0.0, so widen ranges deliberately before each minor release. Initial npm creation and OIDC configuration must be completed before automated uploads can succeed.
 
 ## 15. Public guides in VitePress, generated reference tables
 

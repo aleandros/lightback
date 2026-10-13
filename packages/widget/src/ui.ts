@@ -108,7 +108,8 @@ class Widget implements WidgetHandle {
   private baseMasks: Rect[] = [];
   private maskJob: Promise<void> = Promise.resolve();
   private maskMode = false;
-  private crops = new Map<string, { blob: Blob; url: string }>();
+  /** `width` is the crop's extent in CSS pixels, so a high-DPR crop previews at page size instead of doubled. */
+  private crops = new Map<string, { blob: Blob; url: string; width: number }>();
   private cropJobs = new Map<string, Promise<void>>();
   private pendingTimer: number | null = null;
   private autoShot: boolean;
@@ -791,14 +792,14 @@ class Widget implements WidgetHandle {
     const base = await this.base;
     if (this.destroyed || !base || !this.selections.includes(sel)) return;
     const version = this.baseVersion;
-    const pad = this.opts.cropPadding ?? 16;
     const r = sel.region ? sel.region.docRect : sel.docRect;
+    const area = this.cropArea(sel, base.page);
     const sx = base.bitmap.width / base.page.width;
     const sy = base.bitmap.height / base.page.height;
-    const x0 = Math.max(0, Math.floor((r.x - pad) * sx));
-    const y0 = Math.max(0, Math.floor((r.y - pad) * sy));
-    const x1 = Math.min(base.bitmap.width, Math.ceil((r.x + r.width + pad) * sx));
-    const y1 = Math.min(base.bitmap.height, Math.ceil((r.y + r.height + pad) * sy));
+    const x0 = Math.max(0, Math.floor(area.x * sx));
+    const y0 = Math.max(0, Math.floor(area.y * sy));
+    const x1 = Math.min(base.bitmap.width, Math.ceil((area.x + area.width) * sx));
+    const y1 = Math.min(base.bitmap.height, Math.ceil((area.y + area.height) * sy));
     const w = x1 - x0;
     const h = y1 - y0;
     if (w <= 0 || h <= 0) return;
@@ -817,9 +818,18 @@ class Widget implements WidgetHandle {
     if (this.destroyed || !blob || !this.selections.includes(sel) || version !== this.baseVersion) return;
     const prev = this.crops.get(sel.id);
     if (prev) URL.revokeObjectURL(prev.url);
-    this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob) });
+    this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob), width: w / sx });
     this.renderSelections();
     this.persistDraft();
+  }
+
+  /** A selection's crop in document CSS pixels: its rect plus `cropPadding`, clipped to the page. */
+  private cropArea(sel: ElementSelection, page: Page): Rect {
+    const pad = this.opts.cropPadding ?? 16;
+    const r = sel.region ? sel.region.docRect : sel.docRect;
+    const x = Math.max(0, r.x - pad);
+    const y = Math.max(0, r.y - pad);
+    return { x, y, width: Math.min(page.width, r.x + r.width + pad) - x, height: Math.min(page.height, r.y + r.height + pad) - y };
   }
 
   private async takeScreenshot(): Promise<void> {
@@ -877,7 +887,12 @@ class Widget implements WidgetHandle {
       this.baseMasks = this.shotMasks;
       for (const selection of this.selections) {
         const crop = draft.attachments.find((a) => a.name === selection.crop);
-        if (crop) this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob) });
+        if (crop) {
+          // The capture scale is not stored; estimate the CSS width from the selection against the current page.
+          const page = { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight };
+          const width = this.cropArea(selection, page).width;
+          this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob), width });
+        }
         // Coordinates remain the captured coordinates; a selector may now point at different content.
       }
       this.setScreenshot(draft.attachments.find((a) => a.name === 'screenshot.png')?.blob ?? null);
@@ -1041,7 +1056,9 @@ class Widget implements WidgetHandle {
         const hidden = s.sensitive ? `<div class="lb-sensitive" data-ref="sensitive">🔒 ${esc(this.strings.sensitiveContent)}</div>` : '';
         const note = s.note ? `<div class="lb-note">💬 ${esc(s.note)}</div>` : `<div class="lb-note empty">${esc(this.strings.noComment)}</div>`;
         const crop = this.crops.get(s.id);
-        const thumb = crop ? `<img class="lb-thumb" src="${crop.url}" alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
+        // Natural proportions, never enlarged past the selected area's on-page size (+2 for the border-box border).
+        const cap = Number.isFinite(crop?.width) ? ` style="max-width:min(100%, ${Math.max(1, Math.round(crop!.width)) + 2}px)"` : '';
+        const thumb = crop ? `<img class="lb-thumb" src="${crop.url}"${cap} alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
         return `<div class="lb-sel" data-id="${esc(s.id)}">
   <div class="lb-sel-head"><span class="lb-badge${s.kind === 'region' ? ' region' : ''}">${i + 1}</span><span class="lb-chain" title="${esc(s.components.join(' < '))}">${chain} ${kind}</span><button class="lb-icon" type="button" data-action="sel-edit" aria-label="${esc(this.strings.editComment)}" title="${esc(this.strings.editComment)}">✎</button><button class="lb-icon" type="button" data-action="sel-remove" aria-label="${esc(this.strings.removeSelection)}">✕</button></div>
   <code class="lb-selector">${esc(s.selector)}</code>

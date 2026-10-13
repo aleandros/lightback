@@ -98,7 +98,7 @@ table.mini tr.bad td { color: var(--danger); }
 .chip { font-size: 11px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; color: var(--muted); }
 .shot-box.region { border-style: dashed; }
 .shot-box.child { border-width: 1px; background: transparent; opacity: .7; }
-.crop { display: block; max-width: 100%; max-height: 220px; border: 1px solid var(--border); border-radius: 8px; margin: 4px 0; }
+.crop { display: block; align-self: flex-start; width: auto; height: auto; max-width: 100%; max-height: 220px; border: 1px solid var(--border); border-radius: 8px; margin: 4px 0; }
 
 /* Public demo introduction and layouts that also work on narrow screens. */
 .demo-intro { margin-bottom: 28px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }

@@ -1,14 +1,15 @@
 # @lightback/react
 
-## Unreleased
-
-### Added
-
-- Support core session recovery through the default lazy widget, including recovered trigger counts and editable reports after reload. Widen the core peer range for the compatible 0.2 API.
+## 0.2.0
 
 ### Changed
 
-- Load the widget UI on first interaction by default. `LightbackProvider` initially mounts a lightweight trigger, and `useLightbackWidget()` exposes a lazy handle with promise-returning `open()` and `startPicking()` methods. Preserve mount-time customization, SSR safety and cleanup during loading.
+- `LightbackProvider` now mounts the lazy widget by default: a lightweight trigger first, with the editor and picker loaded on first interaction. `useLightbackWidget()` returns a handle whose `open()` and `startPicking()` return promises. Mount-time customization, SSR safety and cleanup during loading are preserved.
+- Requires `@lightback/widget` 0.2 (for the lazy entry). The `@lightback/core` peer range covers the compatible 0.2 API.
+
+### Added
+
+- Session recovery through the default lazy widget, including recovered counts on the trigger and editable reports after reload.
 
 ## 0.1.0
 

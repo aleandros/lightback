@@ -127,7 +127,7 @@ function Summary({ s }: { s: Submission }) {
                 ))}
               </div>
             )}
-            {sel.crop && s.files[sel.crop] && <img className="crop" src={s.files[sel.crop]} alt={`Crop of selection ${i + 1}`} />}
+            {sel.crop && s.files[sel.crop] && <img className="crop" data-ref="crop" src={s.files[sel.crop]} alt={`Crop of selection ${i + 1}`} />}
             {sel.props && Object.keys(sel.props).length > 0 && <pre className="code">{JSON.stringify(sel.props, null, 1)}</pre>}
             {sel.note && <div className="note-box">💬 {sel.note}</div>}
           </div>

@@ -1,6 +1,6 @@
 {
   "name": "@lightback/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Framework-agnostic feedback capture: console, errors, network, breadcrumbs, element inspection, payload building and transport.",
   "license": "MIT",
   "type": "module",
