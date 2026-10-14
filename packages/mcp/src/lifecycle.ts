@@ -8,21 +8,23 @@ export function configIdentity(config: BridgeConfig) {
   return createHash('sha256').update(JSON.stringify([config.url, config.project, config.session, config.origin, config.token, config.agentToken])).digest('hex');
 }
 
-/** Never mistake an occupied port, mismatched credentials or old receiver for an available port. */
+/** A transient connection failure is retriable; only a matching authenticated health response permits reuse. */
 export async function receiverRunning(config: BridgeConfig, requireVersion = true): Promise<boolean> {
   let response: Response;
   try {
     response = await fetch(config.url + scopePath(config) + '/agent/health', {
       headers: { authorization: `Bearer ${config.agentToken}`, connection: 'close' },
-      signal: AbortSignal.timeout(1000), redirect: 'error',
+      signal: AbortSignal.timeout(3000), redirect: 'error',
     });
   } catch (error) {
-    if ((error as { cause?: { code?: string } }).cause?.code === 'ECONNREFUSED') return false;
+    const code = (error as { cause?: { code?: string } }).cause?.code;
+    if (['ECONNREFUSED', 'ECONNRESET', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'].includes(code ?? '') || (error as Error).name === 'TimeoutError') return false;
     throw new Error(`Cannot contact the receiver at ${config.url}. Check the port and local network access.`, { cause: error });
   }
   const health = await response.json().catch(() => null) as { name?: string; version?: string; config?: string } | null;
+  if (response.status === 429 || response.status === 503) return false;
   if (!response.ok || health?.name !== 'lightback' || (requireVersion && health.version !== version) || health.config !== configIdentity(config)) {
-    throw new Error(`Port ${new URL(config.url).port} is occupied by a different receiver or version. Stop the previous receiver, or initialize this project with a different --port.`);
+    throw new Error(`Port ${new URL(config.url).port} is occupied by a different receiver or version. Run stop with the previous receiver's --config, or initialize this project with a different --port.`);
   }
   return true;
 }
@@ -36,8 +38,8 @@ export async function ensureReceiver(config: BridgeConfig, configFile: string, c
   let spawnError: Error | undefined;
   child.on('error', error => { spawnError = error; });
   child.unref();
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
+  const deadline = performance.now() + 5000;
+  while (performance.now() < deadline) {
     if (spawnError) throw new Error('Could not start the Lightback receiver', { cause: spawnError });
     if (await receiverRunning(config)) return;
     // Concurrent starts are safe: the bind winner owns the queue; the loser exits.

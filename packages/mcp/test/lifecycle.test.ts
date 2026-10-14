@@ -1,4 +1,4 @@
-import { it, expect } from 'vitest';
+import { it, expect, vi } from 'vitest';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { once } from 'node:events';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { readConfig } from '../src/config';
+import { readConfig, writeConfig } from '../src/config';
 import { keepReceiverAlive, receiverRunning, stopReceiver } from '../src/lifecycle';
 import { startReceiver } from '../src/receiver';
 import { config, payload, appRequest, agentRequest, json } from './helpers';
@@ -60,7 +60,42 @@ it('creates one private config and receiver on concurrent stdio starts, preserve
     await Promise.all(clients.map(client => client.close()));
     try { await stopReceiver(readConfig(file)); } finally { await rm(dir, { recursive: true, force: true }); }
   }
-}, 20_000);
+}, 60_000);
+
+it('releases an obsolete managed receiver when its config is regenerated, even with browser polling', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'lightback-reconfigure-'));
+  const file = join(dir, 'connection.json');
+  const c = await config();
+  writeConfig(file, c);
+  const receiver = await startReceiver(c, { configFile: file });
+  const closed = once(receiver.server, 'close');
+  const next = { ...c, session: 'replacement', token: c.agentToken, agentToken: c.token };
+  const client = new Client({ name: 'regenerated-config-test', version: '1' });
+  try {
+    await rm(file);
+    writeConfig(file, next);
+    expect((await appRequest(c, '/reports')).status).toBe(503);
+    await closed;
+    await client.connect(new StdioClientTransport({ command: process.execPath, args: [cli, 'stdio', '--config', file], stderr: 'pipe' }));
+    expect(await receiverRunning(next)).toBe(true);
+    expect((await appRequest(next, '/reports', json(payload('New session')))).status).toBe(201);
+  } finally {
+    await client.close();
+    await receiver.close();
+    try { await stopReceiver(next); } finally { await rm(dir, { recursive: true, force: true }); }
+  }
+}, 30_000);
+
+it('releases a managed receiver after its config is removed without any requests', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'lightback-config-removed-'));
+  const file = join(dir, 'connection.json');
+  const c = await config();
+  writeConfig(file, c);
+  const receiver = await startReceiver(c, { configFile: file });
+  const closed = once(receiver.server, 'close');
+  try { await rm(file); await closed; }
+  finally { await receiver.close(); await rm(dir, { recursive: true, force: true }); }
+});
 
 it('never reuses a receiver with different credentials or browser settings, and protects lifecycle routes from browsers', async () => {
   const c = await config();
@@ -103,4 +138,28 @@ it('keeps an idle coding connection usable, then releases the managed receiver w
     await closed;
     expect(await receiverRunning(c)).toBe(false);
   } finally { release(); await receiver.close(); }
+});
+
+it('grants a fresh idle window after sleep or a stalled event loop instead of closing on wake', async () => {
+  const c = await config();
+  const receiver = await startReceiver(c, { idleTimeoutMs: 500 });
+  const closed = once(receiver.server, 'close');
+  const now = performance.now.bind(performance);
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => now() + 60_000);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 550));
+    expect(receiver.server.listening).toBe(true);
+    await closed;
+  } finally { clock.mockRestore(); await receiver.close(); }
+});
+
+it('does not expire the receiver when the wall clock jumps forward', async () => {
+  const c = await config();
+  const receiver = await startReceiver(c, { idleTimeoutMs: 400 });
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 24 * 60 * 60_000);
+  const release = keepReceiverAlive(c, 25);
+  try {
+    await new Promise(resolve => setTimeout(resolve, 550));
+    expect(receiver.server.listening).toBe(true);
+  } finally { clock.mockRestore(); release(); await receiver.close(); }
 });

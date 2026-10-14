@@ -160,7 +160,12 @@ try {
   // Match only this known failed follow-up; all other page errors remain failures.
   await finish([`/${new URL(config.url).host}/v1/projects/${encodeURIComponent(config.project)}/sessions/${encodeURIComponent(config.session)}/reports/${encodeURIComponent(otherId)}/messages due to access control checks.`]);
 } finally {
-  await client?.close(); await receiver?.close();
-  if (app) await new Promise(resolve => { app.close(resolve); app.closeAllConnections(); });
-  await browser.close(); await rm(dir, { recursive: true, force: true });
+  try { await client?.close(); }
+  finally {
+    try { await receiver?.close(); }
+    finally {
+      try { if (app) await new Promise(resolve => { app.close(resolve); app.closeAllConnections(); }); }
+      finally { try { await browser.close(); } finally { await rm(dir, { recursive: true, force: true }); } }
+    }
+  }
 }

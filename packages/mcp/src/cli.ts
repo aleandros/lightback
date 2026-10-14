@@ -19,7 +19,7 @@ async function main() {
   const command = positionals[0];
   if (positionals.length !== 1) throw new Error('Expected one command; use --help');
   if (command === 'init') {
-    setup();
+    await setup();
     console.error(`Ready: ${file}. Keep .lightback/ gitignored. Register stdio with your coding host; it starts the receiver automatically. Use browser-config for the app connection.`); return;
   }
   if (command === 'browser-config') {
@@ -28,7 +28,7 @@ async function main() {
   }
   if (command === 'serve') {
     const config = readConfig(file);
-    const receiver = await startReceiver(config, values.managed ? { idleTimeoutMs: RECEIVER_IDLE_MS } : {});
+    const receiver = await startReceiver(config, values.managed ? { idleTimeoutMs: RECEIVER_IDLE_MS, configFile: file } : {});
     console.error(`Lightback receiver ${config.url} — project ${config.project}, session ${config.session}; app origin ${config.origin}. Reports expire after 30 minutes; stopping loses the queue.`);
     const stop = () => { void receiver.close().then(() => process.exit(0)); };
     process.once('SIGINT', stop); process.once('SIGTERM', stop); return;
@@ -37,7 +37,7 @@ async function main() {
     console.error(await stopReceiver(readConfig(file)) ? 'Lightback receiver stopped; queued reports cleared.' : 'Lightback receiver is not running.'); return;
   }
   if (command === 'stdio') {
-    const config = setup();
+    const config = await setup();
     await ensureReceiver(config, file, resolve(process.argv[1]!));
     const server = await serveMcp(file);
     const release = keepReceiverAlive(config);

@@ -28,6 +28,24 @@ jobs:
       - run: pnpm build:site
       - run: git diff --exit-code -- docs/guide/payload.md docs/guide/strings-reference.md
 
+  mcp-platforms:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter '@lightback/mcp...' build
+      - run: pnpm --filter @lightback/mcp test
+
   browsers:
     runs-on: ubuntu-latest
     timeout-minutes: 15

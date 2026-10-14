@@ -35,19 +35,36 @@ export function writeConfig(file: string, config: BridgeConfig) {
   const data = JSON.stringify(validateConfig(config), null, 2) + '\n';
   const temporary = `${path}.${randomUUID()}.tmp`;
   writeFileSync(temporary, data, { flag: 'wx', mode: 0o600 });
-  try { linkSync(temporary, path); } // Atomic create-only publication: readers never see half a config.
+  try { linkSync(temporary, path); } // Atomic create-only publication on filesystems supporting links.
+  catch (error) {
+    if (!['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'ENOSYS'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+    // Preserve exclusive creation and private permissions on filesystems without hard links.
+    writeFileSync(path, data, { flag: 'wx', mode: 0o600 });
+  }
   finally { unlinkSync(temporary); }
 }
 
-export function ensureConfig(file: string, options: { project?: string; origin?: string; port?: number; session?: string }) {
+async function readReadyConfig(file: string) {
+  const deadline = performance.now() + 1000;
+  while (true) {
+    try { return readConfig(file); }
+    catch (error) {
+      // An exclusive-write fallback may be in progress in another process. Never accept partial JSON.
+      if (!(error instanceof SyntaxError) || performance.now() >= deadline) throw error;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  }
+}
+
+export async function ensureConfig(file: string, options: { project?: string; origin?: string; port?: number; session?: string }) {
   let config: BridgeConfig;
-  try { config = readConfig(file); }
+  try { config = await readReadyConfig(file); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     if (!options.project || !options.origin) throw new Error('No Lightback config found. Run init first, or pass --project and --origin to stdio.');
     try { writeConfig(file, makeConfig({ ...options, project: options.project, origin: options.origin })); }
     catch (writeError) { if ((writeError as NodeJS.ErrnoException).code !== 'EEXIST') throw writeError; }
-    config = readConfig(file);
+    config = await readReadyConfig(file);
   }
   for (const key of ['project', 'origin', 'session'] as const) {
     if (options[key] !== undefined && options[key] !== config[key]) throw new Error(`--${key} differs from the existing config; use a separate --config file for another project/session.`);
