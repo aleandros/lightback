@@ -48,7 +48,7 @@ pnpm e2e    # browser suites; needs `pnpm dev` running and a system Chrome
 
 The optional `@lightback/mcp` package connects a local frontend to **Claude Code or Codex**. The agent reads annotated reports and PNGs, edits the app with its own tools, and sends progress/results back to an optional browser thread. Follow-ups reopen the same report with revision checks. Ask the conversation to watch Lightback explicitly; installing MCP does not start an agent turn.
 
-Run a loopback receiver, connect your existing client through `send` or `endpoint`, and register the stdio server with the coding host. The queue survives agent reconnects and keeps reports in memory for 30 minutes; stopping the receiver clears it. No hosted service or provider credentials are required by Lightback. Browser packages retain their existing dependency direction.
+Register the stdio server with your coding host and connect your existing client through `send` or `endpoint`. The MCP command starts or reuses the local receiver automatically; no separate server terminal is needed. The queue survives agent reconnects and keeps reports in memory for 30 minutes; stopping the receiver clears it. No hosted service or provider credentials are required by Lightback. Browser packages retain their existing dependency direction.
 
 See the [Claude Code and Codex walkthrough](docs/guide/coding-agents.md) for npm installation, source-checkout setup, client configuration, image support, isolation and validation. Install the optional bridge with `npm install --save-dev @lightback/mcp`.
 

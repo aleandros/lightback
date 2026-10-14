@@ -47,7 +47,7 @@ Ask your coding agent to watch Lightback, then point at something in your runnin
 
 The agent edits the project with its own tools. Review the running result, read its reply in the optional browser thread, and send a follow-up on the same report.
 
-The bridge runs locally without its own model account. Connecting it does not automatically start an agent turn; ask the conversation to watch when you are ready to work.
+Your coding host starts the local receiver automatically; no separate server terminal is needed. The bridge runs locally without its own model account. Connecting it does not automatically start an agent turn; ask the conversation to watch when you are ready to work.
 
 [Set up the local feedback loop →](./guide/coding-agents.md)
 

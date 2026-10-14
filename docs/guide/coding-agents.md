@@ -4,25 +4,26 @@
 
 The bridge does not run a model, edit your files, or require provider credentials. Claude Code or Codex performs those actions using its own workspace tools and permissions. Installing MCP alone does **not** start a turn or interrupt a finished conversation. Start the watch loop explicitly, and restart it if the host stops waiting.
 
-## Install and start the receiver
+## Install and initialize
 
 Node **22+** is required. Install the separate package in the frontend project:
 
 ```sh
 npm install --save-dev @lightback/mcp
 npx lightback-mcp init --project my-app --origin http://localhost:5173
-npx lightback-mcp serve
 ```
 
 **Source checkout:** to work on the bridge itself, run `pnpm install && pnpm build` in this repository and replace `npx lightback-mcp` with `node /absolute/path/to/lightback/packages/mcp/dist/cli.js`. The repository playground already has the workspace dependency. To test unpublished changes in a separate frontend, run `pnpm --filter @lightback/mcp pack --pack-destination /absolute/output` and install the resulting tarball in that frontend with `npm install --save-dev /absolute/output/lightback-mcp-<version>.tgz`.
 
-`init` creates `.lightback/connection.json`, with private file permissions and separate random browser/agent credentials. Add `.lightback/` to your project's `.gitignore`. It refuses to overwrite existing configuration. Use an exact origin: `http://localhost:5173` and `http://127.0.0.1:5173` are different. `--port` defaults to `4318`; `--session` defaults to a random ID. Project/session labels use letters, numbers, `_` and `-`.
+`init` creates `.lightback/connection.json`, with private file permissions and separate random browser/agent credentials. Add `.lightback/` to your project's `.gitignore`. It reuses matching existing configuration without changing credentials, and rejects conflicting project/origin/session/port options. Use an exact origin: `http://localhost:5173` and `http://127.0.0.1:5173` are different. `--port` defaults to `4318`; `--session` defaults to a random ID. Project/session labels use letters, numbers, `_` and `-`.
 
-Keep `serve` running in a terminal. The receiver binds **only to `127.0.0.1`**. Reports live in memory for **30 minutes from submission**. Stopping/restarting it loses queued reports, replies and images. Disconnecting/restarting the MCP client or reloading the browser preserves them while the receiver is alive. Expired entries are inaccessible immediately and swept from memory at least every 30 seconds while the event loop runs. There is no disk persistence of reports or images.
+Register the MCP command with [Codex](#connect-codex) or [Claude Code](#connect-claude-code) below. When the coding host connects, `stdio` automatically starts or reuses a background receiver. **No separate server terminal is needed.** An open MCP connection keeps it alive while you work. It survives host disconnects and exits after 30 minutes without authenticated requests (including browser thread polling). Removing, invalidating or changing the private config stops its managed receiver within a second and clears its in-memory reports. Reconnect the MCP host to start with the new config, then refresh the frontend with new `browser-config` output. To stop it immediately, run `npx lightback-mcp stop`. `npx lightback-mcp serve` is still available for foreground diagnostics.
+
+The receiver binds **only to `127.0.0.1`**. Reports live in memory for **30 minutes from submission**. Stopping/restarting it loses queued reports, replies and images. Disconnecting/restarting the MCP client or reloading the browser preserves them while the receiver is alive. Expired entries are inaccessible immediately and swept from memory at least every 30 seconds while the event loop runs. There is no disk persistence of reports or images.
 
 ## Connect the frontend
 
-In another terminal:
+After initialization, obtain the browser connection:
 
 ```sh
 npx lightback-mcp browser-config
@@ -93,6 +94,8 @@ startup_timeout_sec = 10
 tool_timeout_sec = 60
 ```
 
+You can skip the separate `init` step by appending `--project my-app --origin http://localhost:5173` to the registered `stdio` command. It creates the private config on the first connection; run `browser-config` after that connection. Existing credentials and session IDs are preserved.
+
 For a source checkout, use `/absolute/lightback/packages/mcp/dist/cli.js`. Restart/reconnect the host and check `/mcp`. Local Codex clients supporting stdio MCP can use this connection; a hosted web conversation cannot reach your machine's loopback receiver. See the [official Codex MCP configuration](https://developers.openai.com/codex/mcp).
 
 ## Connect Claude Code
@@ -104,7 +107,7 @@ claude mcp add --scope local --transport stdio lightback-my-app -- node /absolut
 claude mcp get lightback-my-app
 ```
 
-Again, substitute the source checkout CLI path if needed. Restart/reconnect Claude Code and check `/mcp`. The local scope keeps the connection associated with this project. See [Claude Code's MCP setup](https://code.claude.com/docs/en/mcp).
+You can append `--project my-app --origin http://localhost:5173` to `stdio` to initialize on the first connection instead of running `init` separately. Again, substitute the source checkout CLI path if needed. Restart/reconnect Claude Code and check `/mcp`. The local scope keeps the connection associated with this project. See [Claude Code's MCP setup](https://code.claude.com/docs/en/mcp).
 
 You can connect both clients to the same receiver for testing, but use **one active coding conversation per session** for normal work. Installation does not choose a particular existing conversation for you: the conversation that invokes the Lightback tools receives the reports and images.
 
@@ -154,10 +157,10 @@ Report metadata keeps the client's redaction and capture choices. Follow-ups pas
 
 ## Validation and troubleshooting
 
-`pnpm test` includes receiver boundary, routing, queue, expiry, duplicate, revision, attachment, disconnect and real stdio protocol tests. `pnpm e2e mcp-feedback` exercises widget submission, screenshots/crops, MCP retrieval, a deterministic edit to a temporary frontend file, reload verification, reply display and redacted follow-ups. It uses a local MCP client and **no model calls**.
+`pnpm test` includes concurrent automatic startup, create-only config initialization, reconnect/stop/idle lifecycle, receiver boundary, routing, queue, expiry, duplicate, revision, attachment, disconnect and real stdio protocol tests. `pnpm e2e mcp-feedback` exercises widget submission, screenshots/crops, MCP retrieval, a deterministic edit to a temporary frontend file, reload verification, reply display and redacted follow-ups. It uses a local MCP client and **no model calls**.
 
 After building, `node scripts/check-mcp-hosts.mjs` checks installed Codex and Claude Code clients without paid inference. It verifies Codex discovery, report/image retrieval and replies through the app-server protocol; Claude Code also executes that tool sequence in a conversation driven by a deterministic local Messages API fixture. It is optional because CI does not install either CLI.
 
-Verified locally with **Codex CLI 0.162.1** and **Claude Code 2.1.299**. The Claude fixture performs no inference and never forwards to a provider; the Codex check never starts a model turn. Protocol/client compatibility is distinct from validating a model's choice of code changes; review edits and run your application's checks normally.
+Verified locally with **Codex CLI 0.162.1** and **Claude Code 2.1.300**. The Claude fixture performs no inference and never forwards to a provider; the Codex check never starts a model turn. Protocol/client compatibility is distinct from validating a model's choice of code changes; review edits and run your application's checks normally.
 
-If tools connect but calls fail, confirm `serve` is running and the absolute config path is correct. For `403`, check the exact app origin and that browser-config output, not the agent token, is used by the app. For `404`, confirm the project/session and retention window. On `409`, reread before retrying. For upload errors, reduce capture size, select a smaller area or submit without images. If the agent finishes its turn, ask it to resume watching.
+If tools connect but calls fail, confirm the absolute config path is correct. After an idle shutdown or `stop`, reconnect the MCP host to start the receiver again. For startup errors, run `npx lightback-mcp serve` with the same config to see diagnostics. An occupied port with a different project, credentials or package version is rejected; run `npx lightback-mcp stop --config /path/to/previous-project/.lightback/connection.json` using the old receiver’s config, or choose a different port/config. Your new config cannot stop a receiver owned by another config. After a package upgrade, use `stop` to clear the previous receiver, then reconnect (a manually started 0.2.1 receiver needs Ctrl+C in its terminal). For `403`, check the exact app origin and that browser-config output, not the agent token, is used by the app. For `404`, confirm the project/session and retention window. On `409`, reread before retrying. For upload errors, reduce capture size, select a smaller area or submit without images. If the agent finishes its turn, ask it to resume watching.

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, lstatSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, lstatSync, linkSync, unlinkSync, openSync, closeSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import { idSchema } from './schema';
@@ -32,5 +32,49 @@ export function readConfig(file: string): BridgeConfig {
 export function writeConfig(file: string, config: BridgeConfig) {
   const path = resolve(file);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, JSON.stringify(validateConfig(config), null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+  const data = JSON.stringify(validateConfig(config), null, 2) + '\n';
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  writeFileSync(temporary, data, { flag: 'wx', mode: 0o600 });
+  try { linkSync(temporary, path); } // Atomic create-only publication on filesystems supporting links.
+  catch (error) {
+    if (!['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'ENOSYS'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+    // Preserve exclusive creation and private permissions on filesystems without hard links.
+    const fd = openSync(path, 'wx', 0o600);
+    try { writeFileSync(fd, data); }
+    catch (writeError) {
+      // Only remove a file this process successfully created, never the EEXIST winner.
+      closeSync(fd); unlinkSync(path); throw writeError;
+    }
+    closeSync(fd);
+  }
+  finally { unlinkSync(temporary); }
+}
+
+async function readReadyConfig(file: string) {
+  const deadline = performance.now() + 1000;
+  while (true) {
+    try { return readConfig(file); }
+    catch (error) {
+      // An exclusive-write fallback may be in progress in another process. Never accept partial JSON.
+      if (!(error instanceof SyntaxError) || performance.now() >= deadline) throw error;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  }
+}
+
+export async function ensureConfig(file: string, options: { project?: string; origin?: string; port?: number; session?: string }) {
+  let config: BridgeConfig;
+  try { config = await readReadyConfig(file); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    if (!options.project || !options.origin) throw new Error('No Lightback config found. Run init first, or pass --project and --origin to stdio.');
+    try { writeConfig(file, makeConfig({ ...options, project: options.project, origin: options.origin })); }
+    catch (writeError) { if ((writeError as NodeJS.ErrnoException).code !== 'EEXIST') throw writeError; }
+    config = await readReadyConfig(file);
+  }
+  for (const key of ['project', 'origin', 'session'] as const) {
+    if (options[key] !== undefined && options[key] !== config[key]) throw new Error(`--${key} differs from the existing config; use a separate --config file for another project/session.`);
+  }
+  if (options.port !== undefined && options.port !== Number(new URL(config.url).port)) throw new Error('--port differs from the existing config; use a separate --config file.');
+  return config;
 }

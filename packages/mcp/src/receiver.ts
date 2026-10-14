@@ -2,10 +2,12 @@ import { createServer, type IncomingMessage } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { createLightback } from '@lightback/core';
 import { ZodError } from 'zod';
-import { validateConfig } from './config';
+import { readConfig, validateConfig } from './config';
 import { payloadSchema, messageSchema, updateSchema } from './schema';
 import { BridgeError, ReportStore, type StoreOptions } from './store';
 import { scopePath, type BridgeConfig } from './types';
+import { configIdentity } from './lifecycle';
+import { version } from '../package.json';
 
 const MAX_UPLOAD = 10 * 1024 * 1024;
 const MAX_JSON = 1024 * 1024;
@@ -74,11 +76,30 @@ async function submission(req: IncomingMessage) {
 }
 
 /** One long-lived, in-memory queue per project/session. Agent transports never own its lifetime. */
-export async function startReceiver(input: BridgeConfig, options: Omit<StoreOptions, 'project' | 'session'> = {}) {
+export async function startReceiver(input: BridgeConfig, options: Omit<StoreOptions, 'project' | 'session'> & { idleTimeoutMs?: number; configFile?: string } = {}) {
+  if (options.idleTimeoutMs !== undefined && (!Number.isSafeInteger(options.idleTimeoutMs) || options.idleTimeoutMs < 1 || options.idleTimeoutMs > 2_147_483_647)) throw new Error('Invalid receiver idle timeout');
   const config = validateConfig(input);
   const store = new ReportStore({ ...options, project: config.project, session: config.session });
   const base = scopePath(config);
   let active = 0, uploads = 0;
+  let lastActivity = performance.now(), lastIdleCheck = lastActivity;
+  const identity = configIdentity(config);
+  let configFailureSince: number | undefined;
+  const configCurrent = () => {
+    if (!options.configFile) return true;
+    try {
+      const current = configIdentity(readConfig(options.configFile));
+      configFailureSince = undefined;
+      return current === identity;
+    } catch (error) {
+      // Temporary file locks or resource exhaustion must not immediately discard the queue.
+      if (['EBUSY', 'EACCES', 'EPERM', 'EMFILE', 'ENFILE'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+        configFailureSince ??= performance.now();
+        return performance.now() - configFailureSince < 3000;
+      }
+      return false;
+    }
+  };
   const server = createServer({ maxHeaderSize: 8192, requestTimeout: 15_000, headersTimeout: 10_000 }, async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
@@ -87,6 +108,10 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
     let counted = false, uploading = false;
     try {
       if (req.headers.host !== new URL(config.url).host) throw new BridgeError(403, 'Invalid Host');
+      if (!configCurrent()) {
+        res.once('finish', () => { void close(); });
+        return json(503, { error: 'Receiver configuration changed; reconnect the MCP host' });
+      }
       const url = new URL(req.url ?? '/', config.url);
       if (url.origin !== config.url || !url.pathname.startsWith(base + '/')) throw new BridgeError(404, 'Unknown project/session');
       const path = url.pathname.slice(base.length);
@@ -105,13 +130,21 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
         }
         if (!matches(req.headers['x-lightback-token'] as string | undefined, config.token)) throw new BridgeError(403, 'App access denied');
       }
+      lastActivity = performance.now();
+      const route = agent ? path.slice('/agent'.length) : path;
+      if (agent && route === '/health' && req.method === 'GET') {
+        return json(200, { name: 'lightback', version, config: identity });
+      }
+      if (agent && route === '/shutdown' && req.method === 'POST') {
+        res.once('finish', () => { void close(); });
+        return json(200, { stopped: true });
+      }
       if (active >= 24) throw new BridgeError(429, 'Too many active requests');
       active++; counted = true;
       if (req.method === 'POST' && path === '/reports' && !agent) {
         if (uploads >= 4) throw new BridgeError(429, 'Too many concurrent uploads');
         uploads++; uploading = true;
       }
-      const route = agent ? path.slice('/agent'.length) : path;
       if (route === '/reports' && req.method === 'POST' && !agent) {
         const { payload, files } = await submission(req);
         return json(201, store.submit(payload, files));
@@ -155,7 +188,7 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
         const timer = setTimeout(() => req.destroy(), 1000); timer.unref();
         req.once('end', () => clearTimeout(timer));
       }
-    } finally { if (counted) active--; if (uploading) uploads--; }
+    } finally { if (counted) { active--; lastActivity = performance.now(); } if (uploading) uploads--; }
   });
   server.maxConnections = 64;
   await new Promise<void>((resolve, reject) => {
@@ -164,5 +197,21 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
   });
   const sweep = setInterval(() => store.prune(), 30_000); sweep.unref();
   let closing: Promise<void> | undefined;
-  return { store, server, close: () => closing ??= new Promise<void>((resolve, reject) => { clearInterval(sweep); server.close(error => error ? reject(error) : resolve()); server.closeAllConnections(); }) };
+  const idlePeriod = Math.min(options.idleTimeoutMs ?? 30_000, 30_000);
+  const idle = options.idleTimeoutMs === undefined ? undefined : setInterval(() => {
+    const now = performance.now();
+    // Sleep may pause or advance the monotonic clock depending on the OS. Give a late
+    // timer a fresh idle window, so it cannot race a connected host's first heartbeat.
+    if (now - lastIdleCheck > idlePeriod * 2) lastActivity = now;
+    lastIdleCheck = now;
+    if (!active && now - lastActivity >= options.idleTimeoutMs!) void close();
+  }, idlePeriod);
+  idle?.unref();
+  const configWatch = options.configFile ? setInterval(() => { if (!configCurrent()) void close(); }, 1000) : undefined;
+  configWatch?.unref();
+  const close = () => closing ??= new Promise<void>((resolve, reject) => {
+    clearInterval(sweep); clearInterval(idle); clearInterval(configWatch);
+    server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
+  });
+  return { store, server, close };
 }

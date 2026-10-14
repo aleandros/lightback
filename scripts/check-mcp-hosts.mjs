@@ -11,7 +11,7 @@ import { createServer } from 'node:net';
 import { createServer as createHttpServer } from 'node:http';
 import assert from 'node:assert/strict';
 import { createLightback } from '../packages/core/dist/index.js';
-import { makeConfig, writeConfig, startReceiver } from '../packages/mcp/dist/index.js';
+import { makeConfig, writeConfig } from '../packages/mcp/dist/index.js';
 const run = promisify(execFile);
 const dir = await mkdtemp(join(tmpdir(), 'lightback-hosts-'));
 const cli = fileURLToPath(new URL('../packages/mcp/dist/cli.js', import.meta.url));
@@ -21,12 +21,23 @@ try {
   const reserve = createServer(); await new Promise(resolve => reserve.listen(0, '127.0.0.1', resolve));
   const port = reserve.address().port; await new Promise(resolve => reserve.close(resolve));
   const config = makeConfig({ project: 'host-smoke', session: 'test', origin: 'http://localhost:5173', port });
-  writeConfig(configFile, config); receiver = await startReceiver(config);
+  writeConfig(configFile, config);
+  receiver = { close: () => run(process.execPath, [cli, 'stop', '--config', configFile]) };
+  const base = `${config.url}/v1/projects/${config.project}/sessions/${config.session}`;
+  const readReport = async id => {
+    const response = await fetch(`${base}/agent/reports/${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${config.agentToken}`, connection: 'close' } });
+    assert.equal(response.status, 200); return response.json();
+  };
   const core = createLightback({ persistence: false });
   const payload = core.buildPayload({ text: 'Host protocol smoke: selected button feedback' }); core.destroy();
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=', 'base64');
   payload.attachments = [{ name: 'screenshot.png', type: 'image/png', size: png.length }];
-  receiver.store.submit(payload, new Map([['screenshot.png', png]]));
+  const submit = async () => {
+    const form = new FormData(); form.append('payload', JSON.stringify(payload));
+    form.append('screenshot.png', new Blob([png], { type: 'image/png' }), 'screenshot.png');
+    const response = await fetch(base + '/reports', { method: 'POST', body: form, headers: { origin: config.origin, 'x-lightback-token': config.token, connection: 'close' } });
+    await response.arrayBuffer(); assert.equal(response.status, 201);
+  };
   const commandArgs = [cli, 'stdio', '--config', configFile];
   console.log((await run('codex', ['--version'])).stdout.trim());
   // Config tables merge, so disable every existing entry explicitly for this process.
@@ -61,7 +72,8 @@ try {
   const inventory = await rpc('mcpServerStatus/list', {});
   assert.deepEqual(inventory.data.filter(server => Object.keys(server.tools).length).map(server => server.name), [serverName], 'process config must isolate the smoke MCP server');
   assert.equal(Object.keys(inventory.data.find(s => s.name === serverName).tools).length, 5);
-  console.log('Codex discovered all five Lightback tools.');
+  console.log('Codex automatically started the receiver and discovered all five Lightback tools.');
+  await submit();
   const thread = await rpc('thread/start', { cwd: dir, ephemeral: true, config: { mcp_servers: isolatedServers, plugins: {} } });
   const call = (tool, args = {}) => rpc('mcpServer/tool/call', { threadId: thread.thread.id, server: serverName, tool, arguments: args });
   const report = await call('get_feedback', { reportId: payload.id });
@@ -70,23 +82,25 @@ try {
   assert(JSON.stringify(image).includes(png.toString('base64')));
   const reply = await call('update_feedback', { reportId: payload.id, expectedRevision: 1, messageId: 'codex-reply', status: 'resolved', text: 'Codex protocol smoke complete' });
   assert(!reply.isError, JSON.stringify(reply));
-  assert.equal(receiver.store.get(payload.id).report.status, 'resolved');
+  assert.equal((await readReport(payload.id)).status, 'resolved');
   console.log('Codex retrieved feedback and PNG content and posted a reply without starting a model turn.');
   codex.kill('SIGTERM'); codex = undefined;
+  await receiver.close(); // Claude must independently start a missing receiver.
 
   const claudeEnv = { ...process.env, CLAUDE_CONFIG_DIR: join(dir, 'claude'), DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' };
   console.log((await run('claude', ['--version'], { env: claudeEnv })).stdout.trim());
   await run('claude', ['mcp', 'add', '--scope', 'local', '--transport', 'stdio', 'lightback', '--', process.execPath, ...commandArgs], { cwd: dir, env: claudeEnv });
   const health = await run('claude', ['mcp', 'get', 'lightback'], { cwd: dir, env: claudeEnv, timeout: 45000 });
   assert.match(health.stdout, /Connected/i);
-  console.log('Claude Code connected to the stdio server (initialize/health check).');
+  console.log('Claude Code automatically started the receiver and connected to stdio.');
+  await submit();
   // A deterministic local Messages API fixture drives the actual Claude Code tool loop.
   // It performs no inference and never forwards requests to a provider.
   const steps = [
     { name: 'list_feedback', input: {} },
     { name: 'get_feedback', input: { reportId: payload.id } },
     { name: 'get_feedback_image', input: { reportId: payload.id, name: 'screenshot.png' } },
-    { name: 'update_feedback', input: { reportId: payload.id, expectedRevision: 2, messageId: 'claude-reply', status: 'resolved', text: 'Claude Code tool loop smoke complete' } },
+    { name: 'update_feedback', input: { reportId: payload.id, expectedRevision: 1, messageId: 'claude-reply', status: 'resolved', text: 'Claude Code tool loop smoke complete' } },
   ];
   let step = 0;
   const observed = [];
@@ -126,7 +140,7 @@ try {
   assert(!observed.some(result => result.is_error), JSON.stringify(observed));
   assert(JSON.stringify(observed).includes(payload.note.text));
   assert(JSON.stringify(observed).includes(png.toString('base64')));
-  assert.equal(receiver.store.get(payload.id).report.messages.at(-1).text, 'Claude Code tool loop smoke complete');
+  assert.equal((await readReport(payload.id)).messages.at(-1).text, 'Claude Code tool loop smoke complete');
   console.log('Claude Code conversation retrieved feedback and PNG content and replied through MCP, driven by a local deterministic API fixture (no paid inference).');
 } finally {
   codex?.kill('SIGTERM');
