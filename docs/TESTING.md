@@ -65,3 +65,12 @@ The generated merge fixture deliberately includes request timestamps in completi
 3. Check after every transition and after recovery. For persistence/privacy properties, inspect the stored record as well as the public recovered value.
 4. Clean up clients, widget handles, unresolved jobs, mocks, globals and clocks in `finally`, so every shrink attempt starts fresh.
 5. Replay the minimized failure, add a named regression, then run the default corpus and a larger local corpus. Keep browser tests for layout, native IndexedDB and module loading.
+
+
+## Local MCP and installed-host tests
+
+`packages/mcp/test` runs in Node, using temporary loopback receivers and real stdio MCP subprocesses. Build first (`pnpm build`). These tests need no external service or model credentials; they cover Origin/Host/token/project/session boundaries, malformed and oversized uploads, PNG metadata, queue/thread/waiter limits, retention, idempotent retry, conflicting claims and follow-ups, cancellation and reconnects.
+
+`pnpm e2e mcp-feedback` adds a browser fixture with the real widget and optional thread. A deterministic MCP client reads the selected source hint and images, updates a temporary frontend file, verifies the changed rendering after reload, posts a result, and receives a redacted follow-up on the same report. The fixture also checks text-only rendering of replies, network collector exclusion and preservation of unsent text on receiver failure. CI runs it with the other browser suites.
+
+`node scripts/check-mcp-hosts.mjs` is an optional compatibility check for installed Codex and Claude Code. Codex's app-server protocol discovers/calls tools without a model turn; Claude Code executes a conversation driven by a local deterministic Messages API fixture. Both retrieve report/image content and post replies without paid inference. The script uses temporary local Claude configuration and process-only Codex configuration, never changes the user's registered MCP servers, and cleans up the receiver/fixtures. This verifies tool plumbing, not the quality of a model's autonomous code changes. See [the walkthrough](guide/coding-agents.md) for tested versions and the user-started watch loop.

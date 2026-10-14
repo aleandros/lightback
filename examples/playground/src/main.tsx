@@ -1,7 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { LightbackProvider } from '@lightback/react';
-import { lightback, screenshot } from './lightback';
+import { mountFeedbackThread } from '@lightback/mcp/browser';
+import { lightback, screenshot, feedbackBridge } from './lightback';
 import { App } from './App';
 import './styles.css';
 
@@ -19,3 +20,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </LightbackProvider>
   </React.StrictMode>,
 );
+
+if (feedbackBridge) {
+  const thread = mountFeedbackThread({ bridge: feedbackBridge });
+  import.meta.hot?.dispose(() => thread.destroy());
+}

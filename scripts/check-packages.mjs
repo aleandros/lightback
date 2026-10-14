@@ -16,7 +16,7 @@ const run = (command, args, cwd = root) => execFileSync(command, args, { cwd, st
 try {
   run('pnpm', ['-r', '--filter', './packages/*', 'pack', '--pack-destination', scratch]);
   const tarballs = readdirSync(scratch).filter((name) => name.endsWith('.tgz')).map((name) => join(scratch, name));
-  assert.equal(tarballs.length, 6);
+  assert.equal(tarballs.length, 7);
   for (const tarball of tarballs) {
     // Svelte's runtime is ESM-only. Keep all other strict checks, and verify dynamic import below.
     const esmOnly = /lightback-svelte-/.test(tarball);
@@ -44,6 +44,9 @@ try {
     assert.equal(typeof svelte.provideLightback, 'function');
     assert.ok(sourceVue.transformVueSource('<template><button/></template>', '/app/App.vue', {root:'/app'}).code.includes('App.vue:1:11'));
     assert.ok(sourceSvelte.transformSvelteSource('<button/>', '/app/App.svelte', {root:'/app'}).code.includes('App.svelte:1:1'));
+    assert.equal(typeof mcp.startReceiver, 'function');
+    assert.equal(typeof bridge.createFeedbackBridge, 'function');
+    assert.equal(typeof bridge.mountFeedbackThread, 'function');
   `;
   for (const mode of ['esm', 'cjs']) {
     const file = join(scratch, mode === 'esm' ? 'smoke.mjs' : 'smoke.cjs');
@@ -51,12 +54,13 @@ try {
       ? `import assert from 'node:assert/strict'; import * as core from '@lightback/core'; import * as widget from '@lightback/widget'; import * as react from '@lightback/react'; import * as lazy from '@lightback/widget/lazy'; import * as vue from '@lightback/vue'; import * as svelte from '@lightback/svelte';`
       : `const assert = require('node:assert/strict'); const core = require('@lightback/core'); const widget = require('@lightback/widget'); const react = require('@lightback/react'); const lazy = require('@lightback/widget/lazy'); const vue = require('@lightback/vue'); const svelte = await import('@lightback/svelte');`;
     const sourceImports = mode === 'esm'
-      ? `import * as source from '@lightback/source'; import * as sourceVite from '@lightback/source/vite'; import * as sourceBabel from '@lightback/source/babel'; import * as sourceVue from '@lightback/source/vue'; import * as sourceSvelte from '@lightback/source/svelte';`
-      : `const source = require('@lightback/source'); const sourceVite = require('@lightback/source/vite'); const sourceBabel = require('@lightback/source/babel'); const sourceVue = require('@lightback/source/vue'); const sourceSvelte = require('@lightback/source/svelte');`;
+      ? `import * as source from '@lightback/source'; import * as sourceVite from '@lightback/source/vite'; import * as sourceBabel from '@lightback/source/babel'; import * as sourceVue from '@lightback/source/vue'; import * as sourceSvelte from '@lightback/source/svelte'; import * as mcp from '@lightback/mcp'; import * as bridge from '@lightback/mcp/browser';`
+      : `const source = require('@lightback/source'); const sourceVite = require('@lightback/source/vite'); const sourceBabel = require('@lightback/source/babel'); const sourceVue = require('@lightback/source/vue'); const sourceSvelte = require('@lightback/source/svelte'); const mcp = require('@lightback/mcp'); const bridge = require('@lightback/mcp/browser');`;
     writeFileSync(file, mode === 'esm' ? imports + sourceImports + assertions : '(async () => {' + imports + sourceImports + assertions + '})().catch(error => { console.error(error); process.exitCode = 1; });');
     run(process.execPath, [file], scratch);
   }
-  for (const name of ['core', 'widget', 'react', 'source', 'vue', 'svelte']) {
+  run(process.execPath, [join(scratch, 'node_modules/@lightback/mcp/dist/cli.js'), '--help'], scratch);
+  for (const name of ['core', 'widget', 'react', 'source', 'vue', 'svelte', 'mcp']) {
     const dir = join(scratch, 'node_modules', '@lightback', name);
     assert.match(readFileSync(join(dir, 'LICENSE'), 'utf8'), /MIT License/);
     assert.match(readFileSync(join(dir, 'README.md'), 'utf8'), /Lightback/);
