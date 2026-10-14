@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const idSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
+// Core redaction can alter generated IDs; treat report IDs as opaque path segments.
+export const reportIdSchema = z.string().min(1).max(200).refine(id => id !== '.' && id !== '..');
 const text = z.string().max(100_000);
 const num = z.number().finite();
 const size = z.object({ width: num.nonnegative(), height: num.nonnegative() });
@@ -21,7 +23,7 @@ const selection = summary.omit({ role: true }).extend({
 export const attachmentSchema = z.object({ name: z.string().min(1).max(200), type: z.literal('image/png'), size: z.number().int().nonnegative().max(5 * 1024 * 1024), area: rect.optional() });
 // Boundary validation for the fields consumed by toPromptContext. Unknown v1 extension fields survive.
 export const payloadSchema = z.object({
-  version: z.literal(1), id: idSchema, createdAt: z.iso.datetime({ offset: true }),
+  version: z.literal(1), id: reportIdSchema, createdAt: z.iso.datetime({ offset: true }),
   page: z.object({ url: text, title: text, referrer: text, scroll: point, size }),
   note: z.object({ text, transcript: text.optional() }), selections: z.array(selection).max(50),
   attachments: z.array(attachmentSchema).max(51),

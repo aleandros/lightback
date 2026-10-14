@@ -162,3 +162,22 @@ it('bounds simultaneous waiters and releases them on abort', async () => {
   const report = store.submit(payload(), new Map());
   expect((await store.wait(0, 25_000)).reports[0]?.id).toBe(report.id);
 });
+
+
+it('keeps replies available while all report upload slots are occupied', async () => {
+  const { c, r } = await setup();
+  const report = payload(); await appRequest(c, '/reports', json(report));
+  const pending: ReturnType<typeof httpRequest>[] = [];
+  try {
+    for (let i = 0; i < 4; i++) {
+      const started = new Promise<void>(resolve => r.server.once('request', () => resolve()));
+      const request = httpRequest(c.url + scopePath(c) + '/reports', {
+        method: 'POST', headers: { origin: c.origin, 'x-lightback-token': c.token, 'content-type': 'application/json' },
+      }, response => response.resume());
+      request.on('error', () => {}); pending.push(request); request.write('{'); await started;
+    }
+    expect((await appRequest(c, '/reports', json(payload()))).status).toBe(429);
+    expect((await agentRequest(c, `/reports/${report.id}/update`, json({ messageId: 'reply-during-upload', expectedRevision: 1, status: 'resolved', text: 'Completed' }))).status).toBe(200);
+    expect((await appRequest(c, `/reports/${report.id}/messages`, json({ messageId: 'followup-during-upload', expectedRevision: 2, text: 'Reviewing now' }))).status).toBe(200);
+  } finally { pending.forEach(request => request.destroy()); }
+});

@@ -2,6 +2,12 @@ import type { Attachment, FeedbackPayload, LightbackClient } from '@lightback/co
 import { scopePath, type BrowserConnection, type Report, type ReportList } from './types';
 export type { BrowserConnection, Report, ReportList, ReportSummary, ReportStatus, ThreadMessage } from './types';
 
+// getRandomValues also works on HTTP development origins without randomUUID.
+function newMessageId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 /** Dev-only transport. Connect to the core client before sending follow-ups (for custom redaction). */
 export function createFeedbackBridge(connection: BrowserConnection) {
   const url = new URL(connection.url);
@@ -38,7 +44,7 @@ export function createFeedbackBridge(connection: BrowserConnection) {
     async followUp(id: string, expectedRevision: number, text: string, options: { selectionId?: string; messageId?: string } = {}) {
       if (!client) throw new Error('Call bridge.connect(client) before sending follow-ups so host redaction is applied');
       const clean = client.buildPayload({ text }).note.text;
-      return request<Report>(`/reports/${encodeURIComponent(id)}/messages`, JSON.stringify({ messageId: options.messageId ?? crypto.randomUUID(), expectedRevision, text: clean, ...(options.selectionId ? { selectionId: options.selectionId } : {}) }), true);
+      return request<Report>(`/reports/${encodeURIComponent(id)}/messages`, JSON.stringify({ messageId: options.messageId ?? newMessageId(), expectedRevision, text: clean, ...(options.selectionId ? { selectionId: options.selectionId } : {}) }), true);
     },
   };
 }
@@ -69,11 +75,12 @@ export function mountFeedbackThread(options: { bridge: FeedbackBridge; container
   const button = root.querySelector<HTMLButtonElement>('[data-action=follow-up]')!;
   button.disabled = true;
   let current: Report | undefined;
-  let destroyed = false, busy = false, sending = false;
+  let destroyed = false, busy = false, sending = false, refreshAgain = false;
   let generation = 0;
   let retry: { id: string; revision: number; text: string; messageId: string } | undefined;
   const refresh = async () => {
-    if (destroyed || busy || sending) return;
+    if (destroyed || sending) return;
+    if (busy) { refreshAgain = true; return; }
     busy = true;
     const version = generation;
     try {
@@ -108,15 +115,15 @@ export function mountFeedbackThread(options: { bridge: FeedbackBridge; container
       }));
       q('error').textContent = '';
     } catch (error) { if (!destroyed) q('error').textContent = error instanceof Error ? error.message : 'Bridge unavailable'; }
-    finally { busy = false; }
+    finally { busy = false; if (refreshAgain) { refreshAgain = false; void refresh(); } }
   };
-  select.addEventListener('change', () => { generation++; current = undefined; retry = undefined; note.value = ''; button.disabled = true; void refresh(); });
+  select.addEventListener('change', () => { generation++; current = undefined; retry = undefined; note.value = ''; button.disabled = true; q('status').textContent = 'Loading report…'; q('messages').replaceChildren(); void refresh(); });
   q('form').addEventListener('submit', async event => {
     event.preventDefault();
     if (!current || sending || !note.value.trim()) return;
     sending = true; generation++; button.disabled = true; select.disabled = true;
     const text = note.value;
-    if (!retry || retry.id !== current.id || retry.text !== text) retry = { id: current.id, revision: current.revision, text, messageId: crypto.randomUUID() };
+    if (!retry || retry.id !== current.id || retry.text !== text) retry = { id: current.id, revision: current.revision, text, messageId: newMessageId() };
     try {
       await options.bridge.followUp(retry.id, retry.revision, retry.text, { messageId: retry.messageId });
       if (!destroyed) { if (note.value === text) note.value = ''; retry = undefined; }

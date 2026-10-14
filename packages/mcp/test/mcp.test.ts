@@ -1,4 +1,5 @@
 import { it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -44,6 +45,24 @@ it('runs the real stdio CLI: discovery, context, image, reply, reconnect and fol
     expect(JSON.parse(raw.data).messages.at(-1).text).toBe('Use more padding');
     expect((await client.callTool({ name: 'update_feedback', arguments: { ...update, messageId: 'stale' } })).isError).toBe(true);
     expect((await client.callTool({ name: 'get_feedback', arguments: { reportId: 'missing' } })).isError).toBe(true);
+    // Core may redact a numeric UUID segment; IDs remain opaque and round-trip through URLs.
+    for (const id of ['[redacted]-8123-abcd', 'report/with?query#fragment']) {
+      const opaque = { ...payload('Opaque report ID'), id };
+      expect((await appRequest(c, '/reports', json(opaque))).status).toBe(201);
+      expect((await call('get_feedback', { reportId: id })).id).toBe(id);
+      expect((await call('update_feedback', { reportId: id, messageId: 'opaque-reply', expectedRevision: 1, status: 'resolved', text: 'Reviewed' })).id).toBe(id);
+    }
+    for (const oversized of [Buffer.from(png), Buffer.alloc(3_750_001)]) {
+      if (oversized.length === png.length) oversized.writeUInt32BE(8001, 16);
+      else png.copy(oversized);
+      const largeImage = payload('Use text if image delivery exceeds host limits');
+      largeImage.attachments = [{ name: 'large.png', type: 'image/png', size: oversized.length }];
+      receiver.store.submit(largeImage, new Map([['large.png', oversized]]));
+      const rejected = await client.callTool({ name: 'get_feedback_image', arguments: { reportId: largeImage.id, name: 'large.png' } });
+      expect(rejected.isError).toBe(true);
+      expect((rejected.content as { type: string }[]).every(item => item.type === 'text')).toBe(true);
+      expect((await call('get_feedback', { reportId: largeImage.id })).prompt).toContain('Use text');
+    }
     // A status change shifts JSON offsets: stale chunks must never be silently concatenated.
     const large = payload('x'.repeat(50_000));
     expect((await appRequest(c, '/reports', json(large))).status).toBe(201);
@@ -80,6 +99,9 @@ it('refuses unsafe config URLs, broad origins, duplicate credentials and readabl
     expect(() => writeConfig(file, { ...c, origin: '*' })).toThrow();
     expect(() => writeConfig(file, { ...c, agentToken: c.token })).toThrow();
     writeConfig(file, c); expect(readConfig(file)).toEqual(c);
+    const browser = JSON.parse(execFileSync(process.execPath, [resolve('dist/cli.js'), 'browser-config', '--config', file], { encoding: 'utf8' }));
+    expect(browser).toEqual({ url: c.url, project: c.project, session: c.session, token: c.token });
+    expect(JSON.stringify(browser)).not.toContain(c.agentToken);
     expect(() => writeConfig(file, c)).toThrow();
     if (process.platform !== 'win32') { await chmod(file, 0o644); expect(() => readConfig(file)).toThrow('chmod 600'); }
   } finally { await rm(dir, { recursive: true, force: true }); }

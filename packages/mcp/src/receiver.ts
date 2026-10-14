@@ -107,7 +107,7 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
       }
       if (active >= 24) throw new BridgeError(429, 'Too many active requests');
       active++; counted = true;
-      if (req.method === 'POST') {
+      if (req.method === 'POST' && path === '/reports' && !agent) {
         if (uploads >= 4) throw new BridgeError(429, 'Too many concurrent uploads');
         uploads++; uploading = true;
       }
@@ -128,9 +128,9 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
         try { return json(200, waitMs ? await store.wait(cursor, waitMs, abort.signal) : store.list(cursor)); }
         finally { res.off('close', onClose); }
       }
-      const match = /^\/reports\/([a-zA-Z0-9_-]{1,128})(?:\/(messages|update|attachment))?$/.exec(route);
+      const match = /^\/reports\/([^/]+)(?:\/(messages|update|attachment))?$/.exec(route);
       if (!match) throw new BridgeError(404, 'Unknown route');
-      const id = match[1]!;
+      const id = decodeURIComponent(match[1]!);
       if (!match[2] && req.method === 'GET') return json(200, store.get(id).report);
       if (match[2] === 'attachment' && req.method === 'GET' && agent) {
         const entry = store.get(id);

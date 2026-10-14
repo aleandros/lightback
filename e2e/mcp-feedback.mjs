@@ -26,8 +26,10 @@ try {
     import { createLightback } from ${JSON.stringify(resolve('packages/core/src/index.ts'))};
     import { mountWidget } from ${JSON.stringify(resolve('packages/widget/src/index.ts'))};
     import { createFeedbackBridge, mountFeedbackThread } from ${JSON.stringify(resolve('packages/mcp/src/browser.ts'))};
+    window.unhandledRejections = [];
+    window.addEventListener('unhandledrejection', event => window.unhandledRejections.push(String(event.reason)));
     const bridge = createFeedbackBridge(window.connection);
-    const client = createLightback({ send: bridge.send, persistence: false, redact: { patterns: [/PRIVATE_WORD/g] } });
+    const client = createLightback({ send: (payload, attachments) => { window.lastSubmittedPayload = payload; return bridge.send(payload, attachments); }, persistence: false, redact: { patterns: [/PRIVATE_WORD/g] } });
     bridge.connect(client);
     const widget = mountWidget({ client, sendDelay: 0, screenshot: async ({area}) => {
       const canvas = document.createElement('canvas'); canvas.width = area.width; canvas.height = area.height;
@@ -73,6 +75,10 @@ try {
   const waiting = call('wait_for_feedback', { cursor: initial.cursor, instance: initial.instance, timeoutMs: 10000 });
   await page.click(W + '[data-action=pop-send]');
   const submitted = (await waiting).reports[0];
+  if (!submitted) {
+    await page.screenshot({ path: OUT + 'failed-submission.png' });
+    await writeFile(OUT + 'failed-payload.json', JSON.stringify(await page.evaluate(() => window.lastSubmittedPayload), null, 2));
+  }
   check(submitted, 'browser report arrived');
   const context = await call('get_feedback', { reportId: submitted.id });
   assert(context.prompt.includes('Button.html:1:1'), 'MCP sees the actual selected frontend source');
@@ -93,6 +99,8 @@ try {
   assert(await page.locator(T + '[data-ref=messages] img').count() === 0, 'agent replies render as text, never executable HTML');
   await page.screenshot({ path: OUT + '1-agent-reply.png' });
   await client.close(); await connect();
+  // HTTP LAN origins expose getRandomValues but may omit randomUUID.
+  await page.evaluate(() => Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: undefined }));
   await page.fill(T + '[data-ref=note]', 'Please add more padding. PRIVATE_WORD');
   await page.click(T + '[data-action=follow-up]');
   await page.waitForFunction(() => document.querySelector('lightback-thread').shadowRoot.querySelector('[data-ref=note]').value === '');
@@ -121,13 +129,34 @@ try {
   assert((await call('list_feedback')).reports.every(report => report.id === submitted.id || report.revision === 1), 'draft never reaches another report');
   await page.evaluate(() => { window.testBridge.bridge.list = window.originalBridgeList; });
   await page.waitForFunction(() => !document.querySelector('lightback-thread').shadowRoot.querySelector('[data-action=follow-up]').disabled);
+  // Changing reports during an in-flight poll clears stale content and queues a fresh read.
+  const otherId = (await call('list_feedback')).reports.find(report => report.id !== submitted.id).id;
+  await page.evaluate(() => {
+    const { bridge, thread } = window.testBridge;
+    bridge.list = async () => {
+      window.blockedPollStarted = true;
+      await new Promise(resolve => { window.releasePoll = resolve; });
+      return window.originalBridgeList();
+    };
+    void thread.refresh();
+  });
+  await page.waitForFunction(() => window.blockedPollStarted);
+  await page.selectOption(T + '[data-ref=reports]', otherId);
+  assert(await page.locator(T + '[data-ref=messages]').textContent() === '', 'switching reports clears stale messages during a pending poll');
+  assert(await page.locator(T + '[data-action=follow-up]').isDisabled(), 'switching reports disables sending until the new report loads');
+  await page.evaluate(() => { window.testBridge.bridge.list = window.originalBridgeList; window.releasePoll(); });
+  await page.waitForFunction(() => document.querySelector('lightback-thread').shadowRoot.querySelector('[data-ref=messages]').textContent.includes('A different report'));
+  assert(await page.inputValue(T + '[data-ref=reports]') === otherId, 'queued refresh loads the explicitly selected report');
   // Receiver failure keeps unsent text visible. A closed agent alone did not lose the queue above.
   await receiver.close();
   await page.fill(T + '[data-ref=note]', 'Keep this unsent follow-up');
   await page.click(T + '[data-action=follow-up]');
   await page.waitForFunction(() => document.querySelector('lightback-thread').shadowRoot.querySelector('[data-ref=error]').textContent.length > 0);
   assert(await page.inputValue(T + '[data-ref=note]') === 'Keep this unsent follow-up', 'receiver disconnect preserves unsent text and shows an error');
-  await finish();
+  assert((await page.evaluate(() => window.unhandledRejections)).length === 0, 'receiver disconnect causes no unhandled promise rejection');
+  // WebKit reports the intentionally unreachable cross-origin request as a page error.
+  // Match only this known failed follow-up; all other page errors remain failures.
+  await finish([`/${new URL(config.url).host}/v1/projects/${encodeURIComponent(config.project)}/sessions/${encodeURIComponent(config.session)}/reports/${encodeURIComponent(otherId)}/messages due to access control checks.`]);
 } finally {
   await client?.close(); await receiver?.close();
   if (app) await new Promise(resolve => { app.close(resolve); app.closeAllConnections(); });

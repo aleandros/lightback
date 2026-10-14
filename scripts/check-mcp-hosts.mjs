@@ -1,5 +1,5 @@
 // Optional installed-host smoke. Codex uses direct protocol calls; Claude uses a local API fixture.
-// No paid inference or external provider API calls.
+// No paid inference: Claude uses the local API fixture; Codex never starts a model turn.
 // Run after pnpm build with Codex and Claude Code on PATH.
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -29,12 +29,19 @@ try {
   receiver.store.submit(payload, new Map([['screenshot.png', png]]));
   const commandArgs = [cli, 'stdio', '--config', configFile];
   console.log((await run('codex', ['--version'])).stdout.trim());
-  // Command-line config replaces the server map for this process only. No user config edits.
-  const mcpConfig = `mcp_servers={lightback={command=${JSON.stringify(process.execPath)},args=${JSON.stringify(commandArgs)}}}`;
-  codex = spawn('codex', ['-c', mcpConfig, '-c', 'plugins={}', '-c', 'features.apps=false', 'app-server', '--stdio'], { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'] });
+  // Config tables merge, so disable every existing entry explicitly for this process.
+  // Reading the inventory does not start servers, and none of its credentials are logged.
+  const existing = JSON.parse((await run('codex', ['mcp', 'list', '--json'], { cwd: dir })).stdout);
+  const serverName = 'lightback_smoke_' + process.pid;
+  const isolatedServers = Object.fromEntries(existing.map(server => [server.name, { enabled: false, command: process.execPath, args: [] }]));
+  isolatedServers[serverName] = { enabled: true, command: process.execPath, args: commandArgs };
+  const disabled = existing.map(server => `${JSON.stringify(server.name)}={enabled=false,command=${JSON.stringify(process.execPath)},args=[]}`);
+  const mcpConfig = `mcp_servers={${[...disabled, `${serverName}={enabled=true,command=${JSON.stringify(process.execPath)},args=${JSON.stringify(commandArgs)}}`].join(',')}}`;
+  codex = spawn('codex', ['-c', mcpConfig, '-c', 'plugins={}', '-c', 'features.apps=false', '-c', 'analytics.enabled=false', 'app-server', '--stdio'], { cwd: dir, stdio: ['pipe', 'pipe', 'pipe'] });
   let buffer = '', nextId = 0, stderr = '';
   const pending = new Map();
   codex.stderr.on('data', bytes => { stderr = (stderr + bytes).slice(-8000); });
+  codex.on('exit', code => { for (const entry of pending.values()) { clearTimeout(entry.timer); entry.reject(new Error(`Codex exited (${code}): ${stderr}`)); } pending.clear(); });
   codex.stdout.on('data', bytes => {
     buffer += bytes;
     while (buffer.includes('\n')) {
@@ -51,11 +58,12 @@ try {
   });
   await rpc('initialize', { clientInfo: { name: 'lightback_smoke', version: '1.0' }, capabilities: { experimentalApi: true } });
   codex.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
-  const inventory = await rpc('mcpServerStatus/list', { serverName: 'lightback' });
-  assert.equal(Object.keys(inventory.data.find(s => s.name === 'lightback').tools).length, 5);
+  const inventory = await rpc('mcpServerStatus/list', {});
+  assert.deepEqual(inventory.data.filter(server => Object.keys(server.tools).length).map(server => server.name), [serverName], 'process config must isolate the smoke MCP server');
+  assert.equal(Object.keys(inventory.data.find(s => s.name === serverName).tools).length, 5);
   console.log('Codex discovered all five Lightback tools.');
-  const thread = await rpc('thread/start', { cwd: dir, ephemeral: true, config: { mcp_servers: { lightback: { command: process.execPath, args: commandArgs } }, plugins: {} } });
-  const call = (tool, args = {}) => rpc('mcpServer/tool/call', { threadId: thread.thread.id, server: 'lightback', tool, arguments: args });
+  const thread = await rpc('thread/start', { cwd: dir, ephemeral: true, config: { mcp_servers: isolatedServers, plugins: {} } });
+  const call = (tool, args = {}) => rpc('mcpServer/tool/call', { threadId: thread.thread.id, server: serverName, tool, arguments: args });
   const report = await call('get_feedback', { reportId: payload.id });
   assert(!report.isError, JSON.stringify(report)); assert(JSON.stringify(report).includes(payload.note.text));
   const image = await call('get_feedback_image', { reportId: payload.id, name: 'screenshot.png' });
@@ -66,7 +74,7 @@ try {
   console.log('Codex retrieved feedback and PNG content and posted a reply without starting a model turn.');
   codex.kill('SIGTERM'); codex = undefined;
 
-  const claudeEnv = { ...process.env, CLAUDE_CONFIG_DIR: join(dir, 'claude'), DISABLE_AUTOUPDATER: '1' };
+  const claudeEnv = { ...process.env, CLAUDE_CONFIG_DIR: join(dir, 'claude'), DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' };
   console.log((await run('claude', ['--version'], { env: claudeEnv })).stdout.trim());
   await run('claude', ['mcp', 'add', '--scope', 'local', '--transport', 'stdio', 'lightback', '--', process.execPath, ...commandArgs], { cwd: dir, env: claudeEnv });
   const health = await run('claude', ['mcp', 'get', 'lightback'], { cwd: dir, env: claudeEnv, timeout: 45000 });
@@ -90,9 +98,10 @@ try {
       if (!req.url?.includes('/messages')) { res.statusCode = 404; res.end(); return; }
       const previous = body.messages?.at(-1)?.content;
       if (Array.isArray(previous)) for (const block of previous) if (block.type === 'tool_result') observed.push(block);
-      const next = steps[step++];
+      const next = steps[step];
       const tool = next && body.tools?.find(tool => tool.name.endsWith('__' + next.name));
       if (next && !tool) throw new Error('Claude did not advertise tool ' + next.name);
+      step++;
       const block = next ? { type: 'tool_use', id: 'tool-' + step, name: tool.name, input: next.input } : { type: 'text', text: 'Local fixture completed the Lightback tool loop.' };
       const message = { id: 'msg-' + step, type: 'message', role: 'assistant', model: body.model, content: [block], stop_reason: next ? 'tool_use' : 'end_turn', stop_sequence: null, usage: { input_tokens: 100, output_tokens: 30 } };
       if (!body.stream) { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(message)); return; }
