@@ -50,7 +50,7 @@ The optional `@lightback/mcp` package connects a local frontend to **Claude Code
 
 Run a loopback receiver, connect your existing client through `send` or `endpoint`, and register the stdio server with the coding host. The queue survives agent reconnects and keeps reports in memory for 30 minutes; stopping the receiver clears it. No hosted service or provider credentials are required by Lightback. Browser packages retain their existing dependency direction.
 
-See the [Claude Code and Codex walkthrough](docs/guide/coding-agents.md) for source-checkout setup, client configuration, image support, isolation and validation. The new package must be published before npm installation is available.
+See the [Claude Code and Codex walkthrough](docs/guide/coding-agents.md) for npm installation, source-checkout setup, client configuration, image support, isolation and validation. Install the optional bridge with `npm install --save-dev @lightback/mcp`.
 
 ## Compatibility and script tags
 

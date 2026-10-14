@@ -14,7 +14,7 @@ npx lightback-mcp init --project my-app --origin http://localhost:5173
 npx lightback-mcp serve
 ```
 
-**Source checkout:** before the first npm release, run `pnpm install && pnpm build` in this repository and replace `npx lightback-mcp` with `node /absolute/path/to/lightback/packages/mcp/dist/cli.js`. The rest of this walkthrough works with that command. Do not assume an unreleased package is on npm. To use the browser helper in a separate frontend before publication, run `pnpm --filter @lightback/mcp pack --pack-destination /absolute/output` in the checkout, then install the resulting `lightback-mcp-0.1.0.tgz` in that frontend with `npm install --save-dev /absolute/output/lightback-mcp-0.1.0.tgz`. The repository playground already has the workspace dependency.
+**Source checkout:** to work on the bridge itself, run `pnpm install && pnpm build` in this repository and replace `npx lightback-mcp` with `node /absolute/path/to/lightback/packages/mcp/dist/cli.js`. The repository playground already has the workspace dependency. To test unpublished changes in a separate frontend, run `pnpm --filter @lightback/mcp pack --pack-destination /absolute/output` and install the resulting tarball in that frontend with `npm install --save-dev /absolute/output/lightback-mcp-<version>.tgz`.
 
 `init` creates `.lightback/connection.json`, with private file permissions and separate random browser/agent credentials. Add `.lightback/` to your project's `.gitignore`. It refuses to overwrite existing configuration. Use an exact origin: `http://localhost:5173` and `http://127.0.0.1:5173` are different. `--port` defaults to `4318`; `--session` defaults to a random ID. Project/session labels use letters, numbers, `_` and `-`.
 

@@ -51,7 +51,7 @@ The bridge runs locally without its own model account. Connecting it does not au
 
 [Set up the local feedback loop →](./guide/coding-agents.md)
 
-The new bridge is available from this repository's source checkout; the guide includes setup instructions ahead of its first npm release.
+Install the optional bridge with `npm install --save-dev @lightback/mcp`. Node 22 or later is required.
 
 ## From “this is broken” to a report you can use
 
