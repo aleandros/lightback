@@ -1,5 +1,11 @@
 # @lightback/mcp
 
+## 0.2.1
+
+### Patch Changes
+
+- Prepare the first automated MCP patch release through the existing trusted publishing workflow, with npm provenance. Runtime behavior is unchanged from 0.2.0.
+
 ## 0.2.0
 
 ### Minor Changes
