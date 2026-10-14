@@ -3,7 +3,7 @@ layout: home
 hero:
   name: Lightback
   text: Point at the problem. Send the context.
-  tagline: In-app feedback with the element, the screenshot, and the trail that led there. Delivered to your own backend.
+  tagline: In-app feedback with the element, the screenshot, and the trail that led there. Delivered to your backend or local coding conversation.
   actions:
     - theme: brand
       text: Try the demo
@@ -11,6 +11,9 @@ hero:
     - theme: alt
       text: Get started
       link: /guide/getting-started
+    - theme: alt
+      text: Connect Claude Code or Codex
+      link: /guide/coding-agents
 features:
   - title: Point at anything
     details: Click an element or drag an area. Add a comment right where the problem is, with a screenshot crop for each selection.
@@ -37,6 +40,18 @@ mountWidget({ client });
 ```
 
 Mount after the DOM is ready. Add an optional screenshot capturer to include the images shown below. Works with React, Vue, Svelte, or plain JavaScript.
+
+## Give feedback in Claude Code or Codex
+
+Ask your coding agent to watch Lightback, then point at something in your running app and describe the change. The optional local MCP bridge gives that conversation your note, component and source context, and any screenshots you chose to capture.
+
+The agent edits the project with its own tools. Review the running result, read its reply in the optional browser thread, and send a follow-up on the same report.
+
+The bridge runs locally without its own model account. Connecting it does not automatically start an agent turn; ask the conversation to watch when you are ready to work.
+
+[Set up the local feedback loop →](./guide/coding-agents.md)
+
+Install the optional bridge with `npm install --save-dev @lightback/mcp`. Node 22 or later is required.
 
 ## From “this is broken” to a report you can use
 

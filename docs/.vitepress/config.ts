@@ -19,6 +19,7 @@ export default defineConfig({
       { text: 'Privacy and masking', link: '/guide/privacy' },
       { text: 'Source locations', link: '/guide/source-locations' },
       { text: 'Backend', link: '/guide/backend' },
+      { text: 'Claude Code and Codex', link: '/guide/coding-agents' },
       { text: 'Texts and i18n', link: '/guide/texts-and-i18n' },
       { text: 'Payload reference', link: '/guide/payload' },
     ] }],

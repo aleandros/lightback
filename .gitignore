@@ -4,3 +4,5 @@ dist
 .DS_Store
 e2e/out
 docs/.vitepress/cache
+
+.lightback/

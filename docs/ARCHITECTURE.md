@@ -1,6 +1,6 @@
 # Architecture
 
-Five runtime packages, an optional build-time source package, one playground, one browser test harness. Runtime dependency direction is `core ← widget ← react/vue/svelte`; `@lightback/source` is independent. Nothing in `core` touches the UI; nothing in `widget` knows about React.
+Five runtime packages, an optional build-time source package, an optional local MCP bridge, one playground, one browser test harness. Runtime dependency direction is `core ← widget ← react/vue/svelte`; `@lightback/source` is independent. Nothing in `core` touches the UI; nothing in `widget` knows about React.
 
 ## Data flow
 
@@ -124,6 +124,22 @@ Default filters include JSX/TSX; dependencies, outside-root paths and virtual/qu
 
 Each integration exposes an initialization-time `provideLightback(client, options)` plus descendant helpers `useLightback()` and `useLightbackWidget()`. Vue uses an injection key, mount/unmount hooks and a readonly shallow widget ref. Svelte uses component context, `onMount` cleanup and a readable widget store. Widget configuration and client identity are captured once; reactive context is merged while mounted. SSR does not mount or subscribe. Cleanup disposes the lazy widget and watcher/subscription but never the caller's client. Svelte publishes ESM; Vue publishes matching ESM/CJS entries. See [framework integration](./guide/frameworks.md).
 
+## `@lightback/mcp`
+
+A separate Node 22+ package depends on core (prompt rendering and text redaction), the MCP SDK and Zod. No browser package depends on the server. Its `./browser` entry contains only the custom transport and optional plain-DOM thread surface, with type-only core imports; it does not import Node, Zod or the MCP SDK. Payload v1 is unchanged.
+
+`cli.ts` provides `init`, `serve`, `browser-config` and `stdio`. `config.ts` generates separate browser/agent tokens in a private, create-only JSON file, validates one exact frontend origin and a literal loopback URL, and refuses broadly readable files on POSIX. `serve` owns a single project/session receiver independently of coding-host process lifetime. Each stdio connection proxies tools to that receiver, rereading its private config on every call. Stdout is reserved for MCP protocol in stdio mode.
+
+`receiver.ts` binds 127.0.0.1, validates Host, exact Origin and browser token before reading bodies, and separates agent-only routes with bearer authentication and no browser Origins. It accepts existing JSON/multipart reports. Runtime schema checks guard prompt rendering while preserving compatible unknown payload fields; PNG files must match metadata exactly and satisfy byte/dimension limits. Read/upload/wait/concurrency bounds prevent unbounded queues. No submitted source path is opened or command executed.
+
+`store.ts` owns bounded in-memory reports/images and separate conversation envelopes: project, session, report ID, status, revision, monotonic sequence and expiry. Payload IDs deduplicate identical retained submissions; conflicting content returns 409. Reads never acknowledge. Updates use expectedRevision and an idempotent messageId; reporter follow-ups reopen pending state. No exclusive lease or exactly-once editing guarantee is implied. Agent disconnects preserve reports; a receiver restart discards them and changes the instance ID, which invalidates old wait cursors. Fixed 30-minute retention applies to the entire thread from initial submission. There is deliberately no disk image persistence.
+
+`mcp.ts` exposes five tools: list, bounded wait, prompt/paginated JSON retrieval, individual PNG image retrieval, and revision-checked status/reply. Tool/server descriptions identify captured data as untrusted and require workspace path validation. Host-initiated polling/waiting is the portable wake-up mechanism; server installation and notifications are not assumed to start agent turns. Models and file-edit permissions remain entirely in the coding host.
+
+`browser.ts` connects custom send and follow-up redaction to the existing core client. Only fetch dispatch is muted, avoiding suppression of unrelated host activity while the receiver waits. The optional ignored Shadow DOM thread polls the scoped receiver, preserves unsent text on request failure, renders replies using textContent, and supports cleanup. It keeps sent thread state at the receiver; unsent follow-ups are not browser-persisted. The playground enables it only when a development `VITE_LIGHTBACK_BRIDGE` setting is supplied. The public demo's inbox is unchanged.
+
+See [the coding-agent guide](guide/coding-agents.md) for exact limits, configuration, ownership and retry semantics. Node boundary/protocol tests run in `pnpm test`; `mcp-feedback.mjs` covers a browser-to-MCP-to-frontend-edit/review loop without inference. `scripts/check-mcp-hosts.mjs` separately checks installed client compatibility without paid model calls.
+
 ## Playground (`examples/playground`)
 
 Vite + React 18. Aliases point at package `src`, so no build is needed for `pnpm dev`. `vite.config.ts` contains `mockApi`, an in-memory backend:
@@ -159,6 +175,7 @@ Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the
 | `pill-pins-crops.mjs` | Pill actions, removing via popover and pin, Cancel keeps draft, auto screenshot and crops; `helpers/customization.mjs` checks translations, themes, hidden trigger and CSS parts. |
 | `crop-aspect.mjs` | Wide, tall and small region crops at DPR 1 and 2: exported pixel size matches rect plus padding, widget thumbnails and inbox previews keep natural proportions and are never enlarged. |
 | `large-page.mjs` | A ~93,000-element table: whole-page mode skips the automatic capture with a notice and stays responsive; viewport mode captures in about a second, records the screenshot and crop `area`s, and re-captures for a selection scrolled outside the base without moving the scroll position; a `height: 100%` app root scrolled down still yields non-blank images, and keystrokes typed during that capture reach the comment box; whole-page mode on an ordinary page still reports `area` equal to `page.size`. |
+| `mcp-feedback.mjs` | Local bridge: browser selection/capture → stdio retrieval → temporary frontend code edit → reload/review → agent reply → redacted follow-up, reconnect and receiver failure. |
 | `send-flow.mjs` | Popover Send and Enter, pending card Cancel/Edit, Add more, auto-send after delay with crops, Discard. |
 
 ## Invariants worth protecting
@@ -171,9 +188,9 @@ Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the
 
 ## Distribution and CI
 
-All module builds target ES2020, with separate `.d.ts` (ESM) and `.d.cts` (CommonJS) export conditions except the ESM-only Svelte integration. Packed checks keep strict type-resolution validation, accepting only the expected CJS-to-ESM diagnostic for that package and testing dynamic import from CJS. They exercise both current and minimum Vue/Svelte compiler peers. The widget adds `lightback.iife.js`, bundling core and exposing `window.Lightback = { createLightback, mountWidget, defaultStrings }`. Each tarball includes its own README and MIT license.
+Browser package module builds target ES2020; the optional MCP package targets Node 22 and modern local browsers, with separate `.d.ts` (ESM) and `.d.cts` (CommonJS) export conditions except the ESM-only Svelte integration. Packed checks keep strict type-resolution validation, accepting only the expected CJS-to-ESM diagnostic for that package and testing dynamic import from CJS. They exercise both current and minimum Vue/Svelte compiler peers. The widget adds `lightback.iife.js`, bundling core and exposing `window.Lightback = { createLightback, mountWidget, defaultStrings }`. Each tarball includes its own README and MIT license.
 
-`.github/workflows/ci.yml` validates build, types, tests, packed consumers and strict Are the Types Wrong checks, plus a Chromium/Firefox/WebKit matrix. It is reusable so `release.yml` requires the same gates before running Changesets. Publishing uses npm 11 through pnpm, OIDC and provenance. The initial `0.1.0` packages were published locally on 2026-10-12. Existing published packages trust `aleandros/lightback` / `release.yml`; newly introduced package names need their initial npm setup and trusted publisher configured before automated publication. Widget `0.1.1` verified the first actual OIDC upload with npm provenance on 2026-10-12 ([run](https://github.com/aleandros/lightback/actions/runs/38297673131)). Payload version stays 1.
+`.github/workflows/ci.yml` validates build, types, tests, packed consumers and strict Are the Types Wrong checks, plus a Chromium/Firefox/WebKit matrix. It is reusable so `release.yml` requires the same gates before running Changesets. Publishing uses npm 11 through pnpm, OIDC and provenance. The initial `0.1.0` packages were published locally on 2026-10-12. Existing published packages trust `aleandros/lightback` / `release.yml`; newly introduced package names need their initial npm setup and trusted publisher configured before automated publication. A new npm trusted publisher must complete its first successful workflow publish within two days of configuration ([npm requirements](https://docs.npmjs.com/trusted-publishers/)). Configure `aleandros/lightback`, workflow `release.yml`, with direct `npm publish` allowed. For a bootstrap patch, consume the patch changeset with `pnpm version-packages` and include the resulting version/changelog in the feature PR: with no pending changesets, merging to main publishes the unpublished version after CI, without a second version PR. MCP `0.2.0` was published manually; `0.2.1` is prepared for this first automated publish. Widget `0.1.1` verified the first actual OIDC upload with npm provenance on 2026-10-12 ([run](https://github.com/aleandros/lightback/actions/runs/38297673131)). Payload version stays 1.
 
 ## Documentation site
 

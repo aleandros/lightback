@@ -16,6 +16,7 @@ Framework-agnostic in-app feedback capture. Users pick the elements they are tal
 | `@lightback/vue` | Vue 3.5+ lifecycle/context composables and a reactive widget ref. |
 | `@lightback/svelte` | Svelte 5 lifecycle/context helpers and a widget store (ESM). |
 | `@lightback/source` | Optional build-time JSX/TSX, Vue and Svelte source stamping. |
+| `@lightback/mcp` | Optional local receiver, coding-agent MCP tools and browser follow-up thread. Node 22+. |
 | `examples/playground` | Vite + React demo app with a mock backend and an inbox that renders what arrived. |
 | `e2e` | Playwright suites for Chromium, Firefox and WebKit. |
 
@@ -42,6 +43,14 @@ pnpm test                 # unit and deterministic property tests (vitest)
 pnpm build
 pnpm e2e    # browser suites; needs `pnpm dev` running and a system Chrome
 ```
+
+## Send feedback to a coding conversation
+
+The optional `@lightback/mcp` package connects a local frontend to **Claude Code or Codex**. The agent reads annotated reports and PNGs, edits the app with its own tools, and sends progress/results back to an optional browser thread. Follow-ups reopen the same report with revision checks. Ask the conversation to watch Lightback explicitly; installing MCP does not start an agent turn.
+
+Run a loopback receiver, connect your existing client through `send` or `endpoint`, and register the stdio server with the coding host. The queue survives agent reconnects and keeps reports in memory for 30 minutes; stopping the receiver clears it. No hosted service or provider credentials are required by Lightback. Browser packages retain their existing dependency direction.
+
+See the [Claude Code and Codex walkthrough](docs/guide/coding-agents.md) for npm installation, source-checkout setup, client configuration, image support, isolation and validation. Install the optional bridge with `npm install --save-dev @lightback/mcp`.
 
 ## Compatibility and script tags
 

@@ -151,3 +151,7 @@ A reference implementation of this handler, with a JSON Schema for the payload, 
 The default fetch transport uses the browser's default credentials policy: same-origin cookies are included, cross-origin cookies are not. Use a custom `send` with `fetch(..., { credentials: 'include' })` when your authenticated cross-origin receiver needs cookies, and configure its CORS policy for your app's origin. For bearer authentication, add an `Authorization` header; if the token rotates, resolve it inside a custom `send` rather than storing a stale header. Do not embed server secrets in the client.
 
 Never set multipart `Content-Type` manually; the browser adds the boundary. `beforeSend` can veto a report, but cannot change the attachment bytes. A custom `send` controls both.
+
+## Local coding-agent conversations
+
+For feedback directly in Claude Code or Codex, use the optional [`@lightback/mcp` local bridge](./coding-agents.md). It uses the existing payload/transport and supplies reports, images and revision-checked replies to the coding host; it does not run a model or replace your production backend.
