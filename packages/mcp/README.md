@@ -8,7 +8,7 @@ npx lightback-mcp init --project my-app --origin http://localhost:5173
 npx lightback-mcp browser-config
 ```
 
-Register `stdio` with Claude Code or Codex: it automatically starts or reuses a background receiver. No separate server terminal is needed. An open MCP connection keeps it alive. It exits after 30 minutes without authenticated activity; `npx lightback-mcp stop` stops it immediately. Removing or changing the private config also stops its managed receiver and clears reports; reconnect the host and refresh frontend browser-config afterward. `serve` is available for foreground diagnostics.
+Register `stdio` with Claude Code or Codex: it automatically starts or reuses a background receiver. No separate server terminal is needed. An open MCP connection keeps it alive. It exits after 30 minutes without authenticated activity; `npx lightback-mcp stop` stops it immediately. Removing, invalidating or changing the private config also stops its managed receiver and clears reports; reconnect the host and refresh frontend browser-config afterward. `serve` is available for foreground diagnostics.
 
 Keep `.lightback/` gitignored. The private connection file contains separate agent/browser tokens; **only** browser-config output belongs in your frontend. The receiver is loopback-only, exact-origin restricted, bounded, and keeps reports in memory for 30 minutes. Agent reconnects retain reports; receiver shutdown loses them.
 

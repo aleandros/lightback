@@ -5,9 +5,12 @@ import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { once } from 'node:events';
+import { request } from 'node:http';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { readConfig, writeConfig } from '../src/config';
+import * as configuration from '../src/config';
+import { scopePath } from '../src/types';
 import { keepReceiverAlive, receiverRunning, stopReceiver } from '../src/lifecycle';
 import { startReceiver } from '../src/receiver';
 import { config, payload, appRequest, agentRequest, json } from './helpers';
@@ -74,7 +77,12 @@ it('releases an obsolete managed receiver when its config is regenerated, even w
   try {
     await rm(file);
     writeConfig(file, next);
-    expect((await appRequest(c, '/reports')).status).toBe(503);
+    // The config watcher may close the socket before the request reaches it.
+    const response = await appRequest(c, '/reports').catch(error => {
+      expect(['ECONNREFUSED', 'ECONNRESET', 'UND_ERR_SOCKET']).toContain(error.cause?.code);
+      return undefined;
+    });
+    if (response) expect(response.status).toBe(503);
     await closed;
     await client.connect(new StdioClientTransport({ command: process.execPath, args: [cli, 'stdio', '--config', file], stderr: 'pipe' }));
     expect(await receiverRunning(next)).toBe(true);
@@ -162,4 +170,41 @@ it('does not expire the receiver when the wall clock jumps forward', async () =>
     await new Promise(resolve => setTimeout(resolve, 550));
     expect(receiver.server.listening).toBe(true);
   } finally { clock.mockRestore(); release(); await receiver.close(); }
+});
+
+it('keeps lifecycle routes available when all request slots are occupied', async () => {
+  const c = await config();
+  const receiver = await startReceiver(c);
+  let count = 0;
+  const saturated = new Promise<void>(resolve => receiver.server.on('request', () => { if (++count === 24) resolve(); }));
+  const requests = Array.from({ length: 24 }, () => {
+    const req = request(c.url + scopePath(c) + '/agent/reports/pending/update', {
+      method: 'POST', headers: { authorization: `Bearer ${c.agentToken}`, 'content-type': 'application/json', 'content-length': '100' },
+    });
+    req.on('error', () => {});
+    req.write('{');
+    return req;
+  });
+  try {
+    await saturated;
+    expect((await agentRequest(c, '/reports')).status).toBe(429);
+    expect(await receiverRunning(c)).toBe(true);
+    expect(await stopReceiver(c)).toBe(true);
+  } finally { requests.forEach(req => req.destroy()); await receiver.close(); }
+});
+
+it('preserves queued reports across a temporary config read failure', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'lightback-config-busy-'));
+  const file = join(dir, 'connection.json');
+  const c = await config();
+  writeConfig(file, c);
+  const receiver = await startReceiver(c, { configFile: file });
+  const p = payload('Keep this report');
+  try {
+    expect((await appRequest(c, '/reports', json(p))).status).toBe(201);
+    const reader = vi.spyOn(configuration, 'readConfig').mockImplementationOnce(() => { throw Object.assign(new Error('File busy'), { code: 'EBUSY' }); });
+    try { expect(await receiverRunning(c)).toBe(true); } finally { reader.mockRestore(); }
+    const response = await agentRequest(c, '/reports');
+    expect((await response.json()).reports[0].id).toBe(p.id);
+  } finally { await receiver.close(); await rm(dir, { recursive: true, force: true }); }
 });

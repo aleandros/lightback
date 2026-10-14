@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { linkSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -33,4 +34,26 @@ it('waits for an exclusive config writer to complete instead of adopting partial
   const finish = setTimeout(() => writeFileSync(file, JSON.stringify(c)), 60);
   try { expect(await ensureConfig(file, {})).toEqual(c); }
   finally { clearTimeout(finish); await rm(dir, { recursive: true, force: true }); }
+});
+
+it('removes a partially written fallback config after a disk write failure', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'lightback-config-disk-full-'));
+  const file = join(dir, 'connection.json');
+  const c = makeConfig({ project: 'test', origin: 'http://localhost:5173' });
+  const originalWrite = fs.writeFileSync;
+  vi.mocked(linkSync).mockImplementation(() => { throw Object.assign(new Error('Unsupported'), { code: 'ENOTSUP' }); });
+  const writer = vi.spyOn(fs, 'writeFileSync').mockImplementation((path, data, options) => {
+    if (typeof path === 'number') {
+      originalWrite(path, '{');
+      throw Object.assign(new Error('Disk full'), { code: 'ENOSPC' });
+    }
+    originalWrite(path, data, options);
+  });
+  try {
+    expect(() => writeConfig(file, c)).toThrow('Disk full');
+    await expect(stat(file)).rejects.toMatchObject({ code: 'ENOENT' });
+    writer.mockRestore();
+    writeConfig(file, c);
+    expect(readConfig(file)).toEqual(c);
+  } finally { writer.mockRestore(); await rm(dir, { recursive: true, force: true }); }
 });

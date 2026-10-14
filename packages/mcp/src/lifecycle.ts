@@ -9,7 +9,7 @@ export function configIdentity(config: BridgeConfig) {
 }
 
 /** A transient connection failure is retriable; only a matching authenticated health response permits reuse. */
-export async function receiverRunning(config: BridgeConfig, requireVersion = true): Promise<boolean> {
+export async function receiverRunning(config: BridgeConfig, { requireVersion = true, retryTransient = true } = {}): Promise<boolean> {
   let response: Response;
   try {
     response = await fetch(config.url + scopePath(config) + '/agent/health', {
@@ -18,11 +18,15 @@ export async function receiverRunning(config: BridgeConfig, requireVersion = tru
     });
   } catch (error) {
     const code = (error as { cause?: { code?: string } }).cause?.code;
-    if (['ECONNREFUSED', 'ECONNRESET', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'].includes(code ?? '') || (error as Error).name === 'TimeoutError') return false;
+    if (code === 'ECONNREFUSED') return false;
+    if (retryTransient && (['ECONNRESET', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT'].includes(code ?? '') || (error as Error).name === 'TimeoutError')) return false;
     throw new Error(`Cannot contact the receiver at ${config.url}. Check the port and local network access.`, { cause: error });
   }
   const health = await response.json().catch(() => null) as { name?: string; version?: string; config?: string } | null;
-  if (response.status === 429 || response.status === 503) return false;
+  if (response.status === 429 || response.status === 503) {
+    if (retryTransient) return false;
+    throw new Error(`Receiver is temporarily unavailable (${response.status}); retry stop.`);
+  }
   if (!response.ok || health?.name !== 'lightback' || (requireVersion && health.version !== version) || health.config !== configIdentity(config)) {
     throw new Error(`Port ${new URL(config.url).port} is occupied by a different receiver or version. Run stop with the previous receiver's --config, or initialize this project with a different --port.`);
   }
@@ -49,7 +53,7 @@ export async function ensureReceiver(config: BridgeConfig, configFile: string, c
 }
 
 export async function stopReceiver(config: BridgeConfig) {
-  if (!await receiverRunning(config, false)) return false;
+  if (!await receiverRunning(config, { requireVersion: false, retryTransient: false })) return false;
   const response = await fetch(config.url + scopePath(config) + '/agent/shutdown', {
     method: 'POST', headers: { authorization: `Bearer ${config.agentToken}`, connection: 'close' },
     signal: AbortSignal.timeout(3000), redirect: 'error',

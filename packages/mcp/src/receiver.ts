@@ -84,10 +84,21 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
   let active = 0, uploads = 0;
   let lastActivity = performance.now(), lastIdleCheck = lastActivity;
   const identity = configIdentity(config);
+  let configFailureSince: number | undefined;
   const configCurrent = () => {
     if (!options.configFile) return true;
-    try { return configIdentity(readConfig(options.configFile)) === identity; }
-    catch { return false; }
+    try {
+      const current = configIdentity(readConfig(options.configFile));
+      configFailureSince = undefined;
+      return current === identity;
+    } catch (error) {
+      // Temporary file locks or resource exhaustion must not immediately discard the queue.
+      if (['EBUSY', 'EACCES', 'EPERM', 'EMFILE', 'ENFILE'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+        configFailureSince ??= performance.now();
+        return performance.now() - configFailureSince < 3000;
+      }
+      return false;
+    }
   };
   const server = createServer({ maxHeaderSize: 8192, requestTimeout: 15_000, headersTimeout: 10_000 }, async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -96,11 +107,11 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
     const json = (status: number, value: unknown) => { if (!res.destroyed) { res.statusCode = status; res.end(JSON.stringify(value)); } };
     let counted = false, uploading = false;
     try {
+      if (req.headers.host !== new URL(config.url).host) throw new BridgeError(403, 'Invalid Host');
       if (!configCurrent()) {
         res.once('finish', () => { void close(); });
         return json(503, { error: 'Receiver configuration changed; reconnect the MCP host' });
       }
-      if (req.headers.host !== new URL(config.url).host) throw new BridgeError(403, 'Invalid Host');
       const url = new URL(req.url ?? '/', config.url);
       if (url.origin !== config.url || !url.pathname.startsWith(base + '/')) throw new BridgeError(404, 'Unknown project/session');
       const path = url.pathname.slice(base.length);
@@ -119,13 +130,7 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
         }
         if (!matches(req.headers['x-lightback-token'] as string | undefined, config.token)) throw new BridgeError(403, 'App access denied');
       }
-      if (active >= 24) throw new BridgeError(429, 'Too many active requests');
-      active++; counted = true;
       lastActivity = performance.now();
-      if (req.method === 'POST' && path === '/reports' && !agent) {
-        if (uploads >= 4) throw new BridgeError(429, 'Too many concurrent uploads');
-        uploads++; uploading = true;
-      }
       const route = agent ? path.slice('/agent'.length) : path;
       if (agent && route === '/health' && req.method === 'GET') {
         return json(200, { name: 'lightback', version, config: identity });
@@ -133,6 +138,12 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
       if (agent && route === '/shutdown' && req.method === 'POST') {
         res.once('finish', () => { void close(); });
         return json(200, { stopped: true });
+      }
+      if (active >= 24) throw new BridgeError(429, 'Too many active requests');
+      active++; counted = true;
+      if (req.method === 'POST' && path === '/reports' && !agent) {
+        if (uploads >= 4) throw new BridgeError(429, 'Too many concurrent uploads');
+        uploads++; uploading = true;
       }
       if (route === '/reports' && req.method === 'POST' && !agent) {
         const { payload, files } = await submission(req);

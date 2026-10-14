@@ -16,7 +16,9 @@ it('retries reset or busy listeners and only stops an authenticated receiver wit
   await new Promise<void>(resolve => server.listen(Number(new URL(c.url).port), '127.0.0.1', resolve));
   try {
     expect(await receiverRunning(c)).toBe(false);
+    await expect(stopReceiver(c)).rejects.toThrow('Cannot contact');
     mode = 'busy'; expect(await receiverRunning(c)).toBe(false);
+    await expect(stopReceiver(c)).rejects.toThrow('temporarily unavailable');
     mode = 'foreign';
     await expect(receiverRunning(c)).rejects.toThrow('occupied');
     await expect(stopReceiver(c)).rejects.toThrow('occupied');

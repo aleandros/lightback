@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, lstatSync, linkSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, lstatSync, linkSync, unlinkSync, openSync, closeSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import { idSchema } from './schema';
@@ -39,7 +39,13 @@ export function writeConfig(file: string, config: BridgeConfig) {
   catch (error) {
     if (!['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'ENOSYS'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
     // Preserve exclusive creation and private permissions on filesystems without hard links.
-    writeFileSync(path, data, { flag: 'wx', mode: 0o600 });
+    const fd = openSync(path, 'wx', 0o600);
+    try { writeFileSync(fd, data); }
+    catch (writeError) {
+      // Only remove a file this process successfully created, never the EEXIST winner.
+      closeSync(fd); unlinkSync(path); throw writeError;
+    }
+    closeSync(fd);
   }
   finally { unlinkSync(temporary); }
 }
