@@ -1,5 +1,7 @@
 import React from 'react';
 
 export function Badge() {
-  return <span data-testid="badge">JSX</span>;
+  const badge = <span data-testid="badge">JSX</span>;
+  // Keep a caller frame in WebKit, which can eliminate direct-return JSX tail calls.
+  return badge;
 }

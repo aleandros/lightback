@@ -43,7 +43,7 @@ For a custom build pipeline, call `transformSource(code, filename, options)` fro
 
 | Input | Initial support |
 | --- | --- |
-| React `.jsx` / `.tsx` | Vite and Babel; tested with minified React 18 client/SSR output and hydration |
+| React `.jsx` / `.tsx` | Vite and Babel; tested with minified React 18 and React 19 client/SSR output and hydration |
 | Non-DOM React renderers (for example React Three Fiber) | Exclude these files, e.g. `exclude: ['src/scene/**']`; lowercase renderer elements may reject DOM attributes |
 | JSX in `.js`, `.mjs`, `.cjs` | Opt in with `include`; host compiler must also accept JSX there |
 | Other JSX runtimes | Native-tag syntax is stamped; framework/compiler behavior is not covered by the initial fixtures |
@@ -67,6 +67,12 @@ Source paths are visible in the DOM and shipped JavaScript. Use a narrow `includ
 ## SSR and hydration
 
 Use the same root, filters and adapter on server and client. Both sides then emit identical attributes, with no runtime code or DOM mutation. Enabling stamping on only one side, or compiling different source revisions, can cause hydration differences. Production fixtures verify matching server/client markup, reuse of the server-rendered DOM and no recoverable hydration errors.
+
+## React development metadata
+
+React 18 `_debugSource` and React 19 `_debugStack` inspection are best effort. A real React 19 development fixture exercises JSX/TSX element locations, nested component call sites and props across the CI browser matrix. Stack locations may describe transformed modules rather than original JSX coordinates, or be absent when browser optimizations such as WebKit tail calls remove the application frame; generated stamps take precedence and retain original opening-tag coordinates.
+
+Production fixtures verify that source locations are absent without stamped or manual attributes, while element inspection continues to work. Component names may be minified and component call-site locations may be absent. Lightback does not require React debug internals or add a React runtime dependency to core.
 
 ## Manual fallback
 
