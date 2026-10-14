@@ -14,6 +14,7 @@ export default defineConfig({
     ],
     sidebar: [{ text: 'Guide', items: [
       { text: 'Getting started', link: '/guide/getting-started' },
+      { text: 'Vue and Svelte', link: '/guide/frameworks' },
       { text: 'Customization', link: '/guide/customization' },
       { text: 'Privacy and masking', link: '/guide/privacy' },
       { text: 'Source locations', link: '/guide/source-locations' },

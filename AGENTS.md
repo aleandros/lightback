@@ -14,13 +14,15 @@ A framework-agnostic in-app feedback library. A user points at elements or drags
 packages/core      @lightback/core    collectors, redaction, inspection, payload, transport. Zero deps. No DOM UI.
 packages/widget    @lightback/widget  <lightback-widget> custom element, Shadow DOM, vanilla TS. Depends on core only.
 packages/react     @lightback/react   LightbackProvider, useLightback, useLightbackWidget. Thin.
-packages/source    @lightback/source  optional build-time JSX/TSX stamping; Vite/Babel adapters. No runtime dependency.
+packages/vue       @lightback/vue     Vue lifecycle/context composables.
+packages/svelte    @lightback/svelte  Svelte lifecycle/context helpers.
+packages/source    @lightback/source  optional build-time JSX/TSX, Vue and Svelte stamping. No runtime dependency.
 examples/playground                   Vite + React demo with a mock API (vite.config.ts) and an inbox page.
 e2e                                   Playwright suites against the playground. Not unit tests.
 docs                                  Architecture, decisions, user guides (docs/guide), screenshots (docs/assets).
 ```
 
-Dependency direction is strict: `core ← widget ← react`, `playground` consumes all three via Vite aliases to `src` (no build needed for `pnpm dev`).
+Dependency direction is strict: `core ← widget ← react/vue/svelte`, `playground` consumes core/widget/react via Vite aliases to `src` (no build needed for `pnpm dev`).
 
 ## Commands
 
@@ -43,10 +45,10 @@ Node 22, pnpm 10 via corepack. The e2e runner defaults to Playwright's `channel:
 
 A change is done when all of these hold. Report results plainly; if something fails, say so with the output.
 
-1. `pnpm build` succeeds (9 module/declaration builds plus the standalone IIFE).
+1. `pnpm build` succeeds (all package modules/declarations plus standalone bundles).
 2. `pnpm typecheck` is clean.
 3. `pnpm test` passes (core and widget).
-4. `pnpm e2e` passes all ten suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
+4. `pnpm e2e` passes all suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
 5. README and the relevant `docs/*.md` describe the new behaviour. A feature that is not in README does not exist for users.
 6. New UI hooks have a `data-action` or `data-ref` attribute and the e2e suites use those, never visible text.
 

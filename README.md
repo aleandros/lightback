@@ -13,7 +13,9 @@ Framework-agnostic in-app feedback capture. Users pick the elements they are tal
 | `@lightback/core` | Collectors, ring buffers, redaction, element inspection, payload builder, transport. No UI, no dependencies. |
 | `@lightback/widget` | Drop-in UI: trigger button, element picker, notes, screenshot, review and send. Vanilla TypeScript inside a Shadow DOM. |
 | `@lightback/react` | `LightbackProvider`, `useLightback()`, `useLightbackWidget()`. |
-| `@lightback/source` | Optional build-time JSX/TSX source stamping, with Vite and Babel adapters. |
+| `@lightback/vue` | Vue 3.5+ lifecycle/context composables and a reactive widget ref. |
+| `@lightback/svelte` | Svelte 5 lifecycle/context helpers and a widget store (ESM). |
+| `@lightback/source` | Optional build-time JSX/TSX, Vue and Svelte source stamping. |
 | `examples/playground` | Vite + React demo app with a mock backend and an inbox that renders what arrived. |
 | `e2e` | Playwright suites for Chromium, Firefox and WebKit. |
 
@@ -43,7 +45,7 @@ pnpm e2e    # browser suites; needs `pnpm dev` running and a system Chrome
 
 ## Compatibility and script tags
 
-Packages ship ESM and CommonJS with matching TypeScript declarations, targeting ES2020.
+Packages ship ESM and CommonJS with matching TypeScript declarations, targeting ES2020; `@lightback/svelte` is ESM-only to match Svelte’s runtime.
 
 | Environment | Support |
 | --- | --- |
@@ -141,6 +143,16 @@ React:
 </LightbackProvider>
 ```
 
+Vue 3.5+ and Svelte 5:
+
+```ts
+// In a Vue ancestor's setup, or a Svelte ancestor's initialization:
+import { provideLightback } from '@lightback/vue'; // or '@lightback/svelte'
+const { widget } = provideLightback(lightback, { context });
+```
+
+Install the integration alongside core and widget. Vue context accepts an object, ref or getter; Svelte accepts an object or readable store. Descendants use `useLightback()` and `useLightbackWidget()`; the widget is a readonly Vue ref or Svelte readable store. Both mount lazily, clean up on unmount, support SSR and leave client ownership with the application. Client/widget options are captured at initialization; remount to replace them. See the [Vue and Svelte guide](docs/guide/frameworks.md) for complete examples and lifecycle rules. The Svelte integration is ESM.
+
 ## Load the UI on first interaction
 
 Keep `createLightback()` at app startup so collectors are warm, and mount a lightweight trigger after the DOM is ready:
@@ -171,7 +183,7 @@ The lazy script includes core and resolves the UI relative to its own script URL
 
 ## Restore work after reload
 
-Session recovery is enabled by default in the unreleased core/widget changes. Lightback checkpoints bounded console, errors, network and breadcrumb buffers, the report text, selections and selection notes to IndexedDB. A random sessionStorage key scopes recovery to the current tab and origin. The lazy trigger shows recovered selection counts without downloading the editor. Restored reports are editable; picking and pending-send timers never restart automatically.
+Session recovery is enabled by default. Lightback checkpoints bounded console, errors, network and breadcrumb buffers, the report text, selections and selection notes to IndexedDB. A random sessionStorage key scopes recovery to the current tab and origin. The lazy trigger shows recovered selection counts without downloading the editor. Restored reports are editable; picking and pending-send timers never restart automatically.
 
 ```ts
 const lightback = createLightback({
@@ -255,7 +267,7 @@ Each selection carries a **source location** when exposed by React's debug info,
 
 React 18 and React 19 are covered by inspection and source-stamping fixtures. React 19 development locations come from best-effort debug-stack parsing and may point into transformed modules; production builds need stamped or manual attributes for reliable source locations.
 
-For production JSX/TSX, install the optional build-time `@lightback/source` package and add `lightbackSource()` from `@lightback/source/vite` before your React plugin. It stamps native tags with project-relative paths and original one-based line/column positions. `@lightback/source/babel` supports Babel pipelines, including Webpack's `babel-loader`; `transformSource` is available for other build adapters. All entries support `root`, `include` and `exclude`. Use identical settings on client and server for hydration. Source paths become visible in the DOM and bundle. Vue/Svelte templates retain the manual `data-source` fallback. See the [source-location guide](docs/guide/source-locations.md) for configuration and the support matrix.
+For production JSX/TSX, install the optional build-time `@lightback/source` package and add `lightbackSource()` from `@lightback/source/vite` before your React plugin. It stamps native tags with project-relative paths and original one-based line/column positions. `@lightback/source/babel` supports Babel pipelines, including Webpack's `babel-loader`; `transformSource` is available for other build adapters. All entries support `root`, `include` and `exclude`. Use identical settings on client and server for hydration. Source paths become visible in the DOM and bundle. Vue templates use `@lightback/source/vue` before the Vue Vite plugin; Svelte templates use `@lightback/source/svelte` first in the compiler preprocess list. Both preserve original template coordinates in client and SSR builds. See the [source-location guide](docs/guide/source-locations.md) for configuration and the support matrix.
 
 ## How element selection works
 
