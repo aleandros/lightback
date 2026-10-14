@@ -8,8 +8,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const resolve = path => fileURLToPath(new URL('../' + path, import.meta.url));
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import { launch, W } from './lib.mjs';
-import { makeConfig, writeConfig, startReceiver } from '../packages/mcp/dist/index.js';
+import { makeConfig, writeConfig } from '../packages/mcp/dist/index.js';
 const requireMcp = createRequire(new URL('../packages/mcp/package.json', import.meta.url));
 const { Client } = requireMcp('@modelcontextprotocol/sdk/client/index.js');
 const { StdioClientTransport } = requireMcp('@modelcontextprotocol/sdk/client/stdio.js');
@@ -55,7 +56,7 @@ try {
   const { agentToken, version, origin: allowedOrigin, ...connection } = config;
   browserConnection = connection;
   const configFile = join(dir, 'connection.json'); writeConfig(configFile, config);
-  receiver = await startReceiver(config);
+  receiver = { close: async () => { execFileSync(process.execPath, [resolve('packages/mcp/dist/cli.js'), 'stop', '--config', configFile], { stdio: 'pipe' }); } };
   const connect = async () => {
     client = new Client({ name: 'browser-test-agent', version: '1.0' });
     await client.connect(new StdioClientTransport({ command: process.execPath, args: [resolve('packages/mcp/dist/cli.js'), 'stdio', '--config', configFile], stderr: 'pipe' }));
@@ -66,6 +67,7 @@ try {
     return JSON.parse(result.content[0].text);
   };
   const initial = await call('list_feedback');
+  assert(initial.reports.length === 0, 'stdio starts a usable empty receiver without a separate server command');
   await page.goto(origin);
   await page.waitForSelector(W + '[data-action=pick]');
   await page.click(W + '[data-action=pick]');

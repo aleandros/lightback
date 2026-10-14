@@ -6,6 +6,8 @@ import { validateConfig } from './config';
 import { payloadSchema, messageSchema, updateSchema } from './schema';
 import { BridgeError, ReportStore, type StoreOptions } from './store';
 import { scopePath, type BridgeConfig } from './types';
+import { configIdentity } from './lifecycle';
+import { version } from '../package.json';
 
 const MAX_UPLOAD = 10 * 1024 * 1024;
 const MAX_JSON = 1024 * 1024;
@@ -74,11 +76,13 @@ async function submission(req: IncomingMessage) {
 }
 
 /** One long-lived, in-memory queue per project/session. Agent transports never own its lifetime. */
-export async function startReceiver(input: BridgeConfig, options: Omit<StoreOptions, 'project' | 'session'> = {}) {
+export async function startReceiver(input: BridgeConfig, options: Omit<StoreOptions, 'project' | 'session'> & { idleTimeoutMs?: number } = {}) {
+  if (options.idleTimeoutMs !== undefined && (!Number.isSafeInteger(options.idleTimeoutMs) || options.idleTimeoutMs < 1 || options.idleTimeoutMs > 2_147_483_647)) throw new Error('Invalid receiver idle timeout');
   const config = validateConfig(input);
   const store = new ReportStore({ ...options, project: config.project, session: config.session });
   const base = scopePath(config);
   let active = 0, uploads = 0;
+  let lastActivity = Date.now();
   const server = createServer({ maxHeaderSize: 8192, requestTimeout: 15_000, headersTimeout: 10_000 }, async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
@@ -107,11 +111,19 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
       }
       if (active >= 24) throw new BridgeError(429, 'Too many active requests');
       active++; counted = true;
+      lastActivity = Date.now();
       if (req.method === 'POST' && path === '/reports' && !agent) {
         if (uploads >= 4) throw new BridgeError(429, 'Too many concurrent uploads');
         uploads++; uploading = true;
       }
       const route = agent ? path.slice('/agent'.length) : path;
+      if (agent && route === '/health' && req.method === 'GET') {
+        return json(200, { name: 'lightback', version, config: configIdentity(config) });
+      }
+      if (agent && route === '/shutdown' && req.method === 'POST') {
+        res.once('finish', () => { void close(); });
+        return json(200, { stopped: true });
+      }
       if (route === '/reports' && req.method === 'POST' && !agent) {
         const { payload, files } = await submission(req);
         return json(201, store.submit(payload, files));
@@ -155,7 +167,7 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
         const timer = setTimeout(() => req.destroy(), 1000); timer.unref();
         req.once('end', () => clearTimeout(timer));
       }
-    } finally { if (counted) active--; if (uploading) uploads--; }
+    } finally { if (counted) { active--; lastActivity = Date.now(); } if (uploading) uploads--; }
   });
   server.maxConnections = 64;
   await new Promise<void>((resolve, reject) => {
@@ -164,5 +176,13 @@ export async function startReceiver(input: BridgeConfig, options: Omit<StoreOpti
   });
   const sweep = setInterval(() => store.prune(), 30_000); sweep.unref();
   let closing: Promise<void> | undefined;
-  return { store, server, close: () => closing ??= new Promise<void>((resolve, reject) => { clearInterval(sweep); server.close(error => error ? reject(error) : resolve()); server.closeAllConnections(); }) };
+  const idle = options.idleTimeoutMs === undefined ? undefined : setInterval(() => {
+    if (!active && Date.now() - lastActivity >= options.idleTimeoutMs!) void close();
+  }, Math.min(options.idleTimeoutMs, 30_000));
+  idle?.unref();
+  const close = () => closing ??= new Promise<void>((resolve, reject) => {
+    clearInterval(sweep); clearInterval(idle);
+    server.close(error => error ? reject(error) : resolve()); server.closeAllConnections();
+  });
+  return { store, server, close };
 }
