@@ -136,7 +136,7 @@ The other exposed parts are `popover` and `pending`. `theme: 'auto'` follows sys
 
 ## Restore work after reload
 
-Session recovery is enabled by default in the unreleased core/widget changes. Lightback checkpoints bounded console, errors, network and breadcrumb buffers, the report text, selections and selection notes to IndexedDB. A random sessionStorage key scopes recovery to the current tab and origin. The lazy trigger shows recovered selection counts without downloading the editor. Restored reports are editable; picking and pending-send timers never restart automatically.
+Session recovery is enabled by default. Lightback checkpoints bounded console, errors, network and breadcrumb buffers, the report text, selections and selection notes to IndexedDB. A random sessionStorage key scopes recovery to the current tab and origin. The lazy trigger shows recovered selection counts without downloading the editor. Restored reports are editable; picking and pending-send timers never restart automatically.
 
 ```ts
 const lightback = createLightback({

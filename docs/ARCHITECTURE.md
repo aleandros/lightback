@@ -1,6 +1,6 @@
 # Architecture
 
-Three runtime packages, an optional build-time source package, one playground, one browser test harness. Runtime dependency direction is `core ← widget ← react`; `@lightback/source` is independent. Nothing in `core` touches the UI; nothing in `widget` knows about React.
+Five runtime packages, an optional build-time source package, one playground, one browser test harness. Runtime dependency direction is `core ← widget ← react/vue/svelte`; `@lightback/source` is independent. Nothing in `core` touches the UI; nothing in `widget` knows about React.
 
 ## Data flow
 
@@ -114,7 +114,15 @@ Every capture (automatic or manual) goes through `capture()`: sensitive rects ar
 
 An independent Node build package; it adds no runtime dependency. `shared.ts` owns project-relative filtering and a Babel JSX visitor. `transformSource` parses original JSX/TSX with isolated Babel configuration and returns code plus a source map. The Vite adapter runs before JSX lowering with the resolved project root on both client and SSR builds. The Babel adapter traverses the original program before JSX visitors, supporting existing Babel pipelines such as Webpack's `babel-loader`. Both preserve explicit source attributes and stamp only native tags, after spreads. Core prefers stamped element locations over framework debug locations; component-chain metadata is unchanged. Payload version remains 1.
 
-Default filters include JSX/TSX; dependencies, outside-root paths and virtual/query modules are always skipped. Vue/Svelte templates need separate compiler adapters and remain manual. Production fixtures build React 18 and React 19 JSX/TSX through Vite, compare minified client/SSR output, hydrate and inspect stamped elements. Packed checks cover ESM/CJS and all three exports. See [the guide](guide/source-locations.md) for supported syntax and filtering.
+Default filters include JSX/TSX; dependencies, outside-root paths and virtual/query modules are always skipped. Vue/Svelte templates use their separate compiler adapters described below. Production fixtures build React 18 and React 19 JSX/TSX through Vite, compare minified client/SSR output, hydrate and inspect stamped elements. Packed checks cover ESM/CJS and all five source exports. See [the guide](guide/source-locations.md) for supported syntax and filtering.
+
+### Vue and Svelte template stamping
+
+`@lightback/source/vue` exports a Vite pre-plugin and `transformVueSource`; `@lightback/source/svelte` exports a compiler markup preprocessor and `transformSvelteSource`. Compiler AST offsets reference the complete original file. `template.ts` inserts escaped static attributes after parsed attributes and generates high-resolution maps; the common filter supplies project-relative filenames with extension-specific defaults. Vue respects native/component classification and a host-supplied custom-element predicate. Svelte visits regular elements across template blocks and snippets. External/Pug Vue templates and dynamic/raw markup remain outside automatic stamping. The respective compiler peers load only through their adapter entry. Runtime payload version remains 1; Svelte uses the existing explicit-attribute source fallback without a component-chain inspector.
+
+## `@lightback/vue` and `@lightback/svelte`
+
+Each integration exposes an initialization-time `provideLightback(client, options)` plus descendant helpers `useLightback()` and `useLightbackWidget()`. Vue uses an injection key, mount/unmount hooks and a readonly shallow widget ref. Svelte uses component context, `onMount` cleanup and a readable widget store. Widget configuration and client identity are captured once; reactive context is merged while mounted. SSR does not mount or subscribe. Cleanup disposes the lazy widget and watcher/subscription but never the caller's client. Svelte publishes ESM; Vue publishes matching ESM/CJS entries. See [framework integration](./guide/frameworks.md).
 
 ## Playground (`examples/playground`)
 
@@ -137,10 +145,11 @@ Pages: Dashboard (stat cards with `data-testid`, invoice table, Export modal, Ch
 
 ## E2E (`e2e`)
 
-Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the local default; `BROWSER=chromium|firefox|webkit` selects a Playwright engine and bypasses the Chrome channel/executable override. `lib.mjs` provides `launch(suite)` returning `page`, `assert`, `received()`, `reset()`, `finish()`, plus `W` (the shadow-root prefix) and `BASE_URL`. `run.mjs` runs the nine suites in sequence and exits non-zero on failure; it excludes the screenshot generator. The crop suite disables `createImageBitmap` to exercise the image/canvas fallback.
+Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the local default; `BROWSER=chromium|firefox|webkit` selects a Playwright engine and bypasses the Chrome channel/executable override. `lib.mjs` provides `launch(suite)` returning `page`, `assert`, `received()`, `reset()`, `finish()`, plus `W` (the shadow-root prefix) and `BASE_URL`. `run.mjs` runs all suites in sequence and exits non-zero on failure; it excludes the screenshot generator. The crop suite disables `createImageBitmap` to exercise the image/canvas fallback.
 
 | Suite | Covers |
 | --- | --- |
+| `framework-integrations.mjs` | Minified Vue/Svelte client and SSR builds, exact original stamps, hydration DOM reuse, lazy controls, real pick/send payloads and prompts, context updates, lifecycle cleanup and remounts. |
 | `privacy-masking.mjs` | Sensitive attribute, configured selector, nested and dynamic elements, regions and breadcrumbs; masked pixels in previews, crops, IndexedDB bytes and sent images (fixture capturer paints red); reporter Hide area, reload, retake and send. |
 | `session-recovery.mjs` | Real IndexedDB recovery of text, selection notes, blobs and context across reloads; deletion on send/discard, tab isolation and pending-send cancellation. |
 | `lazy-loading.mjs` | Deferred React/neutral/standalone loading, first interaction, real import failure and retry, host identity and teardown. |
@@ -162,9 +171,9 @@ Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the
 
 ## Distribution and CI
 
-All module builds target ES2020, with separate `.d.ts` (ESM) and `.d.cts` (CommonJS) export conditions. The widget adds `lightback.iife.js`, bundling core and exposing `window.Lightback = { createLightback, mountWidget, defaultStrings }`. Each tarball includes its own README and MIT license.
+All module builds target ES2020, with separate `.d.ts` (ESM) and `.d.cts` (CommonJS) export conditions except the ESM-only Svelte integration. Packed checks keep strict type-resolution validation, accepting only the expected CJS-to-ESM diagnostic for that package and testing dynamic import from CJS. They exercise both current and minimum Vue/Svelte compiler peers. The widget adds `lightback.iife.js`, bundling core and exposing `window.Lightback = { createLightback, mountWidget, defaultStrings }`. Each tarball includes its own README and MIT license.
 
-`.github/workflows/ci.yml` validates build, types, tests, packed consumers and strict Are the Types Wrong checks, plus a Chromium/Firefox/WebKit matrix. It is reusable so `release.yml` requires the same gates before running Changesets. Publishing uses npm 11 through pnpm, OIDC and provenance. The initial `0.1.0` packages were published locally on 2026-10-12. Each package trusts `aleandros/lightback` / `release.yml`. Widget `0.1.1` verified the first actual OIDC upload with npm provenance on 2026-10-12 ([run](https://github.com/aleandros/lightback/actions/runs/38297673131)). Payload version stays 1.
+`.github/workflows/ci.yml` validates build, types, tests, packed consumers and strict Are the Types Wrong checks, plus a Chromium/Firefox/WebKit matrix. It is reusable so `release.yml` requires the same gates before running Changesets. Publishing uses npm 11 through pnpm, OIDC and provenance. The initial `0.1.0` packages were published locally on 2026-10-12. Existing published packages trust `aleandros/lightback` / `release.yml`; newly introduced package names need their initial npm setup and trusted publisher configured before automated publication. Widget `0.1.1` verified the first actual OIDC upload with npm provenance on 2026-10-12 ([run](https://github.com/aleandros/lightback/actions/runs/38297673131)). Payload version stays 1.
 
 ## Documentation site
 

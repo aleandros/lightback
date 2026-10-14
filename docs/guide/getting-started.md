@@ -12,7 +12,7 @@ pnpm add modern-screenshot
 pnpm add @lightback/react
 ```
 
-Packages are ESM and CommonJS, with matching TypeScript types. The current release is widget `0.2.2`, core `0.2.1` and React `0.2.0`; React `0.2` requires widget `0.2`. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
+Packages provide ESM and CommonJS with matching TypeScript types, except `@lightback/svelte`, which is ESM. The framework integrations require widget `0.2`. The widget is a custom element inside a Shadow DOM, so it works with any framework or none.
 
 ## Mount it
 
@@ -53,6 +53,10 @@ const lightback = createLightback({ endpoint: '/api/feedback' });
 ```
 
 `context` is pushed into every report whenever it changes. `useLightback()` returns the client, `useLightbackWidget()` the lazy widget handle. The provider mounts only the trigger; clicking it or calling `await widget.open()` / `await widget.startPicking()` loads the editor and picker. `widget={false}` disables the widget entirely.
+
+### Vue and Svelte
+
+Install `@lightback/vue` for Vue 3.5+ or `@lightback/svelte` for Svelte 5. Their `provideLightback` helpers mount the lazy widget and share it with descendants through framework context. See the [integration guide](./frameworks.md) for setup, reactive context, SSR and cleanup.
 
 ### SSR and script tags
 
@@ -113,4 +117,4 @@ Call `widget.destroy()` and `lightback.destroy()` when an integration is unmount
 
 ## Reload recovery
 
-The unreleased core/widget changes enable session recovery by default. Report text, selections, notes and recent collector buffers survive reloads in the current tab for up to 30 minutes since the last checkpoint. Send or Discard clears the draft and old buffers. Restored reports wait for the user to send them. Screenshot persistence is a separate opt-in; only [masked images](./privacy.md) are stored. Set `persistence: false` on `createLightback()` to disable recovery storage. See [retention, privacy and custom-editor APIs](./customization.md#restore-work-after-reload). The demo inbox stores sent reports separately.
+Session recovery is enabled by default. Report text, selections, notes and recent collector buffers survive reloads in the current tab for up to 30 minutes since the last checkpoint. Send or Discard clears the draft and old buffers. Restored reports wait for the user to send them. Screenshot persistence is a separate opt-in; only [masked images](./privacy.md) are stored. Set `persistence: false` on `createLightback()` to disable recovery storage. See [retention, privacy and custom-editor APIs](./customization.md#restore-work-after-reload). The demo inbox stores sent reports separately.

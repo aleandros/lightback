@@ -6,7 +6,7 @@ import * as t from '@babel/types';
 export interface SourceOptions {
   /** Project root; cwd for the transform/Babel, resolved Vite root for Vite. */
   root?: string;
-  /** Globs matched against slash-separated project-relative paths. Defaults to JSX/TSX. */
+  /** Globs matched against slash-separated project-relative paths. Defaults to the adapter’s source extensions. */
   include?: string | string[];
   /** Additional globs to skip. Dependencies, outside-root and virtual modules always skip. */
   exclude?: string | string[];
@@ -15,11 +15,11 @@ export interface SourceOptions {
 }
 
 /** Resolve once per adapter/transform, never emit machine-specific absolute paths. */
-export function sourceFilter(options: SourceOptions = {}): (id: string) => string | null {
+export function sourceFilter(options: SourceOptions = {}, extensions = /\.[cm]?[jt]sx?$/, defaults = ['**/*.jsx', '**/*.tsx']): (id: string) => string | null {
   const rootInput = (options.root ?? process.cwd()).replace(/\\/g, '/');
   const paths = /^[A-Za-z]:\//.test(rootInput) ? path.win32 : path.posix;
   const root = paths.resolve(rootInput);
-  const include = picomatch(options.include ?? ['**/*.jsx', '**/*.tsx'], { dot: true });
+  const include = picomatch(options.include ?? defaults, { dot: true });
   const exclude = picomatch(options.exclude ?? [], { dot: true });
   return (id) => {
     if (/[\0?#]/.test(id)) return null;
@@ -28,7 +28,7 @@ export function sourceFilter(options: SourceOptions = {}): (id: string) => strin
     const relative = paths.relative(root, absolute).replace(/\\/g, '/');
     if (!relative || relative === '..' || relative.startsWith('../') || paths.isAbsolute(relative)
       || /^[A-Za-z]:/.test(relative) || /(^|\/)(node_modules|\.git)(\/|$)/.test(relative)
-      || !/\.[cm]?[jt]sx?$/.test(relative) || !include(relative) || exclude(relative)) return null;
+      || !extensions.test(relative) || !include(relative) || exclude(relative)) return null;
     return relative;
   };
 }

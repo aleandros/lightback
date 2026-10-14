@@ -1,0 +1,53 @@
+{
+  "name": "@lightback/vue",
+  "version": "0.0.0",
+  "description": "Vue lifecycle and context integration for Lightback.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap --external vue,@lightback/core,@lightback/widget --target es2020",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@lightback/core": "workspace:>=0.0.1 <0.3.0",
+    "@lightback/widget": "workspace:>=0.2.0 <0.3.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@lightback/core": "workspace:*",
+    "@lightback/widget": "workspace:*",
+    "vue": "^3.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aleandros/lightback.git",
+    "directory": "packages/vue"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
