@@ -1,6 +1,6 @@
 {
   "name": "@lightback/vue",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Vue lifecycle and context integration for Lightback.",
   "license": "MIT",
   "type": "module",
