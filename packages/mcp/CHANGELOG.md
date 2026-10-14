@@ -1,5 +1,11 @@
 # @lightback/mcp
 
+## 0.3.0
+
+### Minor Changes
+
+- 53a649a: Start or reuse the local feedback receiver automatically when a coding host connects over stdio. Initialize missing configuration from project/origin options, preserve reports across reconnects, and add explicit stop plus idle shutdown so no separate server terminal is required.
+
 ## 0.2.1
 
 ### Patch Changes
