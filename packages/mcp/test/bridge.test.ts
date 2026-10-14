@@ -101,7 +101,9 @@ describe('loopback receiver boundary', () => {
     let deep: unknown = {};
     for (let i = 0; i < 34; i++) deep = { child: deep };
     expect((await appRequest(c, '/reports', json({ ...payload(), context: { deep } }))).status).toBe(400);
-    expect((await appRequest(c, '/reports', json({ ...payload(), note: { text: 'x'.repeat(1024 * 1024) } }))).status).toBe(413);
+    // Keep the socket open while the server drains a body rejected by Content-Length.
+    const oversized = json({ ...payload(), note: { text: 'x'.repeat(1024 * 1024) } });
+    expect((await appRequest(c, '/reports', { ...oversized, headers: { ...oversized.headers, connection: 'keep-alive' } })).status).toBe(413);
     expect((await appRequest(c, '/reports', { method: 'POST', body: '{}' })).status).toBe(415);
     expect((await appRequest(c, '/reports', { ...json(payload()), headers: { origin: 'http://evil.test' } })).status).toBe(403);
     expect((await (await agentRequest(c, '/reports')).json()).reports).toHaveLength(0);

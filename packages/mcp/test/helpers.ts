@@ -14,10 +14,17 @@ export function payload(text = 'Make the button blue') {
   const client = createLightback({ persistence: false, capture: { console: false, errors: false, network: false, breadcrumbs: false } });
   const result = client.buildPayload({ text }); client.destroy(); return result;
 }
+// Tests often inspect only status. Drain the socket before retaining a response so
+// large report bodies cannot leave Undici paused when the receiver shuts down.
+async function bufferedResponse(pending: Promise<Response>) {
+  const response = await pending;
+  const bytes = await response.arrayBuffer();
+  return new Response(response.status === 204 ? null : bytes, { status: response.status, headers: response.headers });
+}
 export function appRequest(c: BridgeConfig, path: string, init: RequestInit = {}) {
-  return fetch(c.url + scopePath(c) + path, { ...init, headers: { connection: 'close', origin: c.origin, 'x-lightback-token': c.token, ...init.headers } });
+  return bufferedResponse(fetch(c.url + scopePath(c) + path, { ...init, headers: { connection: 'close', origin: c.origin, 'x-lightback-token': c.token, ...init.headers } }));
 }
 export function agentRequest(c: BridgeConfig, path: string, init: RequestInit = {}) {
-  return fetch(c.url + scopePath(c) + '/agent' + path, { ...init, headers: { connection: 'close', authorization: `Bearer ${c.agentToken}`, ...init.headers } });
+  return bufferedResponse(fetch(c.url + scopePath(c) + '/agent' + path, { ...init, headers: { connection: 'close', authorization: `Bearer ${c.agentToken}`, ...init.headers } }));
 }
 export const json = (value: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(value) });
