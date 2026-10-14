@@ -46,7 +46,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 1. `pnpm build` succeeds (9 module/declaration builds plus the standalone IIFE).
 2. `pnpm typecheck` is clean.
 3. `pnpm test` passes (core and widget).
-4. `pnpm e2e` passes all nine suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
+4. `pnpm e2e` passes all ten suites. For demo/site changes, `pnpm build:site` and `pnpm e2e:demo` also pass.
 5. README and the relevant `docs/*.md` describe the new behaviour. A feature that is not in README does not exist for users.
 6. New UI hooks have a `data-action` or `data-ref` attribute and the e2e suites use those, never visible text.
 
@@ -81,7 +81,7 @@ A change is done when all of these hold. Report results plainly; if something fa
 - No shadow-root or iframe piercing into the host app's own shadow trees.
 - Eager and lazy widget entries are available; React defaults to lazy. ESM lazy builds need URL asset support; CommonJS splitting depends on the host bundler.
 - Drafts and buffers recover through session-scoped IndexedDB (default maximum age 30 minutes); screenshot persistence requires an explicit opt-in; stored images are masked, but only for marked content. Browser session restore or tab duplication can preserve/copy the session key.
-- React 19 `_debugStack` parsing exists but has no fixture; React 18 `_debugSource` is what the tests cover.
+- React 19 `_debugStack` parsing is best effort and may point into transformed modules. React 18/19 fixtures cover inspection and production stamp fallback; use `@lightback/source` for original JSX/TSX coordinates.
 - The base screenshot is captured once at pick start. Selections made after the page changes will crop a stale image (in viewport mode, a selection the base does not show gets a capture of the screen it was selected on).
 - Masks assume the capturer renders exactly the requested `area` at the current scroll position; whole-page DOM captures draw fixed/sticky elements as if scrolled to the top, so they misalign there; `domCapturer` viewport captures draw fixed elements correctly and sticky ones unstuck. Reporter masks are additive (cannot be removed from captured pixels).
 - `modern-screenshot` is the playground's capturer, through `domCapturer` with `screenshotArea: 'viewport'` (`?shot=page` switches the playground to whole-page captures); the packages do not depend on it. Any `({ area }) => Promise<Blob>` works.

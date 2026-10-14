@@ -114,7 +114,7 @@ Every capture (automatic or manual) goes through `capture()`: sensitive rects ar
 
 An independent Node build package; it adds no runtime dependency. `shared.ts` owns project-relative filtering and a Babel JSX visitor. `transformSource` parses original JSX/TSX with isolated Babel configuration and returns code plus a source map. The Vite adapter runs before JSX lowering with the resolved project root on both client and SSR builds. The Babel adapter traverses the original program before JSX visitors, supporting existing Babel pipelines such as Webpack's `babel-loader`. Both preserve explicit source attributes and stamp only native tags, after spreads. Core prefers stamped element locations over framework debug locations; component-chain metadata is unchanged. Payload version remains 1.
 
-Default filters include JSX/TSX; dependencies, outside-root paths and virtual/query modules are always skipped. Vue/Svelte templates need separate compiler adapters and remain manual. Production fixtures build JSX/TSX through Vite, compare minified client/SSR output, hydrate and inspect stamped elements. Packed checks cover ESM/CJS and all three exports. See [the guide](guide/source-locations.md) for supported syntax and filtering.
+Default filters include JSX/TSX; dependencies, outside-root paths and virtual/query modules are always skipped. Vue/Svelte templates need separate compiler adapters and remain manual. Production fixtures build React 18 and React 19 JSX/TSX through Vite, compare minified client/SSR output, hydrate and inspect stamped elements. Packed checks cover ESM/CJS and all three exports. See [the guide](guide/source-locations.md) for supported syntax and filtering.
 
 ## Playground (`examples/playground`)
 
@@ -145,6 +145,7 @@ Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the
 | `session-recovery.mjs` | Real IndexedDB recovery of text, selection notes, blobs and context across reloads; deletion on send/discard, tab isolation and pending-send cancellation. |
 | `lazy-loading.mjs` | Deferred React/neutral/standalone loading, first interaction, real import failure and retry, host identity and teardown. |
 | `smoke.mjs` | Noise generation, panel flow, full payload assertions (redaction, bodies, breadcrumbs, context), inbox overlays, native fetch/XHR redirect body privacy. |
+| `react-19-source.mjs` | Real React 19 development runtime without stamping: JSX/TSX stack locations, component call sites, props and explicit-attribute precedence. Core unit fixtures cover Chromium/Firefox/WebKit stack syntax and missing/unusable metadata; source production tests verify React 18/19 hydration and absent debug locations with stamped/manual fallback. |
 | `region-source-props.mjs` | Inline popover, drag over a modal resolving to the modal, source location and props in payload and inbox. |
 | `pill-pins-crops.mjs` | Pill actions, removing via popover and pin, Cancel keeps draft, auto screenshot and crops; `helpers/customization.mjs` checks translations, themes, hidden trigger and CSS parts. |
 | `crop-aspect.mjs` | Wide, tall and small region crops at DPR 1 and 2: exported pixel size matches rect plus padding, widget thumbnails and inbox previews keep natural proportions and are never enlarged. |

@@ -1,6 +1,6 @@
 {
   "name": "@lightback/source",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Build-time JSX/TSX source locations for Lightback, with Vite and Babel adapters.",
   "license": "MIT",
   "type": "module",
@@ -74,8 +74,8 @@
   "dependencies": {
     "@babel/core": "^7.29.7",
     "@babel/types": "^7.29.8",
-    "picomatch": "^4.0.7",
-    "@types/babel__core": "^7.20.5"
+    "@types/babel__core": "^7.20.5",
+    "picomatch": "^4.0.7"
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.29.7",
@@ -88,6 +88,8 @@
     "@types/react-dom": "^18.3.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-dom19": "npm:react-dom@^19.3.0",
+    "react19": "npm:react@^19.3.0",
     "vite": "^5.4.21"
   },
   "peerDependencies": {

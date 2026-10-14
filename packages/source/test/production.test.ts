@@ -10,16 +10,24 @@ import lightbackSource from '../src/vite';
 import { frameworkInfo } from '../../core/src/inspect';
 
 const root = fileURLToPath(new URL('./fixtures/', import.meta.url));
+const require = createRequire(import.meta.url);
 
-it('builds minified JSX/TSX client and SSR fixtures with matching stamps and hydrates without errors', async () => {
+it.each([18, 19])('builds minified React %i JSX/TSX client and SSR fixtures with matching stamps and hydrates without errors', async (version) => {
   const compile = async (ssr: boolean) => {
     const result = await build({
       configFile: false, root, logLevel: 'silent', plugins: [lightbackSource()],
+      resolve: { alias: version === 19 ? [
+        { find: 'react-dom/server', replacement: require.resolve('react-dom19/server.node') },
+        { find: /^react-dom(\/.*)?$/, replacement: `${path.dirname(require.resolve('react-dom19/package.json'))}$1` },
+        { find: /^react(\/.*)?$/, replacement: `${path.dirname(require.resolve('react19/package.json'))}$1` },
+      ] : [] },
+      // Bundle both sides so the React 19 alias cannot resolve React 18 through a Node peer import.
+      ssr: { noExternal: true },
       define: { 'process.env.NODE_ENV': '"production"' },
       build: {
         write: false, minify: true, sourcemap: true,
         ...(ssr ? { ssr: path.join(root, 'entry.tsx') } : {}),
-        lib: { entry: path.join(root, 'entry.tsx'), name: 'Fixture', formats: [ssr ? 'cjs' : 'iife'] },
+        lib: { entry: path.join(root, ssr ? 'entry.tsx' : 'client.tsx'), name: 'Fixture', formats: [ssr ? 'cjs' : 'iife'] },
       },
     });
     const bundle = Array.isArray(result) ? result[0]! : result;
@@ -38,12 +46,12 @@ it('builds minified JSX/TSX client and SSR fixtures with matching stamps and hyd
   const client = await compile(false);
   for (const code of [server, client]) {
     expect(code).toContain('App.tsx:7:7');
-    expect(code).toContain('Badge.jsx:4:10');
+    expect(code).toContain('Badge.jsx:4:17');
     expect(code).not.toContain(root);
     expect(code.includes('_debugSource')).toBe(false);
+    expect(code.includes('_debugStack')).toBe(false);
   }
   const exports: { render?: () => string } = {};
-  const require = createRequire(import.meta.url);
   new Function('require', 'exports', 'module', server)(require, exports, { exports });
   const html = exports.render!();
   const errors: unknown[] = [];
@@ -63,7 +71,15 @@ it('builds minified JSX/TSX client and SSR fixtures with matching stamps and hyd
     expect(container.innerHTML).toBe(html);
     expect(errors).toEqual([]);
     expect(frameworkInfo(originalButton, '[data-lightback-sensitive]', false).source).toEqual({ file: 'App.tsx', line: 7, column: 7 });
-    expect(frameworkInfo(container.querySelector('[data-testid=badge]')!, '[data-lightback-sensitive]', false).source).toEqual({ file: 'Badge.jsx', line: 4, column: 10 });
+    expect(frameworkInfo(container.querySelector('[data-testid=badge]')!, '[data-lightback-sensitive]', false).source).toEqual({ file: 'Badge.jsx', line: 4, column: 17 });
+    originalButton.removeAttribute('data-source');
+    const unstamped = frameworkInfo(originalButton);
+    expect(unstamped.framework).toBe('react');
+    expect(unstamped.source).toBeUndefined();
+    expect(unstamped.chain.length).toBeGreaterThan(0);
+    expect(unstamped.chain.every((component) => component.source === undefined)).toBe(true);
+    originalButton.setAttribute('data-lb-source', 'manual/Button.tsx:12:5');
+    expect(frameworkInfo(originalButton).source).toEqual({ file: 'manual/Button.tsx', line: 12, column: 5 });
     expect(readFileSync(path.join(root, 'App.tsx'), 'utf8').split('\n')[6]!.indexOf('<button') + 1).toBe(7);
     hydrated.unmount();
   } finally { dom.window.close(); }

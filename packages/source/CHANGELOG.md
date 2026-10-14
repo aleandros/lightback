@@ -1,5 +1,11 @@
 # @lightback/source
 
+## 0.1.1
+
+### Patch Changes
+
+- Validate React 19 compatibility with real development JSX/TSX inspection and minified client/SSR hydration fixtures. Document best-effort development stack locations and the stamped or manual source fallback when production debug metadata is absent. Retain React 18 coverage; no transform or runtime API changes.
+
 ## 0.1.0
 
 ### Minor Changes

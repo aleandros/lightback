@@ -253,6 +253,8 @@ Every selection has a numbered pin on the page with a remove button on hover; ho
 
 Each selection carries a **source location** when exposed by React's debug info, Vue's `__file`, or a `data-source="file:line:col"` attribute. Explicit source attributes take precedence over framework debug paths. A **props snapshot** of the nearest component is included when available (functions, elements and children stripped, depth-limited, redacted like every other string).
 
+React 18 and React 19 are covered by inspection and source-stamping fixtures. React 19 development locations come from best-effort debug-stack parsing and may point into transformed modules; production builds need stamped or manual attributes for reliable source locations.
+
 For production JSX/TSX, install the optional build-time `@lightback/source` package and add `lightbackSource()` from `@lightback/source/vite` before your React plugin. It stamps native tags with project-relative paths and original one-based line/column positions. `@lightback/source/babel` supports Babel pipelines, including Webpack's `babel-loader`; `transformSource` is available for other build adapters. All entries support `root`, `include` and `exclude`. Use identical settings on client and server for hydration. Source paths become visible in the DOM and bundle. Vue/Svelte templates retain the manual `data-source` fallback. See the [source-location guide](docs/guide/source-locations.md) for configuration and the support matrix.
 
 ## How element selection works
