@@ -1,6 +1,6 @@
 {
   "name": "@lightback/svelte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Svelte lifecycle and context integration for Lightback.",
   "license": "MIT",
   "type": "module",
