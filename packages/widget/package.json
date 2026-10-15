@@ -1,6 +1,6 @@
 {
   "name": "@lightback/widget",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Drop-in feedback widget for Lightback: element picker, notes, screenshot, review and send. Vanilla, Shadow DOM, framework-agnostic.",
   "license": "MIT",
   "type": "module",
