@@ -43,6 +43,8 @@ Use `sendFailed(message)` and `screenshotFailed(message)` to translate the surro
 
 The widget inherits `direction` from the host document. The pill, panel and pending card are anchored by `position` (`bottom-right` or `bottom-left`), which does not flip automatically; set `position: 'bottom-left'` for RTL layouts if you want the mirrored placement. This should become automatic once a `dir`-aware default lands; it is not yet scheduled.
 
+The image annotation toolbar, hints, placeholders and accessibility labels are translatable through `strings`. Text drawn onto images currently uses a fixed left-to-right direction, left alignment and English canvas language so the editor preview and exported PNG render consistently. These text settings are not configurable and do not follow the host locale or direction; full right-to-left annotation text support (for example, Arabic or Hebrew) is not available yet.
+
 ## Migration from `triggerLabel`
 
 `triggerLabel` stays supported as an alias for `strings.pillOpen`. When both are supplied, `strings.pillOpen` wins. New code should use `strings`. Remount the widget to apply a changed locale.

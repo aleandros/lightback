@@ -109,6 +109,8 @@ In the review panel choose **Annotate image** above the screenshot or under a se
 
 ![Visual annotation toolbar with ellipse, arrow and text marks](../assets/annotation-editor.png)
 
+Annotation controls are translatable through `strings`, but text drawn onto images currently uses fixed left-to-right layout and English canvas language. Full right-to-left annotation text support is not available yet; see [Texts and i18n](./texts-and-i18n.md#right-to-left).
+
 Coordinates are relative to the entire image, so preview resizing, device pixel ratio and document scroll do not shift marks. Each screenshot and crop has its own layer: editing the screenshot does not alter its crops. Existing selection outlines remain part of crop pixels. Marks are orange with a white edge for contrast. They draw over already masked pixels; they cannot undo a privacy mask, and are not a privacy tool themselves. Use **Hide area** to conceal content.
 
 The editor holds up to 50 shapes per image, the screenshot plus up to 50 crops, and the last 20 undo steps during an editor session. Done keeps edits in the draft; closing and reopening starts a new undo history. Adding selections keeps an annotated screenshot; fresh captures supply the new crops. **Retake screenshot** explicitly replaces that screenshot and clears its marks. Recutting or dropping a crop after masking clears its marks; repainting the same screenshot with a new mask keeps its marks. Removing an image or Discard clears its layer. Failed sends keep edits.
