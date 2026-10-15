@@ -24,7 +24,7 @@ it('models lazy activation, coalesced intents, load failure/retry and teardown',
             else { model.intent = action; if (!model.loading) { model.loading = true; model.calls++; } }
           }
         }
-        if (action === 'close') { handle.close(); model.intent = ''; model.panel = false; }
+        if (action === 'close') { handle.close(); model.intent = ''; model.panel = false; model.picking = false; }
         if ((action === 'resolve' || action === 'reject') && model.loading) {
           if (action === 'resolve') {
             load.resolve({ mountWidget });

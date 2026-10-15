@@ -179,7 +179,7 @@ it('keeps the widget visible and focused while a capturer that omits it runs', a
   pick('target');
   await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
   // The recapture runs right after the comment box takes focus; typing there must keep working.
-  expect(states).toEqual([{ visibility: '', focused: undefined }, { visibility: '', focused: 'popText' }]);
+  expect(states).toEqual([{ visibility: '', focused: 'keyboardPicker' }, { visibility: '', focused: 'popText' }]);
 });
 
 it('skips the automatic capture over the element budget and says so', async () => {

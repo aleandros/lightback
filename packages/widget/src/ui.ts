@@ -1,5 +1,5 @@
 import {
-  componentChain, shortSelector, toPromptContext,
+  componentChain, shortSelector, uniqueSelector, toPromptContext,
   type Attachment, type ElementSelection, type LightbackClient, type Rect, type ScreenshotMask,
 } from '@lightback/core';
 import { defaultStrings, type WidgetStrings } from './strings';
@@ -10,6 +10,7 @@ import { captureCost, OMITS_WIDGET } from './capture';
 
 import type { WidgetOptions, WidgetHandle } from './types';
 import { createHost } from './shell';
+import { keyboardTarget, pickable } from './keyboard-picker';
 
 const DRAG_THRESHOLD = 5;
 /** Default `screenshotMaxElements`: roughly 2 s of a DOM-cloning capturer on an ordinary laptop. */
@@ -42,20 +43,23 @@ const template = (s: WidgetStrings) => /* html */ `
   </div>
   <footer><span class="lb-status" data-ref="status"></span><span class="lb-grow"></span><button class="lb-link danger" type="button" data-action="discard">${esc(s.discard)}</button><button class="lb-btn lb-primary" type="button" data-action="send">${esc(s.send)}</button></footer>
 </div>
-<div class="lb-pickbar" hidden>
+<div class="lb-pickbar" data-ref="pickbar" hidden>
+  <div class="lb-pick-btn" data-ref="keyboardPicker" tabindex="0" role="application" aria-label="${esc(s.keyboardPick)}" aria-describedby="lb-keyboard-hint">${esc(s.keyboardPick)}</div>
   <span class="lb-pick-hint" data-ref="pickHint">${esc(s.pickHint)}</span>
   <span class="lb-count" data-ref="count">${esc(s.countSelected(0))}</span>
   <button class="lb-pick-btn" type="button" data-action="mask-mode" data-ref="maskMode" aria-pressed="false" title="${esc(s.maskHint)}" hidden>${esc(s.maskMode)}</button>
   <button class="lb-pick-btn" type="button" data-action="cancel-pick">${esc(s.cancel)}</button>
   <button class="lb-pick-btn lb-pick-done" type="button" data-action="done">${esc(s.done(0))}</button>
+  <div class="lb-keyboard-help" data-ref="keyboardHelp" hidden><span id="lb-keyboard-hint">${esc(s.keyboardPickHint)}</span><span data-ref="pickTarget"></span></div>
 </div>
+<span class="lb-announcement" data-ref="pickAnnouncement" role="status" aria-live="polite" aria-atomic="true"></span>
 <div class="lb-highlight" data-ref="highlight" hidden><div class="lb-tip"></div></div>
 <div class="lb-drag" hidden></div>
 <div class="lb-masks" data-ref="masks" hidden></div>
 <div class="lb-pins" data-ref="pins"></div>
 <div class="lb-popover" part="popover" data-ref="popover" hidden>
   <div class="lb-pop-head"><span class="lb-badge" data-ref="popBadge">1</span><strong data-ref="popTitle"></strong></div>
-  <textarea data-ref="popText" placeholder="${esc(s.popoverPlaceholder)}"></textarea>
+  <textarea data-ref="popText" aria-label="${esc(s.popoverPlaceholder)}" placeholder="${esc(s.popoverPlaceholder)}"></textarea>
   <div class="lb-pop-actions">
     <button class="lb-link danger" type="button" data-action="pop-remove">${esc(s.remove)}</button>
     <span class="lb-grow"></span>
@@ -119,6 +123,7 @@ class Widget implements WidgetHandle {
   private crops = new Map<string, { blob: Blob; url: string; width: number; area?: Rect }>();
   /** Captures run one at a time: each hides the widget, and an overlapping one would restore it mid-capture. */
   private captureQueue: Promise<unknown> = Promise.resolve();
+  private capturing = false;
   /** Viewport (document coordinates) when each selection was made: what a viewport crop must show. */
   private seenFrom = new Map<string, Rect>();
   /** Latest capture for crops the viewport base does not show; reused while it covers them, dropped on new masks. */
@@ -134,6 +139,10 @@ class Widget implements WidgetHandle {
   private dragging = false;
   private suppressClick = false;
   private popoverFor: string | null = null;
+  private keyboardElement: Element | null = null;
+  private keyboardNavigation = false;
+  private returnFocus: HTMLElement | null = null;
+  private pickFromPanel = false;
 
   private q<T extends HTMLElement>(sel: string): T {
     return this.root.querySelector(sel) as T;
@@ -147,6 +156,8 @@ class Widget implements WidgetHandle {
     const host = element ?? createHost(opts);
     this.element = host;
     this.root = host.shadowRoot!;
+    // A lazy shell's focused button is about to be replaced. Resolve its equivalent below.
+    const shellRef = (this.root.activeElement as HTMLElement | null)?.dataset.ref;
     this.root.replaceChildren();
     const style = document.createElement('style');
     style.textContent = styles;
@@ -154,6 +165,7 @@ class Widget implements WidgetHandle {
     const wrap = document.createElement('div');
     wrap.innerHTML = template(this.strings);
     while (wrap.firstChild) this.root.appendChild(wrap.firstChild);
+    if (shellRef === 'pillPick' || shellRef === 'pillOpen') this.returnFocus = this.q(`[data-ref=${shellRef}]`);
 
     this.q('.lb-pill').hidden = Boolean(opts.hideTrigger);
     if (opts.screenshot) {
@@ -162,6 +174,24 @@ class Widget implements WidgetHandle {
     }
 
     this.root.addEventListener('click', (e) => this.onRootClick(e));
+    // Widget shortcuts/text must not bubble into host form handlers.
+    this.root.addEventListener('keydown', (e) => {
+      if (e instanceof KeyboardEvent && e.key === 'Escape' && !e.isComposing && !this.q('[data-ref=panel]').hidden) {
+        e.preventDefault();
+        if (this.popoverFor) this.closePopover();
+        else this.close();
+      }
+      e.stopPropagation();
+    });
+    this.root.addEventListener('keyup', (e) => e.stopPropagation());
+    this.root.addEventListener('keypress', (e) => e.stopPropagation());
+    this.q('[data-ref=keyboardPicker]').addEventListener('focus', () => {
+      this.q('[data-ref=keyboardHelp]').hidden = false;
+      if (this.keyboardNavigation && this.keyboardElement && this.canPick(this.keyboardElement)) this.drawHighlight(this.keyboardElement);
+    });
+    this.q('[data-ref=keyboardPicker]').addEventListener('blur', () => {
+      this.q('[data-ref=keyboardHelp]').hidden = true;
+    });
     this.q<HTMLTextAreaElement>('[data-ref=text]').addEventListener('input', (e) => {
       this.text = (e.target as HTMLTextAreaElement).value;
       this.refreshReview();
@@ -180,8 +210,10 @@ class Widget implements WidgetHandle {
       this.persistDraft();
     });
     popText.addEventListener('keydown', (e) => {
+      if (e.isComposing) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
+        if (e.repeat) return;
         this.savePopover();
         this.queueSend();
       } else if (e.key === 'Escape') {
@@ -210,6 +242,7 @@ class Widget implements WidgetHandle {
   /* ---------- public ---------- */
 
   open(): void {
+    this.rememberFocus();
     this.recoveryIntent = null;
     this.stopPicking();
     this.q('.lb-pill').hidden = true;
@@ -220,10 +253,29 @@ class Widget implements WidgetHandle {
 
   close(): void {
     this.recoveryIntent = null;
+    this.stopPicking();
+    this.closePopover();
     this.setHoveredPin(null);
     this.q('.lb-panel').hidden = true;
     this.q('.lb-pill').hidden = Boolean(this.opts.hideTrigger);
     this.renderPill();
+    this.restoreFocus();
+  }
+
+  private rememberFocus(): void {
+    if (this.returnFocus) return;
+    let active = document.activeElement;
+    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) this.returnFocus = active;
+  }
+
+  private restoreFocus(): void {
+    const target = this.returnFocus;
+    this.returnFocus = null;
+    // A send can finish after the reporter has resumed work in the host app.
+    if (document.activeElement !== document.body && document.activeElement !== this.element) return;
+    if (target?.isConnected && !target.closest('[hidden],[inert]')) target.focus({ preventScroll: true });
+    if (!this.root.activeElement && document.activeElement === document.body && !this.opts.hideTrigger && !this.destroyed) this.q('[data-ref=pillPick]').focus({ preventScroll: true });
   }
 
   private renderPill(): void {
@@ -243,6 +295,7 @@ class Widget implements WidgetHandle {
     window.removeEventListener('scroll', this.relayout, true);
     window.removeEventListener('resize', this.relayout);
     this.element.remove();
+    this.restoreFocus();
   }
 
   /* ---------- events ---------- */
@@ -269,7 +322,7 @@ class Widget implements WidgetHandle {
       case 'pick': return this.startPicking();
       case 'done': this.savePopover(); return this.open();
       case 'mask-mode': return this.setMaskMode(!this.maskMode);
-      case 'cancel-pick': this.closePopover(); this.stopPicking(); this.q('.lb-pill').hidden = Boolean(this.opts.hideTrigger); this.renderPill(); return;
+      case 'cancel-pick': if (this.pickFromPanel) return this.open(); return this.close();
       case 'shot': void this.takeScreenshot(); return;
       case 'shot-remove': return this.setScreenshot(null);
       case 'send': void this.send(); return;
@@ -277,7 +330,7 @@ class Widget implements WidgetHandle {
       case 'pop-send': this.savePopover(); return this.queueSend();
       case 'pop-remove': if (this.popoverFor) this.removeSelection(this.popoverFor); return;
       case 'pending-edit': this.cancelPending(); return this.open();
-      case 'pending-cancel': this.cancelPending(); this.q('.lb-pill').hidden = Boolean(this.opts.hideTrigger); this.renderPill(); this.toast(this.strings.draftKept); return;
+      case 'pending-cancel': this.cancelPending(); this.close(); this.toast(this.strings.draftKept); return;
       case 'discard': this.reset(); return this.close();
       case 'sel-remove': if (selId) this.removeSelection(selId); return;
       case 'sel-edit': if (selId) this.openPopover(selId); return;
@@ -301,6 +354,8 @@ class Widget implements WidgetHandle {
   /* ---------- picking ---------- */
 
   private moveHandler = (e: MouseEvent) => {
+    this.keyboardNavigation = false;
+    this.q('[data-ref=keyboardHelp]').hidden = true;
     if (this.isOwn(e)) {
       // Over a pin, the popover or the bars: a leftover page highlight would sit on top of them.
       if (!this.dragging) this.hideHighlight();
@@ -320,6 +375,7 @@ class Widget implements WidgetHandle {
       }
     }
     const el = this.targetAt(e.clientX, e.clientY);
+    this.keyboardElement = this.keyboardAncestor(el);
     if (el) this.drawHighlight(el);
     else this.hideHighlight();
   };
@@ -350,6 +406,7 @@ class Widget implements WidgetHandle {
   };
   private clickHandler = (e: MouseEvent) => {
     if (this.isOwn(e)) return;
+    this.keyboardNavigation = false;
     e.preventDefault();
     e.stopImmediatePropagation();
     if (this.suppressClick) {
@@ -359,6 +416,7 @@ class Widget implements WidgetHandle {
     // Clicking the page while a popover is open commits the comment and continues picking.
     if (this.popoverFor) this.savePopover();
     const el = this.targetAt(e.clientX, e.clientY);
+    this.keyboardElement = this.keyboardAncestor(el);
     if (el && this.maskMode) this.addMask(renderedBounds(el));
     else if (el) this.addSelection(el);
   };
@@ -373,6 +431,7 @@ class Widget implements WidgetHandle {
     e.stopImmediatePropagation();
   };
   private keyHandler = (e: KeyboardEvent) => {
+    if (e.isComposing) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -382,15 +441,86 @@ class Widget implements WidgetHandle {
       }
       this.stopPicking();
       this.open();
+      return;
+    }
+    // A capturer may temporarily blur/hide the widget. Never scroll the page out
+    // from under its measured area, or let selection keys activate the host.
+    if (this.capturing && (this.isOwn(e) || document.activeElement === document.body)
+      && ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'Enter', ' ', 'Tab'].includes(e.key)
+      && !this.root.activeElement?.matches('textarea,input,[contenteditable="true"]')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.announce(this.strings.keyboardCapturing);
+      return;
+    }
+    if (e.key === 'Tab') {
+      const controls = Array.from(this.root.querySelectorAll<HTMLElement>('[data-ref=pickbar] [tabindex], [data-ref=pickbar] button, [data-ref=popover] textarea, [data-ref=popover] button'))
+        .filter((el) => !el.closest('[hidden]') && !el.matches(':disabled'));
+      const index = controls.indexOf(this.root.activeElement as HTMLElement);
+      const next = (index + (e.shiftKey ? -1 : 1) + controls.length) % controls.length;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      controls[index < 0 ? (e.shiftKey ? controls.length - 1 : 0) : next]?.focus({ preventScroll: true });
+      return;
+    }
+    if (this.root.activeElement !== this.q('[data-ref=keyboardPicker]') || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(e.key)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    this.q('[data-ref=keyboardHelp]').hidden = false;
+    this.keyboardNavigation = true;
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (e.repeat) return;
+      const el = this.keyboardElement;
+      if (!el || !this.canPick(el)) { this.setKeyboardTarget(null); return; }
+      if (this.maskMode) {
+        this.addMask(renderedBounds(el));
+        this.announce(this.strings.maskedLabel);
+      } else this.addSelection(el);
+    } else {
+      const next = keyboardTarget(this.keyboardElement, e.key, (el) => this.client.isIgnored(el));
+      if (next) this.setKeyboardTarget(next);
+      else this.announce(this.strings.keyboardNoTarget);
     }
   };
 
+  private canPick(el: Element): boolean {
+    return pickable(el, (target) => this.client.isIgnored(target));
+  }
+
+  private keyboardAncestor(el: Element | null): Element | null {
+    while (el && !this.canPick(el)) el = el.parentElement;
+    return el;
+  }
+
+  private announce(text: string): void {
+    this.q('[data-ref=pickAnnouncement]').textContent = text;
+    this.q('[data-ref=pickTarget]').textContent = text;
+  }
+
+  private setKeyboardTarget(el: Element | null): void {
+    this.keyboardElement = el;
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+      const rect = el.getBoundingClientRect();
+      const top = this.q('[data-ref=keyboardHelp]').getBoundingClientRect().bottom + 12;
+      if (rect.top < top && rect.height < window.innerHeight - top && window.scrollY > 0) {
+        window.scrollBy({ top: rect.top - top, behavior: 'instant' });
+      }
+      this.drawHighlight(el);
+    } else this.hideHighlight();
+    // Locators only: never announce page text, form values or sensitive content.
+    this.announce(el ? this.strings.keyboardTarget(uniqueSelector(el)) : this.strings.keyboardChooseTarget);
+  }
+
   startPicking(): void {
+    this.rememberFocus();
     if (!this.recovered) { this.recoveryIntent = 'pick'; return; }
     if (this.destroyed) return;
     this.recoveryIntent = null;
     if (this.picking) return;
     this.picking = true;
+    this.pickFromPanel = !this.q('.lb-panel').hidden;
     this.q('.lb-panel').hidden = true;
     this.q('.lb-pill').hidden = true;
     this.q('.lb-pickbar').hidden = false;
@@ -405,16 +535,20 @@ class Widget implements WidgetHandle {
     document.addEventListener('click', this.clickHandler, true);
     for (const t of ['pointerdown', 'pointerup']) document.addEventListener(t, this.stopOnly, true);
     for (const t of ['dblclick', 'contextmenu', 'selectstart']) document.addEventListener(t, this.swallow, true);
-    document.addEventListener('keydown', this.keyHandler, true);
+    window.addEventListener('keydown', this.keyHandler, true);
+    this.q('[data-ref=keyboardPicker]').focus({ preventScroll: true });
   }
 
   private stopPicking(): void {
     if (!this.picking) return;
     this.picking = false;
+    this.keyboardElement = null;
     this.closePopover();
     this.setMaskMode(false);
     this.q('[data-ref=masks]').hidden = true;
     this.q('.lb-pickbar').hidden = true;
+    this.q('[data-ref=keyboardHelp]').hidden = true;
+    this.announce('');
     this.q('.lb-drag').hidden = true;
     this.hideHighlight();
     this.dragStart = null;
@@ -426,7 +560,7 @@ class Widget implements WidgetHandle {
     document.removeEventListener('click', this.clickHandler, true);
     for (const t of ['pointerdown', 'pointerup']) document.removeEventListener(t, this.stopOnly, true);
     for (const t of ['dblclick', 'contextmenu', 'selectstart']) document.removeEventListener(t, this.swallow, true);
-    document.removeEventListener('keydown', this.keyHandler, true);
+    window.removeEventListener('keydown', this.keyHandler, true);
   }
 
   private targetAt(x: number, y: number): Element | null {
@@ -516,6 +650,10 @@ class Widget implements WidgetHandle {
 
   private relayout = () => {
     if (this.picking) this.renderMasks();
+    if (this.picking && this.keyboardNavigation && this.keyboardElement && this.root.activeElement === this.q('[data-ref=keyboardPicker]')) {
+      if (this.canPick(this.keyboardElement)) this.drawHighlight(this.keyboardElement);
+      else this.setKeyboardTarget(null);
+    }
     if (this.selections.length === 0) return;
     this.renderPins();
     if (this.popoverFor) this.positionPopover(this.popoverFor);
@@ -746,9 +884,14 @@ class Widget implements WidgetHandle {
 
   private closePopover(): void {
     if (!this.popoverFor) return;
+    const hadFocus = this.q('[data-ref=popover]').contains(this.root.activeElement);
     this.popoverFor = null;
     this.q('[data-ref=popover]').hidden = true;
     this.renderPins();
+    if (hadFocus) {
+      if (this.picking) this.q('[data-ref=keyboardPicker]').focus({ preventScroll: true });
+      else if (!this.q('[data-ref=panel]').hidden) this.q('[data-ref=text]').focus({ preventScroll: true });
+    }
   }
 
   private labelFor(sel: ElementSelection): string {
@@ -775,15 +918,38 @@ class Widget implements WidgetHandle {
   }
 
   private async captureNow(requested: Rect | undefined, budget: boolean): Promise<Captured | typeof OVER_BUDGET | null> {
+    this.capturing = true;
+    try {
+      return await this.captureImage(requested, budget);
+    } finally {
+      this.capturing = false;
+      if (!this.destroyed && document.activeElement === document.body) {
+        if (this.picking) this.q('[data-ref=keyboardPicker]').focus({ preventScroll: true });
+        else if (!this.q('[data-ref=panel]').hidden) this.q('[data-ref=text]').focus({ preventScroll: true });
+      }
+    }
+  }
+
+  private async captureImage(requested: Rect | undefined, budget: boolean): Promise<Captured | typeof OVER_BUDGET | null> {
     const capturer = this.opts.screenshot;
     if (!capturer || this.destroyed) return null;
     // domCapturer leaves the widget out of the image, so it can stay visible and keep focus (and keystrokes).
     const hide = !(capturer as { [OMITS_WIDGET]?: boolean })[OMITS_WIDGET];
-    // WebKit scrolls the page to the top when a focused element inside the fixed host becomes hidden.
-    const focused = hide && this.root.activeElement instanceof HTMLElement ? this.root.activeElement : null;
+    // Transparency omits pixels without blurring a comment or removing the live
+    // region from the accessibility tree. visibility:hidden loses typed input
+    // and can scroll WebKit to the top when a shadow descendant has focus.
+    const opacity = this.element.style.opacity;
+    const pointerEvents = this.element.style.pointerEvents;
+    const restore = () => {
+      if (!hide) return;
+      this.element.style.opacity = opacity;
+      this.element.style.pointerEvents = pointerEvents;
+      this.element.removeAttribute('data-capturing');
+    };
     if (hide) {
-      focused?.blur();
-      this.element.style.visibility = 'hidden';
+      this.element.style.opacity = '0';
+      this.element.style.pointerEvents = 'none';
+      this.element.setAttribute('data-capturing', '');
       await nextFrame();
       await nextFrame();
     }
@@ -791,8 +957,7 @@ class Widget implements WidgetHandle {
     let sensitive: Rect[];
     const area = requested ?? this.captureArea();
     if (budget && captureCost(area) > (this.opts.screenshotMaxElements ?? DEFAULT_MAX_ELEMENTS)) {
-      if (hide) this.element.style.visibility = '';
-      focused?.focus({ preventScroll: true });
+      restore();
       return OVER_BUDGET;
     }
     try {
@@ -802,9 +967,7 @@ class Widget implements WidgetHandle {
       blob = await this.client.mute(() => capturer({ area }));
       sensitive = uniqueRects([...before, ...this.sensitiveRects()]);
     } finally {
-      if (hide) this.element.style.visibility = '';
-      // Give focus back unless the user moved it meanwhile (it is then no longer on the body).
-      if (focused?.isConnected && !this.root.activeElement && document.activeElement === document.body) focused.focus({ preventScroll: true });
+      restore();
     }
     if (!blob) return null;
     const bitmap = await decodeScreenshot(blob);
@@ -1043,6 +1206,7 @@ class Widget implements WidgetHandle {
     bar.style.transition = 'none';
     bar.style.width = '100%';
     card.hidden = false;
+    this.q('[data-action=pending-edit]').focus({ preventScroll: true });
     void bar.offsetWidth; // restart the transition
     bar.style.transition = `width ${delay}ms linear`;
     bar.style.width = '0%';

@@ -26,6 +26,12 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | <code>discard</code> | <code>"Discard"</code> |
 | <code>send</code> | <code>"Send"</code> |
 | <code>pickHint</code> | <code>"Click an element or drag an area"</code> |
+| <code>keyboardPick</code> | <code>"Keyboard picker"</code> |
+| <code>keyboardPickHint</code> | <code>"↑/↓ previous/next · ← parent · → child · Enter/Space select · Tab actions · Esc review"</code> |
+| <code>keyboardTarget</code> | <code>(target: string) =&gt; &#96;Target: ${target}&#96;</code> |
+| <code>keyboardNoTarget</code> | <code>"No element in that direction. Try another arrow key."</code> |
+| <code>keyboardChooseTarget</code> | <code>"Use the arrow keys to choose an element."</code> |
+| <code>keyboardCapturing</code> | <code>"Capturing screenshot. Navigation will resume when it finishes."</code> |
 | <code>maskMode</code> | <code>"▨ Hide area"</code> |
 | <code>maskHint</code> | <code>"Click or drag over anything to hide it in screenshots"</code> |
 | <code>maskedLabel</code> | <code>"Hidden"</code> |

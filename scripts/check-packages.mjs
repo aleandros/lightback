@@ -100,7 +100,7 @@ try {
   console.log(`Standalone gzip: eager ${eagerBytes} B, lazy initial ${lazyBytes} B (${Math.round((1 - lazyBytes / eagerBytes) * 100)}% smaller); UI is a separate ${gzipSync(ui).length} B asset.`);
   const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://example.test' });
   const previous = new Map();
-  for (const name of ['window', 'document', 'navigator', 'screen', 'Element']) {
+  for (const name of ['window', 'document', 'navigator', 'screen', 'Element', 'HTMLElement', 'KeyboardEvent']) {
     previous.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
     Object.defineProperty(globalThis, name, { configurable: true, value: name === 'window' ? dom.window : dom.window[name] });
   }
@@ -113,6 +113,15 @@ try {
       assert.equal(handle.element.shadowRoot.querySelector('[data-ref=panel]'), null);
       await handle.open();
       assert.equal(handle.element.shadowRoot.querySelector('[data-ref=panel]').hidden, false);
+      assert.equal(handle.element.shadowRoot.activeElement, handle.element.shadowRoot.querySelector('[data-ref=text]'));
+      await handle.startPicking();
+      const picker = handle.element.shadowRoot.querySelector('[data-ref=keyboardPicker]');
+      assert.equal(handle.element.shadowRoot.activeElement, picker);
+      picker.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
+      assert.equal(handle.element.shadowRoot.querySelector('[data-ref=panel]').hidden, false);
+      assert.equal(handle.element.shadowRoot.activeElement, handle.element.shadowRoot.querySelector('[data-ref=text]'));
+      handle.element.shadowRoot.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
+      assert.equal(handle.element.shadowRoot.querySelector('[data-ref=panel]').hidden, true);
       handle.destroy();
     }
     client.destroy();
