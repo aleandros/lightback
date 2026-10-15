@@ -46,6 +46,29 @@ jobs:
       - run: pnpm --filter '@lightback/mcp...' build
       - run: pnpm --filter @lightback/mcp test
 
+  next-minimum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter e2e exec playwright-core install --with-deps chromium
+      - run: node e2e/next-source.mjs
+        env:
+          BROWSER: chromium
+          NEXT_VERSION: 16.0.0
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-next-minimum
+          path: e2e/out/next-source/
+
   browsers:
     runs-on: ubuntu-latest
     timeout-minutes: 15

@@ -124,7 +124,13 @@ Widget screenshot/crop fields remain masked originals. The annotation cache supp
 
 An independent Node build package; it adds no runtime dependency. `shared.ts` owns project-relative filtering and a Babel JSX visitor. `transformSource` parses original JSX/TSX with isolated Babel configuration and returns code plus a source map. The Vite adapter runs before JSX lowering with the resolved project root on both client and SSR builds. The Babel adapter traverses the original program before JSX visitors, supporting existing Babel pipelines such as Webpack's `babel-loader`. Both preserve explicit source attributes and stamp only native tags, after spreads. Core prefers stamped element locations over framework debug locations; component-chain metadata is unchanged. Payload version remains 1.
 
-Default filters include JSX/TSX; dependencies, outside-root paths and virtual/query modules are always skipped. Vue/Svelte templates use their separate compiler adapters described below. Production fixtures build React 18 and React 19 JSX/TSX through Vite, compare minified client/SSR output, hydrate and inspect stamped elements. Packed checks cover ESM/CJS and all five source exports. See [the guide](guide/source-locations.md) for supported syntax and filtering.
+Default filters include JSX/TSX; dependencies, outside-root paths and virtual/query modules are always skipped. Vue/Svelte templates use their separate compiler adapters described below. Production fixtures build React 18 and React 19 JSX/TSX through Vite, compare minified client/SSR output, hydrate and inspect stamped elements. Packed checks cover ESM/CJS and all seven source exports. See [the guide](guide/source-locations.md) for supported syntax and filtering.
+
+### Next.js source stamping
+
+`@lightback/source/next` wraps object and sync/async function configs for Next.js 16. It resolves the packaged CommonJS loader by absolute path, adds a leading Turbopack brace-glob rule while retaining every existing rule in its original order, and runs existing webpack hooks before appending a first-executing `enforce: 'pre'` rule. Both compilations share a JSON-validated options snapshot. Custom include globs dispatch supported JS/TS extensions to the shared filter instead of translating between glob dialects. Dependency path exclusions supplement the transformer's unconditional `node_modules` skip.
+
+`@lightback/source/loader` caches transformers by options object and resolved root; its default root is the compiler's `rootContext`. It passes skipped code/maps through unchanged and chains incoming maps through Babel. Maps include the generated module filename for Turbopack production scope hoisting. When the compiler requests maps, the loader also carries the returned map inline: Turbopack's independent rule pipelines do not pass callback maps between items, so subsequent map-aware loaders need the inline form. Stamping runs before SWC on server and client. No Next runtime import reaches other source adapters or browser packages.
 
 ### Vue and Svelte template stamping
 
@@ -175,6 +181,7 @@ Plain Node scripts on `playwright-core` against `pnpm dev`. System Chrome is the
 
 | Suite | Covers |
 | --- | --- |
+| `next-source.mjs` | Packed Next 16 App Router app with Turbopack/webpack dev and production: exact server/client/layout stamps, excluded/transpiled dependencies, existing loader order, hydration DOM reuse, pick/send payload and prompt, original browser source maps. |
 | `framework-integrations.mjs` | Minified Vue/Svelte client and SSR builds, exact original stamps, hydration DOM reuse, lazy controls, real pick/send payloads and prompts, context updates, lifecycle cleanup and remounts. |
 | `annotations.mjs` | Scaled pointer/keyboard edits, undo/reset, independent crops, masks, editable reload, exact preview/send PNG bytes, failed sends, retake and discard. |
 | `privacy-masking.mjs` | Sensitive attribute, configured selector, nested and dynamic elements, regions and breadcrumbs; masked pixels in previews, crops, IndexedDB bytes and sent images (fixture capturer paints red); reporter Hide area, reload, retake and send. |

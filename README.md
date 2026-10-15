@@ -80,7 +80,7 @@ The standalone script includes core and exposes `window.Lightback`. Since widget
 
 `pnpm build`, `pnpm typecheck`, `pnpm test` and `pnpm check:packages` validate builds, source types, unit tests, and the actual tarballs (ESM, CommonJS, IIFE, licenses, READMEs and strict type resolution).
 
-`pnpm e2e` runs the six browser suites against `pnpm dev` using system Chrome. To use a Playwright engine:
+`pnpm e2e` runs the browser suites against `pnpm dev` using system Chrome. To use a Playwright engine:
 
 ```sh
 pnpm --filter e2e exec playwright-core install chromium firefox webkit
@@ -281,6 +281,16 @@ Each selection carries a **source location** when exposed by React's debug info,
 React 18 and React 19 are covered by inspection and source-stamping fixtures. React 19 development locations come from best-effort debug-stack parsing and may point into transformed modules; production builds need stamped or manual attributes for reliable source locations.
 
 For production JSX/TSX, install the optional build-time `@lightback/source` package and add `lightbackSource()` from `@lightback/source/vite` before your React plugin. It stamps native tags with project-relative paths and original one-based line/column positions. `@lightback/source/babel` supports Babel pipelines, including Webpack's `babel-loader`; `transformSource` is available for other build adapters. All entries support `root`, `include` and `exclude`. Use identical settings on client and server for hydration. Source paths become visible in the DOM and bundle. Vue templates use `@lightback/source/vue` before the Vue Vite plugin; Svelte templates use `@lightback/source/svelte` first in the compiler preprocess list. Both preserve original template coordinates in client and SSR builds. See the [source-location guide](docs/guide/source-locations.md) for configuration and the support matrix.
+
+For Next.js 16, wrap your existing config with `withLightbackSource` from `@lightback/source/next`:
+
+```js
+import { withLightbackSource } from '@lightback/source/next';
+export default withLightbackSource({ /* existing config */ }, { exclude: ['**/*.test.*'] });
+```
+
+This stamps server and client components with Turbopack and `--webpack` in development and production, keeps SWC, and preserves existing rules and config hooks. Apply the wrapper last. Set `root` to the repository root in monorepos; options must be JSON-safe. Dependencies in `node_modules`, including `transpilePackages`, stay unstamped. Source paths are public in the DOM and bundle. `@lightback/source/loader` is also available for custom webpack pipelines.
+
 
 ### Keyboard picking
 
