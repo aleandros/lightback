@@ -11,7 +11,7 @@ const cleanup: Array<() => void> = [];
 afterEach(() => { cleanup.splice(0).reverse().forEach((fn) => fn()); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 async function setup(withCrop = false) {
   const encodes: BlobCallback[] = [];
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage() {}, beginPath() {}, rect() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {} } as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage() {}, ellipse() {}, setLineDash() {}, measureText() { return { width: 100 }; }, strokeText() {}, fillText() {}, beginPath() {}, rect() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {} } as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => { encodes.push(callback); });
   let nextUrl = 0;
   vi.stubGlobal('URL', class extends URL {
@@ -120,4 +120,19 @@ it('does not replace a focused crop control when its annotation render completes
   encodes[0]!(new Blob(['edited'], { type: 'image/png' })); await settle();
   expect(button.isConnected).toBe(true);
   expect(widget.element.shadowRoot!.activeElement).toBe(button);
+});
+
+it('groups text typing into one undo step and retains typing across pending PNG renders', async () => {
+  const { widget, client, encodes, click } = await setup();
+  click('annotation-text'); click('annotation-add'); await settle();
+  const input = widget.element.shadowRoot!.querySelector<HTMLInputElement>('[data-ref=annotationTextValue]')!;
+  input.value = 'Hello'; input.dispatchEvent(new Event('input')); await settle();
+  input.value = 'Hello world'; input.dispatchEvent(new Event('input'));
+  encodes[0]!(new Blob(['old text'], { type: 'image/png' })); await settle();
+  expect(input.value).toBe('Hello world');
+  expect(client.getDraft()!.imageAnnotations![0]!.shapes[0]!.text).toBe('Hello world');
+  click('annotation-undo');
+  expect(input.value).toBe('');
+  expect(client.getDraft()!.imageAnnotations![0]!.shapes[0]!.text).toBe('');
+  encodes[1]?.(new Blob(['text'], { type: 'image/png' })); await settle();
 });

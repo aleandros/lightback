@@ -41,8 +41,8 @@ async function imageData(selector) {
     const bitmap=await createImageBitmap(b); const c=document.createElement('canvas');c.width=bitmap.width;c.height=bitmap.height;
     const ctx=c.getContext('2d');ctx.drawImage(bitmap,0,0);bitmap.close();
     const pixels=ctx.getImageData(0,0,c.width,c.height).data;
-    let orange=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]===234&&pixels[i+1]===88&&pixels[i+2]===12)orange++;
-    return {bytes,orange,width:c.width,height:c.height};
+    let orange=0,lowerOrange=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]===234&&pixels[i+1]===88&&pixels[i+2]===12){orange++;if(i/4/c.width>c.height*.7)lowerOrange++;}
+    return {bytes,orange,lowerOrange,width:c.width,height:c.height};
   }, selector);
 }
 async function draw(x1,y1,x2,y2) {
@@ -169,4 +169,61 @@ await action('annotation-arrow');await draw(.1,.9,end,.9);await action('annotati
 assert((await shapes())[4].x1>.19 && Math.abs(((await shapes())[4].x2-(await shapes())[4].x1)*smallCanvas.width-26)<1,'small marks above the tiny cutoff retain a usable move area');
 await page.screenshot({path:OUT+'mobile-editor.png'});
 await action('annotation-close');
+// Ellipses, circles and text use the same editable layers and exported PNG contract.
+await page.setViewportSize({width:1280,height:860});const beforeToolsShot=await ref('shotImg').getAttribute('src');await action('shot');
+await page.waitForFunction(old=>document.querySelector('lightback-widget').shadowRoot.querySelector('[data-ref=shotImg]').src!==old,beforeToolsShot);
+await action('annotate-shot');await readyEditor();await count(0);
+await action('annotation-ellipse');await draw(.1,.2,.6,.6);await count(1);
+assert((await shapes())[0].kind==='ellipse','Ellipse creates an editable oval');
+await page.keyboard.down('Shift');await draw(.65,.2,.85,.3);await page.keyboard.up('Shift');await count(2);
+const circle=(await shapes())[1];
+assert(Math.abs((circle.x2-circle.x1)*1280-(circle.y2-circle.y1)*860)<1,'Shift constrains an ellipse to a circle in image pixels');
+await page.keyboard.down('Shift');await draw(.99,.1,.99,.25);await page.keyboard.up('Shift');await count(3);
+assert((await shapes())[2].x2<(await shapes())[2].x1,'a vertical Shift-drag near the right edge chooses the direction with room');await action('annotation-undo');
+await action('annotation-select');await draw(.35,.4,.4,.45);
+assert(Math.abs((await shapes())[0].x1-.15)<.01,'Select moves an ellipse by its interior');
+await action('annotation-arrow');await draw(.1,.8,.4,.8);
+await action('annotation-text');await draw(.05,.7,.5,.9);await count(4);
+await action('annotation-select');await draw(.25,.8,.3,.8);
+assert(Math.abs((await shapes())[2].x1-.15)<.01,'an empty text box does not intercept a visible arrow underneath');
+await action('annotation-undo');await ref('annotationTextValue').fill('x');
+await action('annotation-select');await draw(.25,.8,.3,.8);
+assert(Math.abs((await shapes())[2].x1-.15)<.01,'unused space in a short text label does not intercept a visible arrow');
+await action('annotation-undo');await action('annotation-delete');await draw(.25,.8,.25,.8);await action('annotation-delete');await count(2);
+await action('annotation-text');await draw(.15,.75,.15,.75);await count(3);
+assert(await page.evaluate(()=>document.querySelector('lightback-widget').shadowRoot.activeElement.dataset.ref==='annotationTextValue'),'placing text focuses its label input');
+await page.keyboard.type('Needs more contrast');
+assert((await shapes())[2].text==='Needs more contrast','typed text updates the editable layer');
+await action('annotation-undo');assert((await shapes())[2].text==='','Undo reverts a typing session in one step');
+await ref('annotationTextValue').fill('Needs contrast — café');
+const initialText=(await shapes())[2];
+await draw(.4,.45,.4,.45);
+const beforeTextSelect=await ref('annotationCanvas').boundingBox();
+await page.mouse.dblclick(beforeTextSelect.x+beforeTextSelect.width*(initialText.x1+initialText.x2)/2,beforeTextSelect.y+beforeTextSelect.height*(initialText.y1+initialText.y2)/2);
+assert(await page.evaluate(()=>document.querySelector('lightback-widget').shadowRoot.activeElement.dataset.ref==='annotationTextValue'),'double-clicking a default-size label focuses text editing');
+const afterTextSelect=await ref('annotationCanvas').boundingBox();
+assert(Math.abs(beforeTextSelect.y-afterTextSelect.y)<1,'showing text controls keeps the canvas position stable');
+let label=(await shapes())[2];
+await draw(label.x2,label.y2,label.x2+.15,label.y2+.06);
+assert((await shapes())[2].x2>label.x2+.14 && (await shapes())[2].text===label.text,'text resize handles change its box while preserving content');
+label=(await shapes())[2];
+await draw(.4,.45,.4,.45); // select the ellipse and hide the text input
+await draw((label.x1+label.x2)/2,(label.y1+label.y2)/2,(label.x1+label.x2)/2,(label.y1+label.y2)/2);
+assert(JSON.stringify((await shapes())[2])===JSON.stringify(label),'selecting text reveals its input without shifting its geometry');
+await ref('annotationTextValue').fill('Updated label');
+await page.evaluate(()=>document.documentElement.dir='rtl');await action('annotation-rectangle');
+const editorRaster=await page.evaluate(async()=>Array.from(new Uint8Array(await(await fetch(document.querySelector('lightback-widget').shadowRoot.querySelector('[data-ref=annotationCanvas]').toDataURL('image/png'))).arrayBuffer())));
+await action('annotation-close');
+const newToolsPreview=await imageData('[data-ref=shotImg]');
+assert(newToolsPreview.orange>200 && newToolsPreview.lowerOrange>20,'ellipses and text are rasterized into separate image regions');
+assert(JSON.stringify(editorRaster)===JSON.stringify(newToolsPreview.bytes),'editor raster and exported PNG match on an RTL host page');
+await page.evaluate(()=>client.flushPersistence());await load();await ref('pillOpen').click();
+await action('annotate-shot');await readyEditor();await count(3);
+assert((await shapes())[0].kind==='ellipse' && (await shapes())[2].text==='Updated label','ellipses and text remain editable after recovery');
+await ref('annotationPreciseToggle').click();await ref('annotationList').selectOption('2');
+await ref('annotationTextValue').fill('Edited after reload');await action('annotation-close');
+const finalToolsPreview=await imageData('[data-ref=shotImg]');
+await ref('text').fill('Ellipse and text report');await action('send');await page.waitForFunction(()=>sent.length===1);
+const deliveredTools=await page.evaluate(async()=>Array.from(new Uint8Array(await sent[0].attachments.find(a=>a.name==='screenshot.png').blob.arrayBuffer())));
+assert(JSON.stringify(deliveredTools)===JSON.stringify(finalToolsPreview.bytes),'text and ellipse delivery matches the final preview bytes');
 await finish();

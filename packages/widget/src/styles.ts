@@ -96,6 +96,7 @@ pre.lb-preview {
 .lb-annotation-tools .lb-btn { min-height: 40px; }
 .lb-annotation-tools svg { flex: none; }
 .lb-annotation-tools [aria-pressed=true] { background: var(--lb-accent); color: var(--lb-accent-contrast); border-color: var(--lb-accent); }
+.lb-annotation-context { min-height: 60px; display: flex; flex-direction: column; justify-content: center; }
 .lb-annotation-editor .lb-hint { margin: 0; }
 .lb-annotation-editor select, .lb-annotation-editor input {
   font: inherit; color: var(--lb-fg); background: var(--lb-surface); border: 1px solid var(--lb-border);
@@ -104,6 +105,7 @@ pre.lb-preview {
 .lb-annotation-editor .lb-actions { align-items: end; }
 .lb-annotation-image { display: flex; align-items: center; justify-content: center; min-height: 180px; padding: 20px; border: 1px solid var(--lb-border); border-radius: 10px; background: var(--lb-surface); }
 .lb-annotation-image canvas { display: block; max-width: 100%; height: auto; touch-action: none; cursor: crosshair; box-shadow: 0 2px 10px #0002; }
+.lb-annotation-image canvas[data-tool=text] { cursor: text; }
 .lb-annotation-image canvas[data-tool=select] { cursor: default; }
 .lb-annotation-precise { border-top: 1px solid var(--lb-border); padding-top: 12px; }
 .lb-annotation-editor [data-action=annotation-reset] { min-height: 40px; }

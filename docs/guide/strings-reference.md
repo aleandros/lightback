@@ -23,7 +23,7 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | <code>annotate</code> | <code>"Annotate image"</code> |
 | <code>annotateCrop</code> | <code>(n: number) =&gt; &#96;Annotate crop of selection ${n}&#96;</code> |
 | <code>annotationDone</code> | <code>"Done"</code> |
-| <code>annotationHint</code> | <code>"Choose Rectangle or Arrow and drag to draw. Select a mark to move, resize or remove it."</code> |
+| <code>annotationHint</code> | <code>"Choose a shape and drag to draw. Select a mark to move, resize or remove it."</code> |
 | <code>annotationTool</code> | <code>"Drawing tools"</code> |
 | <code>annotationSelect</code> | <code>"Select"</code> |
 | <code>annotationSelectHint</code> | <code>"Click a mark to select it. Drag to move it, or drag a handle to resize."</code> |
@@ -31,6 +31,12 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | <code>annotationPrecise</code> | <code>"Keyboard & precise editing"</code> |
 | <code>annotationRectangle</code> | <code>"Rectangle"</code> |
 | <code>annotationArrow</code> | <code>"Arrow"</code> |
+| <code>annotationEllipse</code> | <code>"Ellipse"</code> |
+| <code>annotationText</code> | <code>"Text"</code> |
+| <code>annotationTextValue</code> | <code>"Text label"</code> |
+| <code>annotationTextPlaceholder</code> | <code>"Type your label…"</code> |
+| <code>annotationTextHint</code> | <code>"Click to place text, or drag a text box. Select a label to edit it."</code> |
+| <code>annotationEllipseHint</code> | <code>"Drag an ellipse. Hold Shift while drawing for a circle."</code> |
 | <code>annotationAdd</code> | <code>"Add shape"</code> |
 | <code>annotationUndo</code> | <code>"Undo"</code> |
 | <code>annotationReset</code> | <code>"Reset marks"</code> |

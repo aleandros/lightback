@@ -6,6 +6,20 @@ type Layer = { source: Blob; shapes: ImageAnnotation[]; blob: Blob; url?: string
 const copy = (shapes: ImageAnnotation[]) => shapes.map((s) => ({ ...s }));
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
+function textLayout(ctx: CanvasRenderingContext2D, shape: ImageAnnotation, width: number, height: number) {
+  const text = (shape.text ?? '').replace(/[\r\n\t]/g, ' ').slice(0, 200);
+  const boxWidth = Math.abs(shape.x2 - shape.x1) * width, boxHeight = Math.abs(shape.y2 - shape.y1) * height;
+  if (!text || !boxWidth || !boxHeight) return null;
+  // Attached editor and detached export canvases must not inherit different host directions/languages.
+  ctx.direction = 'ltr'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  (ctx as CanvasRenderingContext2D & { lang: string }).lang = 'en';
+  let size = boxHeight * .8;
+  ctx.font = `600 ${size}px sans-serif`;
+  size *= Math.min(1, boxWidth / Math.max(1, ctx.measureText(text).width));
+  ctx.font = `600 ${size}px sans-serif`;
+  return { text, size, left: Math.min(shape.x1, shape.x2) * width, middle: (shape.y1 + shape.y2) * height / 2, width: ctx.measureText(text).width };
+}
+
 /** Paint in image coordinates; preview and attachment use the same renderer and PNG. */
 export function paintAnnotations(canvas: HTMLCanvasElement, source: Drawable, shapes: ImageAnnotation[]): void {
   canvas.width = source.width;
@@ -23,7 +37,14 @@ export function paintAnnotations(canvas: HTMLCanvasElement, source: Drawable, sh
     const ex = s.x2 * canvas.width, ey = s.y2 * canvas.height;
     ctx.beginPath();
     if (s.kind === 'rectangle') ctx.rect(Math.min(x, ex), Math.min(y, ey), Math.abs(ex - x), Math.abs(ey - y));
-    else {
+    else if (s.kind === 'ellipse') ctx.ellipse((x + ex) / 2, (y + ey) / 2, Math.abs(ex - x) / 2, Math.abs(ey - y) / 2, 0, 0, Math.PI * 2);
+    else if (s.kind === 'text') {
+      const layout = textLayout(ctx, s, canvas.width, canvas.height);
+      if (!layout) continue;
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1, layout.size / 10); ctx.strokeText(layout.text, layout.left, layout.middle);
+      ctx.fillStyle = '#ea580c'; ctx.fillText(layout.text, layout.left, layout.middle);
+      continue;
+    } else {
       const angle = Math.atan2(ey - y, ex - x);
       const head = Math.min(width * 5, Math.hypot(ex - x, ey - y) / 2);
       ctx.moveTo(x, y); ctx.lineTo(ex, ey);
@@ -46,6 +67,7 @@ export class AnnotationEditor {
   private selected = -1;
   private drag: ImageAnnotation | null = null;
   private pointer: number | null = null;
+  private textEditing = false;
   private tool: ImageAnnotation['kind'] | 'select' = 'rectangle';
   private drawingKind: ImageAnnotation['kind'] = 'rectangle';
   private gesture: { mode: 'draw' | 'move' | 'start' | 'end'; x: number; y: number; original: ImageAnnotation } | null = null;
@@ -59,6 +81,25 @@ export class AnnotationEditor {
     this.canvas.width = this.canvas.height = 1;
     this.q<HTMLSelectElement>('annotationList').addEventListener('change', (e) => {
       this.cancelDrag(); this.selected = Number((e.target as HTMLSelectElement).value); this.setTool('select'); this.controls(); this.paint();
+    });
+    const textInput = this.q<HTMLInputElement>('annotationTextValue');
+    textInput.addEventListener('focus', () => { this.textEditing = false; });
+    textInput.addEventListener('blur', () => { this.textEditing = false; });
+    textInput.addEventListener('input', () => {
+      const layer = this.current(), selected = layer?.shapes[this.selected];
+      if (!layer || selected?.kind !== 'text') return;
+      const next = copy(layer.shapes); next[this.selected]!.text = textInput.value.slice(0, 200);
+      if (next[this.selected]!.text === selected.text) return;
+      if (!this.textEditing) { this.commit(next, this.selected); this.textEditing = true; }
+      else { layer.shapes = next; this.update(); }
+    });
+    this.canvas.addEventListener('dblclick', (e) => {
+      if (this.tool !== 'select' || !this.bitmap) return;
+      const r = this.canvas.getBoundingClientRect();
+      const hit = this.hit({ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }, 10);
+      if (hit >= 0 && this.current()!.shapes[hit]?.kind === 'text') {
+        this.selected = hit; this.controls(); this.paint(); this.focusText();
+      }
     });
     const point = (e: PointerEvent) => {
       const r = this.canvas.getBoundingClientRect();
@@ -81,12 +122,13 @@ export class AnnotationEditor {
           this.selected = this.hit(p, radius);
           mode = 'move';
         }
+        this.pointer = e.pointerId;
         this.controls(); this.paint();
-        if (this.selected < 0) return;
+        if (this.selected < 0) { this.pointer = null; this.fields(); return; }
         this.drag = { ...shapes[this.selected]! };
       } else {
         if (shapes.length >= 50) return;
-        this.drag = { kind: this.tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+        this.drag = { kind: this.tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, ...(this.tool === 'text' ? { text: '' } : {}) };
       }
       this.gesture = { mode, ...p, original: { ...this.drag } };
       this.pointer = e.pointerId;
@@ -101,6 +143,14 @@ export class AnnotationEditor {
         this.drag = { ...s, x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy };
       } else if (g.mode === 'start') { this.drag.x1 = p.x; this.drag.y1 = p.y; }
       else { this.drag.x2 = p.x; this.drag.y2 = p.y; }
+      if (g.mode === 'draw' && s.kind === 'ellipse' && e.shiftKey) {
+        const width = this.bitmap!.width, height = this.bitmap!.height;
+        const dx = p.x === s.x1 ? (s.x1 > .5 ? -1 : 1) : p.x < s.x1 ? -1 : 1;
+        const dy = p.y === s.y1 ? (s.y1 > .5 ? -1 : 1) : p.y < s.y1 ? -1 : 1;
+        const size = Math.min(Math.max(Math.abs(p.x - s.x1) * width, Math.abs(p.y - s.y1) * height),
+          (dx > 0 ? 1 - s.x1 : s.x1) * width, (dy > 0 ? 1 - s.y1 : s.y1) * height);
+        this.drag.x2 = s.x1 + dx * size / width; this.drag.y2 = s.y1 + dy * size / height;
+      }
       this.paint();
     };
     this.canvas.addEventListener('pointermove', move);
@@ -110,7 +160,14 @@ export class AnnotationEditor {
       const shape = { ...this.drag }, g = this.gesture;
       this.cancelDrag();
       if (g.mode === 'draw') {
-        if (Math.hypot(shape.x2 - shape.x1, shape.y2 - shape.y1) > .005) this.commit([...this.current()!.shapes, shape]);
+        if (shape.kind === 'text') {
+          if (Math.abs(shape.x2 - shape.x1) < .01 || Math.abs(shape.y2 - shape.y1) < .005) {
+            const height = Math.min(.3, .04 * this.bitmap!.width / this.bitmap!.height);
+            shape.x1 = Math.min(shape.x1, .6); shape.y1 = Math.min(shape.y1, 1 - height);
+            shape.x2 = shape.x1 + .4; shape.y2 = shape.y1 + height;
+          }
+          this.setTool('select'); this.commit([...this.current()!.shapes, shape]); this.focusText();
+        } else if (Math.hypot(shape.x2 - shape.x1, shape.y2 - shape.y1) > .005) this.commit([...this.current()!.shapes, shape]);
       } else if ((['x1', 'y1', 'x2', 'y2'] as const).some((key) => shape[key] !== g.original[key])) {
         const next = copy(this.current()!.shapes); next[this.selected] = shape; this.commit(next, this.selected);
       }
@@ -122,7 +179,7 @@ export class AnnotationEditor {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (this.drag) this.cancelDrag(); else void this.finish(); }
       if (e.key === 'Tab') {
         const controls = Array.from(this.box.querySelectorAll<HTMLElement>('button:not(:disabled),select:not(:disabled),input:not(:disabled),summary'))
-          .filter((el) => el.tagName === 'SUMMARY' || !el.closest('details:not([open])'));
+          .filter((el) => !el.closest('[hidden]') && (el.tagName === 'SUMMARY' || !el.closest('details:not([open])')));
         const first = controls[0], last = controls[controls.length - 1];
         if (e.shiftKey && this.root.activeElement === first) { e.preventDefault(); last?.focus(); }
         else if (!e.shiftKey && this.root.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -228,7 +285,7 @@ export class AnnotationEditor {
     // Safari does not focus buttons on mouse clicks; keep Escape and Tab inside the modal.
     this.root.querySelector<HTMLButtonElement>(`[data-action=${action}]`)?.focus({ preventScroll: true });
     if (action === 'annotation-close') { void this.finish(); return; }
-    if (action === 'annotation-select' || action === 'annotation-rectangle' || action === 'annotation-arrow') {
+    if (action === 'annotation-select' || action === 'annotation-rectangle' || action === 'annotation-arrow' || action === 'annotation-ellipse' || action === 'annotation-text') {
       this.cancelDrag(); this.setTool(action.slice(11) as typeof this.tool); this.paint(); return;
     }
     if (!this.bitmap) return;
@@ -241,7 +298,8 @@ export class AnnotationEditor {
     else if (action === 'annotation-add') {
       if (layer.shapes.length < 50) {
         this.setTool('select');
-        this.commit([...layer.shapes, { kind: this.drawingKind, x1: .2, y1: .2, x2: .7, y2: .7 }]);
+        this.commit([...layer.shapes, { kind: this.drawingKind, x1: .2, y1: .2, x2: .7, y2: this.drawingKind === 'text' ? .3 : .7, ...(this.drawingKind === 'text' ? { text: '' } : {}) }]);
+        if (this.drawingKind === 'text') this.focusText();
       }
     } else if (action === 'annotation-apply' && this.selected >= 0) {
       const values = ['X1', 'Y1', 'X2', 'Y2'].map((ref) => this.q<HTMLInputElement>('annotation' + ref).valueAsNumber);
@@ -257,6 +315,7 @@ export class AnnotationEditor {
     const pointer = this.pointer; this.pointer = null; this.drag = null; this.gesture = null;
     if (pointer !== null && this.canvas.hasPointerCapture(pointer)) this.canvas.releasePointerCapture(pointer);
     this.paint();
+    if (this.active) this.textField();
   }
   private commit(shapes: ImageAnnotation[], selected = shapes.length - 1): void {
     this.history.push(copy(this.current()!.shapes));
@@ -315,19 +374,26 @@ export class AnnotationEditor {
       if (this.active === key) this.q('annotationStatus').textContent = this.strings.screenshotFailed(String(error));
     });
   }
+  private kindLabel(kind: ImageAnnotation['kind']): string {
+    return { rectangle: this.strings.annotationRectangle, arrow: this.strings.annotationArrow, ellipse: this.strings.annotationEllipse, text: this.strings.annotationText }[kind];
+  }
+  private focusText(): void {
+    const input = this.q<HTMLInputElement>('annotationTextValue'); input.focus({ preventScroll: true }); input.select();
+  }
   private toolButton(): HTMLButtonElement {
     return this.root.querySelector(`[data-action=annotation-${this.tool}]`)!;
   }
   private setTool(tool: typeof this.tool): void {
     this.tool = tool;
     if (tool !== 'select') this.drawingKind = tool;
-    for (const kind of ['select', 'rectangle', 'arrow']) {
+    for (const kind of ['select', 'rectangle', 'arrow', 'ellipse', 'text']) {
       this.root.querySelector(`[data-action=annotation-${kind}]`)!.setAttribute('aria-pressed', String(kind === tool));
     }
     this.canvas.dataset.tool = tool;
-    this.q('annotationDrawingKind').textContent = this.drawingKind === 'arrow' ? this.strings.annotationArrow : this.strings.annotationRectangle;
+    this.textField();
+    this.q('annotationDrawingKind').textContent = this.kindLabel(this.drawingKind);
     this.root.querySelector<HTMLButtonElement>('[data-action=annotation-delete]')!.disabled = !this.bitmap || this.selected < 0 || tool !== 'select';
-    this.q('annotationHint').textContent = tool === 'select' ? this.strings.annotationSelectHint : this.strings.annotationHint;
+    this.q('annotationHint').textContent = tool === 'select' ? this.strings.annotationSelectHint : tool === 'text' ? this.strings.annotationTextHint : tool === 'ellipse' ? this.strings.annotationEllipseHint : this.strings.annotationHint;
   }
   private near(p: { x: number; y: number }, x: number, y: number, radius: number): boolean {
     const r = this.canvas.getBoundingClientRect();
@@ -338,15 +404,36 @@ export class AnnotationEditor {
     let interior = -1, interiorArea = Infinity;
     for (let i = shapes.length - 1; i >= 0; i--) {
       const s = shapes[i]!;
-      if (s.kind === 'rectangle') {
+      if (s.kind === 'text') {
+        const layout = textLayout(this.canvas.getContext('2d')!, s, this.canvas.width, this.canvas.height);
+        if (layout) {
+          const x = p.x * this.canvas.width, y = p.y * this.canvas.height;
+          if (x >= layout.left && x <= layout.left + layout.width && Math.abs(y - layout.middle) <= layout.size / 2) return i;
+        }
+      }
+      if (s.kind === 'rectangle' || s.kind === 'text') {
         const left = Math.min(s.x1, s.x2), right = Math.max(s.x1, s.x2), top = Math.min(s.y1, s.y2), bottom = Math.max(s.y1, s.y2);
         if (p.x >= left - radius / r.width && p.x <= right + radius / r.width &&
             p.y >= top - radius / r.height && p.y <= bottom + radius / r.height) {
           const edge = Math.min(Math.abs(p.x - left) * r.width, Math.abs(p.x - right) * r.width, Math.abs(p.y - top) * r.height, Math.abs(p.y - bottom) * r.height);
-          if (edge <= radius) return i;
+          if (edge <= radius && (s.kind !== 'text' || !s.text)) return i;
           const area = (right - left) * (bottom - top);
           if (area < interiorArea) { interior = i; interiorArea = area; }
         }
+      } else if (s.kind === 'ellipse') {
+        const rx = Math.abs(s.x2 - s.x1) * r.width / 2, ry = Math.abs(s.y2 - s.y1) * r.height / 2;
+        const dx = (p.x - (s.x1 + s.x2) / 2) * r.width, dy = (p.y - (s.y1 + s.y2) / 2) * r.height;
+        // Measure against short perimeter segments in CSS pixels, including very flat ellipses.
+        let ax = rx, ay = 0;
+        for (let step = 1; step <= 64; step++) {
+          const angle = step * Math.PI / 32, bx = rx * Math.cos(angle), by = ry * Math.sin(angle);
+          const vx = bx - ax, vy = by - ay, length = vx * vx + vy * vy;
+          const t = length ? clamp(((dx - ax) * vx + (dy - ay) * vy) / length) : 0;
+          if (Math.hypot(dx - ax - t * vx, dy - ay - t * vy) <= radius) return i;
+          ax = bx; ay = by;
+        }
+        const area = Math.PI * rx * ry / (r.width * r.height);
+        if (rx && ry && Math.hypot(dx / rx, dy / ry) < 1 && area < interiorArea) { interior = i; interiorArea = area; }
       } else {
         const dx = (s.x2 - s.x1) * r.width, dy = (s.y2 - s.y1) * r.height;
         const px = (p.x - s.x1) * r.width, py = (p.y - s.y1) * r.height;
@@ -365,13 +452,26 @@ export class AnnotationEditor {
       else shapes[this.selected] = this.drag;
     }
     paintAnnotations(this.canvas, this.bitmap, shapes);
+    // Empty labels remain discoverable without adding placeholder pixels to exported PNGs.
+    const overlay = this.canvas.getContext('2d')!;
+    const scale = this.canvas.width / Math.max(1, this.canvas.getBoundingClientRect().width);
+    overlay.strokeStyle = '#64748b'; overlay.lineWidth = scale; overlay.setLineDash([4 * scale, 3 * scale]);
+    for (const s of shapes) if (s.kind === 'text' && !s.text) {
+      overlay.beginPath(); overlay.rect(s.x1 * this.canvas.width, s.y1 * this.canvas.height, (s.x2 - s.x1) * this.canvas.width, (s.y2 - s.y1) * this.canvas.height); overlay.stroke();
+    }
+    overlay.setLineDash([]);
     // Selection handles belong only to the editor, never to exported PNGs.
     const selected = this.drag ?? shapes[this.selected];
-    if (this.tool === 'select' && selected) {
+    if (selected && (this.tool === 'select' || this.drag?.kind === 'text')) {
       const ctx = this.canvas.getContext('2d')!;
       const r = this.canvas.getBoundingClientRect();
       const unit = this.canvas.width / Math.max(1, r.width);
       ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#4f46e5'; ctx.lineWidth = 2 * unit;
+      if (selected.kind === 'text') {
+        ctx.setLineDash([4 * unit, 3 * unit]); ctx.beginPath();
+        ctx.rect(selected.x1 * this.canvas.width, selected.y1 * this.canvas.height, (selected.x2 - selected.x1) * this.canvas.width, (selected.y2 - selected.y1) * this.canvas.height);
+        ctx.stroke(); ctx.setLineDash([]);
+      }
       for (const [x, y] of [[selected.x1, selected.y1], [selected.x2, selected.y2]]) {
         ctx.beginPath(); ctx.rect(x! * this.canvas.width - 4 * unit, y! * this.canvas.height - 4 * unit, 8 * unit, 8 * unit); ctx.fill(); ctx.stroke();
       }
@@ -381,7 +481,7 @@ export class AnnotationEditor {
     const focused = this.root.activeElement;
     const shapes = this.current()!.shapes;
     const list = this.q<HTMLSelectElement>('annotationList');
-    list.replaceChildren(...shapes.map((s, i) => new Option(`${i + 1}. ${s.kind === 'arrow' ? this.strings.annotationArrow : this.strings.annotationRectangle}`, String(i))));
+    list.replaceChildren(...shapes.map((s, i) => new Option(`${i + 1}. ${this.kindLabel(s.kind)}`, String(i))));
     list.value = String(this.selected); list.disabled = !this.bitmap || !shapes.length;
     this.root.querySelector<HTMLButtonElement>('[data-action=annotation-apply]')!.disabled = !this.bitmap || this.selected < 0;
     this.root.querySelector<HTMLButtonElement>('[data-action=annotation-delete]')!.disabled = !this.bitmap || this.selected < 0 || this.tool !== 'select';
@@ -394,8 +494,20 @@ export class AnnotationEditor {
     // Disabling the activated button can move focus to the host page. Keep it on a stable editor control.
     if (focused instanceof HTMLElement && this.box.contains(focused) && focused.matches(':disabled')) this.toolButton().focus();
   }
+  private textField(): void {
+    const s = this.current()?.shapes[this.selected];
+    // Revealing text controls mid-gesture would move the canvas under the pointer.
+    if (this.pointer === null) {
+      const showText = s?.kind === 'text' && this.tool === 'select';
+      this.q('annotationTextLabel').hidden = !showText;
+      this.q('annotationHint').hidden = showText;
+    }
+    const text = this.q<HTMLInputElement>('annotationTextValue');
+    if (text.value !== (s?.text ?? '')) text.value = s?.text ?? '';
+  }
   private fields(): void {
     const s = this.current()?.shapes[this.selected];
+    this.textField();
     ['X1', 'Y1', 'X2', 'Y2'].forEach((ref, i) => {
       const input = this.q<HTMLInputElement>('annotation' + ref);
       input.disabled = !this.bitmap || !s;

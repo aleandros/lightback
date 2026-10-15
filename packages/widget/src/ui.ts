@@ -24,6 +24,8 @@ const annotationIcon = (path: string) => `<svg viewBox="0 0 24 24" width="20" he
 const annotationIcons = {
   select: annotationIcon('<path d="m5 3 14 9-7 1-3 7Z"/>'),
   rectangle: annotationIcon('<rect x="4" y="5" width="16" height="14" rx="1"/>'),
+  ellipse: annotationIcon('<ellipse cx="12" cy="12" rx="9" ry="7"/>'),
+  text: annotationIcon('<path d="M5 5h14M12 5v15M8 20h8M5 5v3M19 5v3"/>'),
   arrow: annotationIcon('<path d="M5 19 19 5M7 5h12v12"/>'),
   undo: annotationIcon('<path d="m9 5-5 5 5 5M4 10h10a6 6 0 0 1 0 12" transform="translate(0 -2)"/>'),
   remove: annotationIcon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>'),
@@ -62,13 +64,18 @@ const template = (s: WidgetStrings) => /* html */ `
         <button class="lb-btn" type="button" data-action="annotation-select" aria-pressed="false">${annotationIcons.select}${esc(s.annotationSelect)}</button>
         <button class="lb-btn" type="button" data-action="annotation-rectangle" aria-pressed="true">${annotationIcons.rectangle}${esc(s.annotationRectangle)}</button>
         <button class="lb-btn" type="button" data-action="annotation-arrow" aria-pressed="false">${annotationIcons.arrow}${esc(s.annotationArrow)}</button>
+        <button class="lb-btn" type="button" data-action="annotation-ellipse" aria-pressed="false">${annotationIcons.ellipse}${esc(s.annotationEllipse)}</button>
+        <button class="lb-btn" type="button" data-action="annotation-text" aria-pressed="false">${annotationIcons.text}${esc(s.annotationText)}</button>
       </div>
       <div class="lb-annotation-tools" role="group" aria-label="${esc(s.annotationEdits)}">
         <button class="lb-btn" type="button" data-action="annotation-undo">${annotationIcons.undo}${esc(s.annotationUndo)}</button>
         <button class="lb-btn" type="button" data-action="annotation-delete">${annotationIcons.remove}${esc(s.remove)}</button>
       </div>
     </div>
+    <div class="lb-annotation-context" data-ref="annotationContext">
     <p class="lb-hint" data-ref="annotationHint">${esc(s.annotationHint)}</p>
+    <label data-ref="annotationTextLabel" hidden>${esc(s.annotationTextValue)}<input type="text" data-ref="annotationTextValue" maxlength="200" placeholder="${esc(s.annotationTextPlaceholder)}"></label>
+    </div>
     <div class="lb-annotation-image"><canvas role="img" data-ref="annotationCanvas" aria-label="${esc(s.annotationCanvas)}"></canvas></div>
     <details class="lb-annotation-precise" data-ref="annotationPrecise">
       <summary data-ref="annotationPreciseToggle">${esc(s.annotationPrecise)}</summary>
