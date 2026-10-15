@@ -3,6 +3,7 @@ import { hrefFor, navigate, usePath } from './router';
 import { isDemo } from './mode';
 import { Dashboard } from './Dashboard';
 import { Inbox } from './Inbox';
+import { ResponsiveTable } from './ResponsiveTable';
 
 export function App() {
   const path = usePath();
@@ -22,7 +23,7 @@ export function App() {
           </div>
           <p className="small muted">Reports and screenshots stay in this browser. The inbox keeps your latest 20 reports; Clear removes them. Payments and errors are simulated.</p>
         </section>}
-        {path === '/inbox' ? <Inbox /> : <Dashboard />}
+        {path === '/inbox' ? <Inbox /> : path === '/responsive-table' ? <ResponsiveTable /> : <Dashboard />}
       </main>
     </div>
   );
@@ -32,7 +33,7 @@ function Sidebar({ path }: { path: string }) {
   const Item = ({ to, label }: { to: string; label: string }) => (
     <a
       href={hrefFor(to)}
-      data-action={to === '/' ? 'nav-dashboard' : 'nav-inbox'}
+      data-action={to === '/' ? 'nav-dashboard' : to === '/inbox' ? 'nav-inbox' : 'nav-responsive-table'}
       className={path === to ? 'nav-item active' : 'nav-item'}
       onClick={(e) => {
         e.preventDefault();
@@ -50,6 +51,7 @@ function Sidebar({ path }: { path: string }) {
       <nav>
         <Item to="/" label="Dashboard" />
         <Item to="/inbox" label="Feedback inbox" />
+        <Item to="/responsive-table" label="Responsive table" />
       </nav>
       {/* Sensitive: reports keep the selector but never this text, and screenshots show an opaque box. */}
       <div className="account" data-lightback-sensitive data-testid="account">

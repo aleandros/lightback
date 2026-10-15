@@ -29,9 +29,9 @@ export interface WidgetOptions {
   autoScreenshot?: boolean;
   /**
    * Skip automatic captures when the capturer would have to clone more elements than this: DOM-cloning capturers
-   * block the page for time proportional to it. Counts the whole document, or with 'viewport' what `domCapturer`
-   * clones (elements on screen, plus an empty box for each outermost element off it). The Screenshot button still
-   * captures on request. Default 8000; `Infinity` disables the check.
+   * block the page for time proportional to it. Counts what `domCapturer` clones, excluding hidden subtrees in
+   * both modes. Viewport captures retain off-screen layout boxes and fixed-element paths. The Screenshot button
+   * still captures on request and is highlighted after an automatic skip/failure. Default 8000; `Infinity` disables the check.
    */
   screenshotMaxElements?: number;
   /** Padding in CSS pixels around a selection in its crop. Default 16. */

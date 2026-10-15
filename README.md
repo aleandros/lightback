@@ -74,7 +74,7 @@ For a script-tag install, build and serve `packages/widget/dist/lightback.iife.j
 </script>
 ```
 
-The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations, and since `0.2.2` `Lightback.domCapturer`. The current release is widget `0.2.2`, core `0.2.1` and React `0.2.0`; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.2/dist/lightback.iife.js` in the script tag above.
+The standalone script includes core and exposes `window.Lightback`. Since widget `0.1.1` it also exposes `Lightback.defaultStrings` for script-tag translations, and since `0.2.2` `Lightback.domCapturer`. The standalone example uses widget `0.2.3` with core `0.2.1`; React `0.2` requires widget `0.2` for the lazy entry. The widget's `unpkg` and `jsdelivr` fields point to the standalone bundle; for example, use `https://unpkg.com/@lightback/widget@0.2.3/dist/lightback.iife.js` in the script tag above.
 
 ## Validation and releases
 
@@ -94,6 +94,8 @@ CI runs all three engines. Screenshot regeneration remains the separate `pnpm sc
 | Drag an area, even over a modal | Optimistic send with a cancel window | What the backend receives |
 | --- | --- | --- |
 | ![Region selection resolves to the dialog, not the backdrop](docs/assets/region-popover.png) | ![Sending card with Edit and Cancel](docs/assets/sending.png) | ![Inbox showing component chain, source, crop and props](docs/assets/inbox-summary.png) |
+
+The playground’s **Responsive table** page (`/responsive-table`) includes 250 desktop rows and a CSS-hidden mobile card list for screenshot testing.
 
 Regenerate these with `pnpm screenshots` while `pnpm dev` is running.
 
@@ -270,7 +272,7 @@ Every selection has a numbered pin on the page with a remove button on hover; ho
 
 **Screenshots are automatic** when a `screenshot` capturer is configured: entering pick mode captures once (collectors are muted during capture so the capturer's own requests never reach the report), and each selection gets a padded crop with the selected rect outlined, attached as `selection-N.png` and referenced from `selection.crop`. Crops are in capture pixels (2× on a Retina display with a 2× capturer); previews keep their natural proportions. Set `autoScreenshot: false` to go back to manual capture.
 
-**Long pages.** DOM-cloning capturers freeze the page while they copy it, for time proportional to its elements (25 seconds for a 93,000-element page). Set `screenshotArea: 'viewport'` and wrap the library in `domCapturer`: only what is on screen is copied (about 1 second on that page) and images stay small. Selections made after scrolling get a fresh capture for their crop, and each image attachment reports the document `area` it shows. Above `screenshotMaxElements` (default 8000 elements to copy) the automatic capture is skipped with a notice, and the panel's Screenshot button still works. See [Screenshot capturer](docs/guide/customization.md#screenshot-capturer). Every capture is masked before it is previewed, stored or sent (see [Privacy](#privacy-sensitive-elements-and-hidden-areas)); **▨ Hide area** in the pick bar lets the reporter cover anything else.
+**Long pages.** DOM-cloning capturers freeze the page while they copy it, for time proportional to its elements (25 seconds for a 93,000-element page). Set `screenshotArea: 'viewport'` and wrap the library in `domCapturer`: only what is on screen is copied (about 1 second on that page) and images stay small. Selections made after scrolling get a fresh capture for their crop, and each image attachment reports the document `area` it shows. Above `screenshotMaxElements` (default 8000 elements to copy) the automatic capture is skipped with a notice, and the panel's Screenshot button still works. Hidden subtrees (`display: none`, `[hidden]`) are excluded from both the budget and DOM cloning in viewport and whole-page modes; `display: contents` keeps its rendered children. After an automatic skip or failure, the Screenshot button stays highlighted until a screenshot is attached. Sending without a screenshot or crops offers **Add screenshot** (capture and stay in the editor) or **Send anyway** (remembered for retries of that draft). See [Screenshot capturer](docs/guide/customization.md#screenshot-capturer). Every capture is masked before it is previewed, stored or sent (see [Privacy](#privacy-sensitive-elements-and-hidden-areas)); **▨ Hide area** in the pick bar lets the reporter cover anything else.
 
 Each selection carries a **source location** when exposed by React's debug info, Vue's `__file`, or a `data-source="file:line:col"` attribute. Explicit source attributes take precedence over framework debug paths. A **props snapshot** of the nearest component is included when available (functions, elements and children stripped, depth-limited, redacted like every other string).
 
