@@ -11,6 +11,10 @@ const overflowing = (id: string, scrollHeight: number) => {
 };
 
 beforeEach(() => {
+  vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
+    return (this.closest('[hidden], [style*="display: none"]') || this.localName === 'head' || this.id === 'contents' || this.localName === 'wbr' || (this.namespaceURI === 'http://www.w3.org/2000/svg' && this.localName !== 'svg')
+      ? [] : [rect(0, 0, 0)]) as unknown as DOMRectList;
+  });
   // A 100x1000 document scrolled to y=400, viewport 100x100. Viewport coordinates below.
   for (const [dimension, value] of [['scrollWidth', 100], ['scrollHeight', 1000]] as const) {
     Object.defineProperty(document.documentElement, dimension, { configurable: true, value });
@@ -37,6 +41,7 @@ beforeEach(() => {
   at('app', -400, 100); // a height: 100% root above the viewport whose content overflows down into it
   overflowing('app', 2000);
   at('app-child', -400, 2000);
+  document.getElementById('contents')!.style.display = 'contents';
   at('contents', 0, 0, 0); // display: contents measures 0x0
   at('contents-child', 30, 20);
   document.getElementById('fixed')!.style.position = 'fixed';
@@ -68,7 +73,7 @@ it('captures a whole-page area unchanged', async () => {
   expect(options.style).toEqual({});
   expect(['above-child', 'below-child'].every((id) => kept(options, id))).toBe(true);
   expect(kept(options, 'widget')).toBe(false);
-  expect(captureCost({ x: 0, y: 0, width: 100, height: 1000 })).toBe(document.getElementsByTagName('*').length);
+  expect(captureCost({ x: 0, y: 0, width: 100, height: 1000 })).toBe(document.getElementsByTagName('*').length - 2); // head and widget excluded
 });
 
 it('marks itself as leaving the widget out, so the widget need not hide', () => {
@@ -112,8 +117,36 @@ it('keeps off-screen elements as empty boxes for a viewport area, and every fixe
 });
 
 it('counts what a viewport capture clones', () => {
-  // Skipped: the children of the off-screen sections. Counted: html, head, body, main, the three sections,
-  // visible-child, app and app-child (overflowing), contents and contents-child (boxless), and the widget host.
-  expect(captureCost({ x: 0, y: 400, width: 100, height: 100 })).toBe(13);
-  expect(captureCost({ x: 0, y: 0, width: 100, height: 1000 })).toBe(document.getElementsByTagName('*').length);
+  // Hidden head and widget are excluded. Off-screen boxes retain their size; the fixed element and
+  // its ancestor path are counted along with visible content, overflowing content and display:contents children.
+  expect(captureCost({ x: 0, y: 400, width: 100, height: 100 })).toBe(14);
+  expect(captureCost({ x: 0, y: 0, width: 100, height: 1000 })).toBe(document.getElementsByTagName('*').length - 2); // head and widget excluded
+});
+
+it.each([100, 1000])('prunes a large hidden list for a capture height of %i', async (height) => {
+  const area = { x: 0, y: 0, width: 100, height };
+  const before = captureCost(area);
+  document.body.insertAdjacentHTML('beforeend', `<ul id="mobile" style="display: none">${'<li><dl><dt>Label</dt><dd>Value</dd></dl></li>'.repeat(250)}</ul>`);
+  const childRects = vi.spyOn(document.querySelector('#mobile li')!, 'getClientRects');
+  expect(captureCost(area)).toBe(before);
+  expect(childRects).not.toHaveBeenCalled();
+  const options = await optionsFor(area);
+  expect(kept(options, 'mobile')).toBe(false);
+  expect(childRects).not.toHaveBeenCalled();
+});
+
+it('walks through display:contents and keeps zero-size rendered inline elements and SVG', async () => {
+  document.getElementById('contents')!.insertAdjacentHTML('beforeend', '<span id="empty"></span><br id="br"><wbr id="wbr"><svg id="svg"><path id="path" /></svg>');
+  const options = await optionsFor({ x: 0, y: 400, width: 100, height: 100 });
+  for (const id of ['contents', 'contents-child', 'empty', 'br', 'wbr', 'svg', 'path']) expect(kept(options, id), id).toBe(true);
+  const before = captureCost({ x: 0, y: 0, width: 100, height: 1000 });
+  document.getElementById('contents')!.remove();
+  expect(captureCost({ x: 0, y: 0, width: 100, height: 1000 })).toBe(before - 7);
+});
+
+it('does not resurrect a fixed descendant under a hidden root', async () => {
+  document.getElementById('above')!.setAttribute('hidden', '');
+  const options = await optionsFor({ x: 0, y: 400, width: 100, height: 100 });
+  expect(kept(options, 'above')).toBe(false);
+  expect(kept(options, 'fixed')).toBe(false);
 });

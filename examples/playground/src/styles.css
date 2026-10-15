@@ -127,3 +127,9 @@ table.mini tr.bad td { color: var(--danger); }
   label.inline { flex-wrap: wrap; }
   .tabs { flex-wrap: wrap; }
 }
+
+.responsive-mobile { display: none; }
+@media (max-width: 640px) {
+  .responsive-desktop { display: none; }
+  .responsive-mobile { display: block; }
+}

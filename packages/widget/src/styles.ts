@@ -33,6 +33,9 @@ textarea, input[type=text] {
 }
 textarea { min-height: 84px; resize: vertical; }
 textarea:focus, input:focus { outline: 2px solid var(--lb-accent); outline-offset: -1px; }
+[data-ref=shotBtn][data-attention=true] { outline: 2px solid var(--lb-accent); outline-offset: 3px; }
+.lb-missing-shot { border: 1px solid var(--lb-accent); border-radius: 8px; padding: 12px; margin: 12px 0; }
+.lb-missing-shot p { margin: 0 0 10px; }
 .lb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .lb-btn {
   display: inline-flex; align-items: center; gap: 6px;

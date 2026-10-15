@@ -18,6 +18,9 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | <code>pick</code> | <code>"⌖ Point at something"</code> |
 | <code>screenshot</code> | <code>"📷 Screenshot"</code> |
 | <code>retakeScreenshot</code> | <code>"📷 Retake screenshot"</code> |
+| <code>missingScreenshot</code> | <code>"No screenshot attached — add one?"</code> |
+| <code>addScreenshot</code> | <code>"Add screenshot"</code> |
+| <code>sendAnyway</code> | <code>"Send anyway"</code> |
 | <code>screenshotPreview</code> | <code>"Screenshot preview"</code> |
 | <code>screenshotSkipped</code> | <code>"Large page: no automatic screenshot. Add one from the panel if it helps."</code> |
 | <code>reviewSummary</code> | <code>"Review what will be sent"</code> |

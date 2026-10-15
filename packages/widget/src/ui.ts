@@ -33,6 +33,13 @@ const template = (s: WidgetStrings) => /* html */ `
       <button class="lb-btn" type="button" data-action="pick">${esc(s.pick)}</button>
       <button class="lb-btn" type="button" data-action="shot" data-ref="shotBtn" hidden>${esc(s.screenshot)}</button>
     </div>
+    <div class="lb-missing-shot" data-ref="missingShot" hidden role="group" aria-label="${esc(s.missingScreenshot)}">
+      <p role="status">${esc(s.missingScreenshot)}</p>
+      <div class="lb-actions">
+        <button class="lb-btn lb-primary" type="button" data-action="shot-add">${esc(s.addScreenshot)}</button>
+        <button class="lb-btn" type="button" data-action="send-anyway">${esc(s.sendAnyway)}</button>
+      </div>
+    </div>
     <div class="lb-selections" data-ref="selections"></div>
     <div class="lb-shot" data-ref="shot" hidden><img alt="${esc(s.screenshotPreview)}" data-ref="shotImg"><button class="lb-icon" type="button" data-action="shot-remove" aria-label="${esc(s.removeScreenshot)}">✕</button></div>
     <details class="lb-review" data-ref="review">
@@ -132,6 +139,7 @@ class Widget implements WidgetHandle {
   private pendingTimer: number | null = null;
   private autoShot: boolean;
   private sending = false;
+  private sendWithoutImages = false;
   private picking = false;
   private reviewTab: 'prompt' | 'json' = 'prompt';
 
@@ -324,6 +332,16 @@ class Widget implements WidgetHandle {
       case 'mask-mode': return this.setMaskMode(!this.maskMode);
       case 'cancel-pick': if (this.pickFromPanel) return this.open(); return this.close();
       case 'shot': void this.takeScreenshot(); return;
+      case 'shot-add':
+        this.q('[data-ref=missingShot]').hidden = true;
+        this.q('[data-ref=shotBtn]').focus();
+        void this.takeScreenshot();
+        return;
+      case 'send-anyway':
+        this.sendWithoutImages = true;
+        this.q('[data-ref=missingShot]').hidden = true;
+        void this.send();
+        return;
       case 'shot-remove': return this.setScreenshot(null);
       case 'send': void this.send(); return;
       case 'pop-more': return this.savePopover();
@@ -996,10 +1014,16 @@ class Widget implements WidgetHandle {
     try {
       const result = await this.capture(undefined, true);
       if (result === OVER_BUDGET) {
-        if (generation === this.captureGeneration) this.toast(this.strings.screenshotSkipped);
+        if (!this.destroyed && generation === this.captureGeneration) {
+          this.markMissingScreenshot();
+          this.toast(this.strings.screenshotSkipped);
+        }
         return null;
       }
-      if (!result) return null;
+      if (!result) {
+        if (!this.destroyed && generation === this.captureGeneration) this.markMissingScreenshot();
+        return null;
+      }
       if (this.destroyed || generation !== this.captureGeneration) {
         release(result.shot.bitmap);
         return null;
@@ -1008,6 +1032,7 @@ class Widget implements WidgetHandle {
       this.baseMasks = result.sensitive;
       return result.shot;
     } catch (err) {
+      if (!this.destroyed && generation === this.captureGeneration) this.markMissingScreenshot();
       this.opts.onError?.(err);
       return null;
     }
@@ -1112,9 +1137,22 @@ class Widget implements WidgetHandle {
     }
   }
 
+  private markMissingScreenshot(): void {
+    if (this.screenshot) return;
+    const btn = this.q('[data-ref=shotBtn]');
+    btn.dataset.attention = 'true';
+    btn.title = this.strings.missingScreenshot;
+  }
+
   private setScreenshot(blob: Blob | null, area: Rect | null = null, sensitive?: Rect[]): void {
     if (this.screenshotUrl) URL.revokeObjectURL(this.screenshotUrl);
     this.screenshot = blob;
+    if (blob) {
+      const btn = this.q('[data-ref=shotBtn]');
+      delete btn.dataset.attention;
+      btn.removeAttribute('title');
+      this.q('[data-ref=missingShot]').hidden = true;
+    }
     this.screenshotArea = blob ? area : null;
     if (sensitive) this.shotMasks = sensitive;
     this.screenshotUrl = blob ? URL.createObjectURL(blob) : null;
@@ -1250,9 +1288,19 @@ class Widget implements WidgetHandle {
       // Masks, crops and the base screenshot may still be rendering if the user sent quickly.
       await this.maskJob;
       await this.base;
+      await this.captureQueue;
       await Promise.all(this.cropJobs.values());
       if (this.destroyed || generation !== this.captureGeneration) return;
-      const payload = await this.client.send(this.draft());
+      const draft = this.draft();
+      if (this.opts.screenshot && !draft.attachments.length && !this.sendWithoutImages) {
+        this.cancelPending();
+        this.setStatus('');
+        this.open();
+        this.q('[data-ref=missingShot]').hidden = false;
+        this.q('[data-action=shot-add]').focus();
+        return;
+      }
+      const payload = await this.client.send(draft);
       if (this.destroyed || generation !== this.captureGeneration) return;
       if (payload) {
         this.opts.onSent?.(payload);
@@ -1275,6 +1323,11 @@ class Widget implements WidgetHandle {
   }
 
   private reset(): void {
+    this.sendWithoutImages = false;
+    this.q('[data-ref=missingShot]').hidden = true;
+    const shotBtn = this.q('[data-ref=shotBtn]');
+    delete shotBtn.dataset.attention;
+    shotBtn.removeAttribute('title');
     this.revision++;
     this.captureGeneration++;
     this.restoring = true;

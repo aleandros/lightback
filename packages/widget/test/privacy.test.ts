@@ -26,6 +26,9 @@ const rect = (x: number, y: number, width: number, height: number) => ({ x, y, w
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(function (this: Element) {
+    return [this.getBoundingClientRect()] as unknown as DOMRectList;
+  });
   calls = []; encoded = []; canvasOf.clear(); noContext = false; held = null; nullFrom = Infinity;
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { queueMicrotask(() => callback(0)); return 0; });
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
@@ -387,4 +390,81 @@ it('a click mask covers content overflowing the element box', async () => {
   } finally {
     delete (Range.prototype as Partial<Range>).getBoundingClientRect;
   }
+});
+
+it('marks skipped screenshots and asks before sending; send anyway is remembered for a retry', async () => {
+  const { widget, q, action, send } = setup({ widget: { screenshotMaxElements: 1 } });
+  await settle(); widget.startPicking(); await settle();
+  expect(q('shotBtn').dataset.attention).toBe('true');
+  pick('target'); action('done'); action('send'); await settle();
+  expect(q('missingShot').hidden).toBe(false);
+  expect(send).not.toHaveBeenCalled();
+  send.mockRejectedValueOnce(new Error('offline'));
+  action('send-anyway');
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+  await settle(); action('send');
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+  expect(send.mock.calls[1]![1]).toEqual([]);
+  expect(q('missingShot').hidden).toBe(true);
+  expect(q('shotBtn').dataset.attention).toBeUndefined();
+});
+
+it('adds a screenshot from the confirmation and stays in the editor without sending', async () => {
+  const { widget, q, action, send, attachment } = setup({ widget: { screenshotMaxElements: 1 } });
+  await settle(); widget.startPicking(); await settle();
+  pick('target'); action('done'); action('send'); await settle();
+  action('shot-add');
+  await vi.waitFor(() => expect(attachment('screenshot.png')).toBeDefined());
+  expect(q('missingShot').hidden).toBe(true);
+  expect(q('shotBtn').dataset.attention).toBeUndefined();
+  expect(q('panel').hidden).toBe(false);
+  expect(send).not.toHaveBeenCalled();
+  action('send'); await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+});
+
+it.each(['null', 'throw'])('marks an automatic capture that returns %s and does not mark a discarded draft', async (failure) => {
+  const { widget, q, action, capturer } = setup();
+  if (failure === 'null') capturer.mockResolvedValue(null as unknown as Blob);
+  else capturer.mockRejectedValue(new Error('capture failed'));
+  await settle(); widget.startPicking(); await settle();
+  expect(q('shotBtn').dataset.attention).toBe('true');
+  action('done'); action('discard');
+  expect(q('shotBtn').dataset.attention).toBeUndefined();
+});
+
+it('does not ask when only a crop remains attached', async () => {
+  const { widget, q, action, send, attachment } = setup();
+  await settle(); widget.startPicking(); pick('target');
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  action('done'); action('shot-remove'); action('send');
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+  expect(q('missingShot').hidden).toBe(true);
+  expect(send.mock.calls[0]![1].map((a) => a.name)).toEqual(['selection-1.png']);
+});
+
+it('waits for a manual capture before deciding whether an image-free send needs confirmation', async () => {
+  let complete!: (blob: Blob) => void;
+  const { widget, q, action, send, capturer, raw } = setup({ widget: { autoScreenshot: false } });
+  capturer.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  await settle(); widget.open();
+  const note = q('text') as HTMLTextAreaElement;
+  note.value = 'Manual capture in progress'; note.dispatchEvent(new Event('input'));
+  action('shot'); await settle(); action('send'); await settle();
+  expect(send).not.toHaveBeenCalled();
+  expect(q('missingShot').hidden).toBe(true);
+  complete(raw);
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+  expect(send.mock.calls[0]![1].map(a => a.name)).toEqual(['screenshot.png']);
+});
+
+it('does not mark a new draft when a discarded automatic capture fails late', async () => {
+  let fail!: (error: Error) => void;
+  const { widget, q, action, capturer } = setup();
+  capturer.mockImplementation(() => new Promise((_, reject) => { fail = reject; }));
+  await settle(); widget.startPicking(); await settle();
+  action('done'); action('discard');
+  fail(new Error('old capture failed'));
+  await settle();
+  expect(q('shotBtn').dataset.attention).toBeUndefined();
+  expect(q('missingShot').hidden).toBe(true);
 });
