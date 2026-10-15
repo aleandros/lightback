@@ -48,6 +48,8 @@ The rules apply before anything is stored, previewed or sent: the panel's Prompt
 
 React props come from the nearest named component above the element. Lightback walks that component's rendered fiber subtree, including portals; if any host element in it is sensitive, the props are omitted. Vue components are checked through their rendered roots; fragments (`v-for`, `v-if`, `<template>`) and fragment-rooted child components are searched through their children. Unknown roots, and trees larger than 5000 nodes, count as sensitive. When nothing on the page is sensitive the check is skipped.
 
+Image annotations are drawn over masked source images. Undo and Reset marks remove only annotations; they cannot restore sensitive pixels or remove selection outlines. Annotation strokes are not privacy masks.
+
 ## Screenshot masking
 
 With a `screenshot` capturer configured, the widget masks every capture before it becomes an attachment, a preview, a crop or a recovery record:

@@ -1,10 +1,11 @@
 import {
   componentChain, shortSelector, uniqueSelector, toPromptContext,
-  type Attachment, type ElementSelection, type LightbackClient, type Rect, type ScreenshotMask,
+  type Attachment, type ImageAnnotations, type ElementSelection, type LightbackClient, type Rect, type ScreenshotMask,
 } from '@lightback/core';
 import { defaultStrings, type WidgetStrings } from './strings';
 export { defaultStrings, type WidgetStrings } from './strings';
 import { styles } from './styles';
+import { AnnotationEditor } from './annotations';
 import { bitmapBounds, covers, decodeScreenshot, maskShot, release, type Shot } from './screenshot';
 import { captureCost, OMITS_WIDGET } from './capture';
 
@@ -34,6 +35,7 @@ const template = (s: WidgetStrings) => /* html */ `
       <button class="lb-btn" type="button" data-action="shot" data-ref="shotBtn" hidden>${esc(s.screenshot)}</button>
     </div>
     <div class="lb-selections" data-ref="selections"></div>
+    <button class="lb-btn" type="button" data-action="annotate-shot" data-ref="annotateShot" hidden>${esc(s.annotate)}</button>
     <div class="lb-shot" data-ref="shot" hidden><img alt="${esc(s.screenshotPreview)}" data-ref="shotImg"><button class="lb-icon" type="button" data-action="shot-remove" aria-label="${esc(s.removeScreenshot)}">✕</button></div>
     <details class="lb-review" data-ref="review">
       <summary>${esc(s.reviewSummary)} <span class="lb-counts" data-ref="counts"></span></summary>
@@ -42,6 +44,25 @@ const template = (s: WidgetStrings) => /* html */ `
     </details>
   </div>
   <footer><span class="lb-status" data-ref="status"></span><span class="lb-grow"></span><button class="lb-link danger" type="button" data-action="discard">${esc(s.discard)}</button><button class="lb-btn lb-primary" type="button" data-action="send">${esc(s.send)}</button></footer>
+</div>
+<div class="lb-annotation-editor" data-ref="annotationEditor" hidden role="dialog" aria-modal="true" aria-label="${esc(s.annotate)}">
+  <header><strong>${esc(s.annotate)}</strong><button class="lb-btn" type="button" data-action="annotation-close">${esc(s.annotationDone)}</button></header>
+  <div class="lb-body">
+    <p class="lb-hint">${esc(s.annotationHint)}</p>
+    <div class="lb-actions">
+      <label>${esc(s.annotationTool)}<select data-ref="annotationKind"><option value="rectangle">${esc(s.annotationRectangle)}</option><option value="arrow">${esc(s.annotationArrow)}</option></select></label>
+      <button class="lb-btn" type="button" data-action="annotation-add">${esc(s.annotationAdd)}</button>
+      <button class="lb-btn" type="button" data-action="annotation-undo">${esc(s.annotationUndo)}</button>
+      <button class="lb-btn" type="button" data-action="annotation-reset">${esc(s.annotationReset)}</button>
+    </div>
+    <div class="lb-annotation-image"><canvas data-ref="annotationCanvas" aria-label="${esc(s.annotationCanvas)}"></canvas></div>
+    <label>${esc(s.annotationSelected)}<select data-ref="annotationList"></select></label>
+    <div class="lb-annotation-fields">
+      ${(['X1', 'Y1', 'X2', 'Y2'] as const).map((field) => `<label>${esc(s[`annotation${field}`])}<input type="number" min="0" max="100" step="0.1" data-ref="annotation${field}"></label>`).join('')}
+    </div>
+    <div class="lb-actions"><button class="lb-btn" type="button" data-action="annotation-apply">${esc(s.annotationApply)}</button><button class="lb-btn" type="button" data-action="annotation-delete">${esc(s.remove)}</button></div>
+    <div data-ref="annotationStatus" role="status"></div>
+  </div>
 </div>
 <div class="lb-pickbar" data-ref="pickbar" hidden>
   <div class="lb-pick-btn" data-ref="keyboardPicker" tabindex="0" role="application" aria-label="${esc(s.keyboardPick)}" aria-describedby="lb-keyboard-hint">${esc(s.keyboardPick)}</div>
@@ -104,6 +125,7 @@ class Widget implements WidgetHandle {
   private selections: ElementSelection[] = [];
   /** Live DOM element for each selection (the container for regions), to re-anchor pins on scroll. */
   private liveEls = new Map<string, Element>();
+  private annotations: AnnotationEditor;
   private screenshot: Blob | null = null;
   private screenshotUrl: string | null = null;
   /** Document area the current screenshot shows; null when restored without one (its geometry is unknown). */
@@ -173,6 +195,13 @@ class Widget implements WidgetHandle {
       this.q('[data-ref=maskMode]').hidden = false;
     }
 
+    this.annotations = new AnnotationEditor(this.root, this.strings, () => {
+      if (this.destroyed) return;
+      if (this.screenshotUrl) this.q<HTMLImageElement>('[data-ref=shotImg]').src = this.annotations.url('screenshot', this.screenshotUrl);
+      this.renderSelections();
+      this.persistDraft();
+    }, () => { if (!this.destroyed) this.open(); });
+
     this.root.addEventListener('click', (e) => this.onRootClick(e));
     // Widget shortcuts/text must not bubble into host form handlers.
     this.root.addEventListener('keydown', (e) => {
@@ -229,9 +258,12 @@ class Widget implements WidgetHandle {
     const recoveryControls = this.root.querySelectorAll<HTMLTextAreaElement>('textarea');
     recoveryControls.forEach((control) => { control.disabled = true; });
     const revision = this.revision;
-    this.recovery = Promise.resolve(this.client.ready).then(() => {
+    this.recovery = Promise.resolve(this.client.ready).then(async () => {
       if (this.destroyed) return;
-      if (revision === this.revision) this.restoreDraft();
+      if (revision === this.revision) {
+        this.restoreDraft();
+        try { if (this.annotations.hasJobs) await this.annotations.flush(); } catch (error) { this.opts.onError?.(error); }
+      }
       this.recovered = true;
       recoveryControls.forEach((control) => { control.disabled = false; });
       if (!this.q('[data-ref=panel]').hidden && !this.root.activeElement) this.q<HTMLTextAreaElement>('[data-ref=text]').focus();
@@ -243,6 +275,7 @@ class Widget implements WidgetHandle {
 
   open(): void {
     this.rememberFocus();
+    this.annotations.close(false);
     this.recoveryIntent = null;
     this.stopPicking();
     this.q('.lb-pill').hidden = true;
@@ -252,6 +285,7 @@ class Widget implements WidgetHandle {
   }
 
   close(): void {
+    this.annotations.close(false);
     this.recoveryIntent = null;
     this.stopPicking();
     this.closePopover();
@@ -287,6 +321,7 @@ class Widget implements WidgetHandle {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.annotations.clear();
     this.revision++;
     this.cancelPending();
     this.stopPicking();
@@ -309,6 +344,7 @@ class Widget implements WidgetHandle {
     if (!target) return;
     const action = target.dataset.action;
     const tab = target.dataset.tab;
+    if (action?.startsWith('annotation-')) { this.annotations.action(action); return; }
     if (tab === 'prompt' || tab === 'json') {
       this.reviewTab = tab;
       this.root.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', (b as HTMLElement).dataset.tab === tab));
@@ -323,6 +359,8 @@ class Widget implements WidgetHandle {
       case 'done': this.savePopover(); return this.open();
       case 'mask-mode': return this.setMaskMode(!this.maskMode);
       case 'cancel-pick': if (this.pickFromPanel) return this.open(); return this.close();
+      case 'annotate-shot': return this.editImage('screenshot', target);
+      case 'annotate-crop': if (selId) this.editImage(selId, target); return;
       case 'shot': void this.takeScreenshot(); return;
       case 'shot-remove': return this.setScreenshot(null);
       case 'send': void this.send(); return;
@@ -515,6 +553,7 @@ class Widget implements WidgetHandle {
 
   startPicking(): void {
     this.rememberFocus();
+    this.annotations.close(false);
     if (!this.recovered) { this.recoveryIntent = 'pick'; return; }
     if (this.destroyed) return;
     this.recoveryIntent = null;
@@ -619,6 +658,7 @@ class Widget implements WidgetHandle {
     const crop = this.crops.get(id);
     if (crop) URL.revokeObjectURL(crop.url);
     this.crops.delete(id);
+    this.annotations.remove(id);
     this.cropJobs.delete(id);
     this.renderPins();
     this.renderSelections();
@@ -801,6 +841,7 @@ class Widget implements WidgetHandle {
         if (hit && this.crops.has(sel.id)) {
           URL.revokeObjectURL(this.crops.get(sel.id)!.url);
           this.crops.delete(sel.id);
+          this.annotations.remove(sel.id);
           dropped = true;
         }
         // Re-cut affected crops (the base may not show them: viewport crops can come from another capture), and
@@ -821,6 +862,7 @@ class Widget implements WidgetHandle {
       this.setScreenshot(null);
       for (const c of this.crops.values()) URL.revokeObjectURL(c.url);
       this.crops.clear();
+      this.annotations.clear();
       this.renderSelections();
       this.opts.onError?.(err);
     });
@@ -1004,6 +1046,7 @@ class Widget implements WidgetHandle {
         release(result.shot.bitmap);
         return null;
       }
+      this.annotations.remove('screenshot');
       this.setScreenshot(result.shot.blob, result.shot.area, result.sensitive);
       this.baseMasks = result.sensitive;
       return result.shot;
@@ -1056,6 +1099,7 @@ class Widget implements WidgetHandle {
       const prev = this.crops.get(sel.id);
       if (prev) URL.revokeObjectURL(prev.url);
       const cut = { x: shot.area.x + x0 / sx, y: shot.area.y + y0 / sy, width: w / sx, height: h / sy };
+      this.annotations.setSource(sel.id, blob);
       this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob), width: w / sx, area: roundRect(cut) });
       this.renderSelections();
       this.persistDraft();
@@ -1103,7 +1147,10 @@ class Widget implements WidgetHandle {
       const captured = await this.capture();
       const result = captured === OVER_BUDGET ? null : captured;
       if (result) release(result.shot.bitmap);
-      if (!this.destroyed && generation === this.captureGeneration) this.setScreenshot(result?.shot.blob ?? null, result?.shot.area, result?.sensitive);
+      if (!this.destroyed && generation === this.captureGeneration) {
+        this.annotations.remove('screenshot');
+        this.setScreenshot(result?.shot.blob ?? null, result?.shot.area, result?.sensitive);
+      }
     } catch (err) {
       this.setStatus(this.strings.screenshotFailed(err instanceof Error ? err.message : String(err)), true);
       this.opts.onError?.(err);
@@ -1115,12 +1162,15 @@ class Widget implements WidgetHandle {
   private setScreenshot(blob: Blob | null, area: Rect | null = null, sensitive?: Rect[]): void {
     if (this.screenshotUrl) URL.revokeObjectURL(this.screenshotUrl);
     this.screenshot = blob;
+    if (blob) this.annotations.setSource('screenshot', blob);
+    else this.annotations.remove('screenshot');
+    this.q('[data-ref=annotateShot]').hidden = !blob;
     this.screenshotArea = blob ? area : null;
     if (sensitive) this.shotMasks = sensitive;
     this.screenshotUrl = blob ? URL.createObjectURL(blob) : null;
     const box = this.q('[data-ref=shot]');
     box.hidden = !blob;
-    if (this.screenshotUrl) this.q<HTMLImageElement>('[data-ref=shotImg]').src = this.screenshotUrl;
+    if (this.screenshotUrl) this.q<HTMLImageElement>('[data-ref=shotImg]').src = this.annotations.url('screenshot', this.screenshotUrl);
     this.q('[data-ref=shotBtn]').textContent = blob ? this.strings.retakeScreenshot : this.strings.screenshot;
     this.refreshReview();
     this.persistDraft();
@@ -1131,7 +1181,7 @@ class Widget implements WidgetHandle {
   private persistDraft(): void {
     if (this.destroyed || this.restoring) return;
     this.revision++;
-    this.client.saveDraft?.(this.draft());
+    this.client.saveDraft?.(this.draft(true));
   }
 
   private restoreDraft(): void {
@@ -1151,12 +1201,17 @@ class Widget implements WidgetHandle {
         if (crop) {
           // Older drafts have no crop area; estimate the CSS width from the selection against the current page.
           const width = crop.area?.width ?? this.cropArea(selection, pageRect()).width;
+          this.annotations.setSource(selection.id, crop.blob);
           this.crops.set(selection.id, { blob: crop.blob, url: URL.createObjectURL(crop.blob), width, area: crop.area });
         }
         // Coordinates remain the captured coordinates; a selector may now point at different content.
       }
       const shot = draft.attachments.find((a) => a.name === 'screenshot.png');
       this.setScreenshot(shot?.blob ?? null, shot?.area ?? null);
+      for (const layer of draft.imageAnnotations ?? []) {
+        const key = layer.attachment === 'screenshot.png' ? 'screenshot' : this.selections.find((s) => s.crop === layer.attachment)?.id;
+        if (key) this.annotations.restore(key, layer.shapes);
+      }
       this.renderSelections();
       this.renderPins();
       this.updateCount();
@@ -1166,17 +1221,29 @@ class Widget implements WidgetHandle {
 
   /* ---------- send ---------- */
 
-  private draft() {
+  private editImage(key: string, opener: HTMLElement): void {
+    if (!this.annotations.hasSource(key)) return;
+    this.stopPicking();
+    this.q('[data-ref=panel]').hidden = true;
+    void this.annotations.open(key, opener);
+  }
+
+  private draft(originals = false) {
     const attachments: Attachment[] = [];
+    const imageAnnotations: ImageAnnotations[] = [];
     if (this.screenshot) {
       const area = this.screenshotArea ? { area: this.screenshotArea } : {};
-      attachments.push({ name: 'screenshot.png', type: this.screenshot.type || 'image/png', size: this.screenshot.size, ...area, blob: this.screenshot });
+      const blob = originals ? this.screenshot : this.annotations.blob('screenshot', this.screenshot);
+      attachments.push({ name: 'screenshot.png', type: blob.type || 'image/png', size: blob.size, ...area, blob });
+      imageAnnotations.push({ attachment: 'screenshot.png', shapes: this.annotations.shapes('screenshot') });
     }
     const selections = this.selections.map((sel, i) => {
       const crop = this.crops.get(sel.id);
       if (!crop) return { ...sel, crop: undefined };
       const name = `selection-${i + 1}.png`;
-      attachments.push({ name, type: 'image/png', size: crop.blob.size, ...(crop.area ? { area: crop.area } : {}), blob: crop.blob });
+      const blob = originals ? crop.blob : this.annotations.blob(sel.id, crop.blob);
+      attachments.push({ name, type: 'image/png', size: blob.size, ...(crop.area ? { area: crop.area } : {}), blob });
+      imageAnnotations.push({ attachment: name, shapes: this.annotations.shapes(sel.id) });
       return { ...sel, crop: name };
     });
     const masks: ScreenshotMask[] = [
@@ -1185,7 +1252,8 @@ class Widget implements WidgetHandle {
         .map((docRect) => ({ docRect, reason: 'sensitive' as const })),
       ...this.masks.map((docRect) => ({ docRect, reason: 'reporter' as const })),
     ];
-    return { text: this.text, selections, attachments, ...(masks.length ? { masks } : {}) };
+    return { text: this.text, selections, attachments, ...(masks.length ? { masks } : {}),
+      ...(originals ? { imageAnnotations: imageAnnotations.filter((l) => l.shapes.length) } : {}) };
   }
 
   /** Leave pick mode and show the cancellable "Sending…" card; the report goes out when it drains. */
@@ -1251,6 +1319,7 @@ class Widget implements WidgetHandle {
       await this.maskJob;
       await this.base;
       await Promise.all(this.cropJobs.values());
+      if (this.annotations.hasJobs) await this.annotations.flush();
       if (this.destroyed || generation !== this.captureGeneration) return;
       const payload = await this.client.send(this.draft());
       if (this.destroyed || generation !== this.captureGeneration) return;
@@ -1287,6 +1356,7 @@ class Widget implements WidgetHandle {
     this.liveEls.clear();
     for (const c of this.crops.values()) URL.revokeObjectURL(c.url);
     this.crops.clear();
+    this.annotations.clear();
     this.cropJobs.clear();
     this.seenFrom.clear();
     this.extra = null;
@@ -1325,7 +1395,7 @@ class Widget implements WidgetHandle {
         const crop = this.crops.get(s.id);
         // Natural proportions, never enlarged past the selected area's on-page size (+2 for the border-box border).
         const cap = Number.isFinite(crop?.width) ? ` style="max-width:min(100%, ${Math.max(1, Math.round(crop!.width)) + 2}px)"` : '';
-        const thumb = crop ? `<img class="lb-thumb" src="${crop.url}"${cap} alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
+        const thumb = crop ? `<img class="lb-thumb" src="${this.annotations.url(s.id, crop.url)}"${cap} alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
         return `<div class="lb-sel" data-id="${esc(s.id)}">
   <div class="lb-sel-head"><span class="lb-badge${s.kind === 'region' ? ' region' : ''}">${i + 1}</span><span class="lb-chain" title="${esc(s.components.join(' < '))}">${chain} ${kind}</span><button class="lb-icon" type="button" data-action="sel-edit" aria-label="${esc(this.strings.editComment)}" title="${esc(this.strings.editComment)}">✎</button><button class="lb-icon" type="button" data-action="sel-remove" aria-label="${esc(this.strings.removeSelection)}">✕</button></div>
   <code class="lb-selector">${esc(s.selector)}</code>
@@ -1334,6 +1404,7 @@ class Widget implements WidgetHandle {
   ${hidden}
   ${children}
   ${thumb}
+  ${crop && this.annotations.hasSource(s.id) ? `<button class="lb-btn" type="button" data-action="annotate-crop">${esc(this.strings.annotate)}</button>` : ''}
   ${note}
 </div>`;
       })

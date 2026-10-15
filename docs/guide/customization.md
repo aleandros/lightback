@@ -103,6 +103,22 @@ screenshot: ({ area }) => import('html2canvas').then(async (m) => {
 
 Capturers written for earlier versions ignore the argument and return the whole page, which is what `'page'` asks for. Crops and privacy masks are placed on the image by document coordinates, so the image must show exactly the requested area. The widget masks sensitive elements and reporter-hidden areas after the capturer returns; see [Privacy and masking](./privacy.md#contract-with-your-capturer).
 
+## Image annotations
+
+In the review panel choose **Annotate image** above the screenshot or under a selection crop. Choose Rectangle or Arrow and drag across the image. For keyboard editing, choose **Add shape**, select a shape from **Shape to edit**, change its Start/End X/Y percentages, and choose **Apply endpoints**. Reversing an arrow's endpoints reverses its direction. **Remove** deletes the selected mark. **Undo** restores the previous edit; **Reset marks** removes all marks from that image and can itself be undone. Done or Escape returns to the report after PNG rendering finishes. Escape during a drag cancels that unfinished mark.
+
+![Rectangle and arrow annotations with keyboard endpoint controls](../assets/annotation-editor.png)
+
+Coordinates are relative to the entire image, so preview resizing, device pixel ratio and document scroll do not shift marks. Each screenshot and crop has its own layer: editing the screenshot does not alter its crops. Existing selection outlines remain part of crop pixels. Marks are orange with a white edge for contrast. They draw over already masked pixels; they cannot undo a privacy mask, and are not a privacy tool themselves. Use **Hide area** to conceal content.
+
+The editor holds up to 50 shapes per image, the screenshot plus up to 50 crops, and the last 20 undo steps during an editor session. Done keeps edits in the draft; closing and reopening starts a new undo history. A new capture or retake clears that screenshot's marks. Recutting or dropping a crop after masking clears its marks; repainting the same screenshot with a new mask keeps its marks. Removing an image or Discard clears its layer. Failed sends keep edits.
+
+Previews display the same flattened PNGs that are sent, with the original bitmap dimensions and attachment `area`. Sending waits for image edits to finish; encoding failure retains the draft and surfaces an error. There are no new payload fields and no additional attachments. With `persistence.attachments: true`, recovery stores the masked source image and bounded vector layer so marks remain editable after reload. Undo history is not persisted. Without image persistence (or if the image exceeds the recovery budget), its edit layer is omitted too.
+
+![Annotated crop preview in the feedback review panel](../assets/annotation-review.png)
+
+Custom editors can use the optional draft-only `imageAnnotations` field: an array of `{ attachment, shapes }`, where each shape has `kind: 'rectangle' | 'arrow'` and normalized `x1`, `y1`, `x2`, `y2` endpoints between 0 and 1. The built-in widget flattens these before send; core does not render custom editors' images.
+
 ## Keeping the widget out of its own reports
 
 Any element with `data-lightback-ignore` is invisible to the picker and the breadcrumb collector. The widget's host has it already. Use it on your own feedback button so a click on it is not recorded as a breadcrumb:

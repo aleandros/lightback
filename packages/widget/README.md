@@ -48,3 +48,9 @@ For script tags, serve `dist/lightback-lazy.iife.js` and `dist/lightback-ui.js` 
 ## Session recovery (unreleased)
 
 With the new core/widget versions, redacted collector buffers and unfinished reports recover after reload in the same tab. Recovery uses IndexedDB plus a sessionStorage key, defaults to a 30-minute expiry since the last checkpoint and a 5 MiB budget, and clears on successful send or Discard. Set `persistence: false` on `createLightback()` to opt out of recovery storage. Screenshot/crop blobs require `persistence: { attachments: true }` and a capturer that masks sensitive pixels first. Storage failures leave the editor usable in memory. The restored report never resumes a pending send automatically. See the [recovery guide](https://aleandros.github.io/lightback/guide/customization#restore-work-after-reload) for retention, cleanup, limits and custom-editor APIs.
+
+## Image annotations
+
+Choose **Annotate image** on a screenshot or crop in the review panel. Draw rectangles or arrows, or use Add shape and the labeled endpoint percentage inputs with the keyboard. Shapes can be edited, removed, undone or reset; existing masks and crop selection outlines remain. Each image is independent, and previews use the same flattened PNGs sent as attachments. A fresh capture clears its old marks; recutting a crop clears that crop's marks.
+
+The editor supports 50 shapes per image, the screenshot plus up to 50 crops, and the last 20 undo steps while the editor is open. With core screenshot persistence enabled, masked originals and vector layers recover as editable images; undo history does not persist. No extra screenshot library or runtime dependency is needed. See the [annotation guide](https://aleandros.github.io/lightback/guide/customization#image-annotations).

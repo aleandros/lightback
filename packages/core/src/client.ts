@@ -29,6 +29,32 @@ export interface Draft {
   attachments: Attachment[];
   /** Screenshot masks to report and to reapply to later captures (the built-in widget records them). */
   masks?: ScreenshotMask[];
+  /** Widget edit layers over masked attachment originals. Draft-only; the widget flattens these before sending. */
+  imageAnnotations?: ImageAnnotations[];
+}
+
+/** Endpoints relative to the image (0–1), independent of bitmap scale and document scroll. */
+export interface ImageAnnotation {
+  kind: 'rectangle' | 'arrow';
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+export interface ImageAnnotations {
+  attachment: string;
+  shapes: ImageAnnotation[];
+}
+
+function cleanAnnotations(value: unknown, names: Set<string>): ImageAnnotations[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 51).flatMap((layer) => {
+    if (!layer || typeof layer.attachment !== 'string' || !names.has(layer.attachment) || !Array.isArray(layer.shapes)) return [];
+    const shapes = layer.shapes.slice(0, 50).filter((s: ImageAnnotation) => s &&
+      ['rectangle', 'arrow'].includes(s.kind) && [s.x1, s.y1, s.x2, s.y2].every((n) => Number.isFinite(n) && n >= 0 && n <= 1))
+      .map((s: ImageAnnotation) => ({ kind: s.kind, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 }));
+    return shapes.length ? [{ attachment: layer.attachment, shapes }] : [];
+  });
 }
 
 export interface LightbackClient {
@@ -124,11 +150,12 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
   const clean = <T>(value: T): T => scrubRecovery(value, redact, limits.string) as T;
   const cleanDraft = (draft: Draft): Draft => {
     // Masks are rebuilt from validated numbers and an enum, so they need no string scrubbing or its array cap.
-    const { attachments, masks, ...metadata } = draft;
+    const { attachments, masks, imageAnnotations, ...metadata } = draft;
     const result = clean(metadata);
     return {
       ...result,
       ...(masks !== undefined ? { masks: cleanMasks(masks) } : {}),
+      ...(imageAnnotations !== undefined ? { imageAnnotations: cleanAnnotations(imageAnnotations, new Set(attachments.slice(0, 51).map((a) => a?.name))).map((l) => ({ ...l, attachment: clean(l.attachment) })) } : {}),
       selections: result.selections.slice(0, 50),
       attachments: attachments.slice(0, 51).filter((a) => a && typeof a.name === 'string' && a.blob instanceof Blob).map((a) => ({
         name: clean(a.name), type: clean(a.blob.type), size: a.blob.size, ...cleanArea(a.area), blob: a.blob,
