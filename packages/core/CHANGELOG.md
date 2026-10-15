@@ -1,5 +1,11 @@
 # @lightback/core
 
+## 0.2.4
+
+### Patch Changes
+
+- f7e2c1f: Add editable rectangle, arrow, ellipse/circle and text annotations to screenshots and crops, with a visual toolbar, drag-to-move and resize handles, keyboard controls, undo/reset, exact PNG previews, and editable recovery over masked originals.
+
 ## 0.2.3
 
 ### Patch Changes
