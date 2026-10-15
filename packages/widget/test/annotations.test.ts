@@ -11,7 +11,7 @@ const cleanup: Array<() => void> = [];
 afterEach(() => { cleanup.splice(0).reverse().forEach((fn) => fn()); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 async function setup(withCrop = false) {
   const encodes: BlobCallback[] = [];
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage() {}, beginPath() {}, rect() {}, stroke() {}, moveTo() {}, lineTo() {} } as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage() {}, beginPath() {}, rect() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {} } as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => { encodes.push(callback); });
   let nextUrl = 0;
   vi.stubGlobal('URL', class extends URL {
@@ -98,6 +98,10 @@ it('lets Done leave a failed crop and does not block another image editor on tha
   const { widget, client, encodes, click, deliver } = await setup(true);
   widget.open(); click('annotate-crop'); await settle();
   click('annotation-add'); await settle(); encodes[0]!(null); await settle();
+  click('annotation-select');
+  const list = widget.element.shadowRoot!.querySelector<HTMLSelectElement>('[data-ref=annotationList]')!;
+  list.dispatchEvent(new Event('change'));
+  expect(widget.element.shadowRoot!.querySelector('[data-ref=annotationStatus]')!.textContent).toContain('Could not encode annotations');
   click('annotation-close'); await settle();
   const panel = widget.element.shadowRoot!.querySelector<HTMLElement>('[data-ref=panel]')!;
   expect(panel.hidden).toBe(false);

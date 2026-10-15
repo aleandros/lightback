@@ -20,6 +20,15 @@ const DEFAULT_MAX_ELEMENTS = 8000;
 const OVER_BUDGET = 'over-budget';
 type Captured = { shot: Shot; sensitive: Rect[] };
 
+const annotationIcon = (path: string) => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${path}</svg>`;
+const annotationIcons = {
+  select: annotationIcon('<path d="m5 3 14 9-7 1-3 7Z"/>'),
+  rectangle: annotationIcon('<rect x="4" y="5" width="16" height="14" rx="1"/>'),
+  arrow: annotationIcon('<path d="M5 19 19 5M7 5h12v12"/>'),
+  undo: annotationIcon('<path d="m9 5-5 5 5 5M4 10h10a6 6 0 0 1 0 12" transform="translate(0 -2)"/>'),
+  remove: annotationIcon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>'),
+};
+
 const template = (s: WidgetStrings) => /* html */ `
 <div class="lb-pill" part="pill" data-ref="pill" role="group" aria-label="${esc(s.feedback)}">
   <button class="lb-pill-btn" type="button" data-action="pick" data-ref="pillPick">${esc(s.pillPick)}</button>
@@ -46,23 +55,34 @@ const template = (s: WidgetStrings) => /* html */ `
   <footer><span class="lb-status" data-ref="status"></span><span class="lb-grow"></span><button class="lb-link danger" type="button" data-action="discard">${esc(s.discard)}</button><button class="lb-btn lb-primary" type="button" data-action="send">${esc(s.send)}</button></footer>
 </div>
 <div class="lb-annotation-editor" data-ref="annotationEditor" hidden role="dialog" aria-modal="true" aria-label="${esc(s.annotate)}">
-  <header><strong>${esc(s.annotate)}</strong><button class="lb-btn" type="button" data-action="annotation-close">${esc(s.annotationDone)}</button></header>
+  <header><strong>${esc(s.annotate)}</strong><button class="lb-btn lb-primary" type="button" data-action="annotation-close">${esc(s.annotationDone)}</button></header>
   <div class="lb-body">
-    <p class="lb-hint">${esc(s.annotationHint)}</p>
-    <div class="lb-actions">
-      <label>${esc(s.annotationTool)}<select data-ref="annotationKind"><option value="rectangle">${esc(s.annotationRectangle)}</option><option value="arrow">${esc(s.annotationArrow)}</option></select></label>
-      <button class="lb-btn" type="button" data-action="annotation-add">${esc(s.annotationAdd)}</button>
-      <button class="lb-btn" type="button" data-action="annotation-undo">${esc(s.annotationUndo)}</button>
-      <button class="lb-btn" type="button" data-action="annotation-reset">${esc(s.annotationReset)}</button>
+    <div class="lb-annotation-toolbar">
+      <div class="lb-annotation-tools" role="group" aria-label="${esc(s.annotationTool)}">
+        <button class="lb-btn" type="button" data-action="annotation-select" aria-pressed="false">${annotationIcons.select}${esc(s.annotationSelect)}</button>
+        <button class="lb-btn" type="button" data-action="annotation-rectangle" aria-pressed="true">${annotationIcons.rectangle}${esc(s.annotationRectangle)}</button>
+        <button class="lb-btn" type="button" data-action="annotation-arrow" aria-pressed="false">${annotationIcons.arrow}${esc(s.annotationArrow)}</button>
+      </div>
+      <div class="lb-annotation-tools" role="group" aria-label="${esc(s.annotationEdits)}">
+        <button class="lb-btn" type="button" data-action="annotation-undo">${annotationIcons.undo}${esc(s.annotationUndo)}</button>
+        <button class="lb-btn" type="button" data-action="annotation-delete">${annotationIcons.remove}${esc(s.remove)}</button>
+      </div>
     </div>
+    <p class="lb-hint" data-ref="annotationHint">${esc(s.annotationHint)}</p>
     <div class="lb-annotation-image"><canvas role="img" data-ref="annotationCanvas" aria-label="${esc(s.annotationCanvas)}"></canvas></div>
-    <label>${esc(s.annotationSelected)}<select data-ref="annotationList"></select></label>
-    <div class="lb-annotation-fields">
-      ${(['X1', 'Y1', 'X2', 'Y2'] as const).map((field) => `<label>${esc(s[`annotation${field}`])}<input type="number" min="0" max="100" step="0.1" data-ref="annotation${field}"></label>`).join('')}
-    </div>
-    <div class="lb-actions"><button class="lb-btn" type="button" data-action="annotation-apply">${esc(s.annotationApply)}</button><button class="lb-btn" type="button" data-action="annotation-delete">${esc(s.remove)}</button></div>
-    <div data-ref="annotationStatus" role="status"></div>
+    <details class="lb-annotation-precise" data-ref="annotationPrecise">
+      <summary data-ref="annotationPreciseToggle">${esc(s.annotationPrecise)}</summary>
+      <div class="lb-annotation-precision-body">
+        <button class="lb-btn" type="button" data-action="annotation-add">${esc(s.annotationAdd)} · <span data-ref="annotationDrawingKind">${esc(s.annotationRectangle)}</span></button>
+        <label>${esc(s.annotationSelected)}<select data-ref="annotationList"></select></label>
+        <div class="lb-annotation-fields">
+          ${(['X1', 'Y1', 'X2', 'Y2'] as const).map((field) => `<label>${esc(s[`annotation${field}`])}<input type="number" min="0" max="100" step="0.1" data-ref="annotation${field}"></label>`).join('')}
+        </div>
+        <div class="lb-actions"><button class="lb-btn" type="button" data-action="annotation-apply">${esc(s.annotationApply)}</button></div>
+      </div>
+    </details>
   </div>
+  <footer><span class="lb-status" data-ref="annotationStatus" role="status"></span><span class="lb-grow"></span><button class="lb-link" type="button" data-action="annotation-reset">${esc(s.annotationReset)}</button></footer>
 </div>
 <div class="lb-pickbar" data-ref="pickbar" hidden>
   <div class="lb-pick-btn" data-ref="keyboardPicker" tabindex="0" role="application" aria-label="${esc(s.keyboardPick)}" aria-describedby="lb-keyboard-hint">${esc(s.keyboardPick)}</div>
