@@ -2,10 +2,11 @@ import { shellStyles } from './shell';
 
 export const styles = /* css */ `
 ${shellStyles}
+:host([data-capturing]) * { pointer-events: none !important; }
 /* Stacking inside the host: pins live on the page, chrome goes above them. */
 .lb-masks, .lb-pins { z-index: 1; }
 .lb-highlight, .lb-drag { z-index: 2; }
-.lb-pickbar { z-index: 3; }
+.lb-pickbar, .lb-keyboard-help { z-index: 3; }
 .lb-popover { z-index: 4; }
 .lb-panel, .lb-pill { z-index: 5; position: relative; }
 .lb-panel { position: absolute; }
@@ -82,11 +83,20 @@ pre.lb-preview {
 .lb-status.error { color: var(--lb-danger); }
 
 /* ---- pick mode ---- */
+.lb-announcement { position: fixed; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.lb-keyboard-help {
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  max-width: calc(100vw - 32px); width: max-content; padding: 8px 12px;
+  background: var(--lb-bg); color: var(--lb-fg); border: 1px solid var(--lb-border);
+  border-radius: 8px; box-shadow: var(--lb-shadow); font-size: 12px; pointer-events: none;
+}
+.lb-keyboard-help span { display: block; }
+[data-ref=keyboardPicker]:focus-visible, .lb-pick-btn:focus-visible { outline: 2px solid var(--lb-accent); outline-offset: 2px; }
 .lb-pickbar {
   position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 10px;
   background: var(--lb-fg); color: var(--lb-bg); padding: 6px 8px 6px 14px; border-radius: 999px;
-  font-size: 13px; font-weight: 600; box-shadow: var(--lb-shadow); white-space: nowrap;
+  font-size: 13px; font-weight: 600; box-shadow: var(--lb-shadow); width: max-content; max-width: calc(100vw - 24px); flex-wrap: wrap;
 }
 .lb-pickbar .lb-pick-hint { opacity: .85; font-weight: 500; }
 .lb-pickbar .lb-count { background: var(--lb-accent); color: var(--lb-accent-contrast); border-radius: 999px; padding: 2px 10px; font-size: 12px; }

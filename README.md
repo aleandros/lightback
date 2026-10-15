@@ -278,9 +278,15 @@ React 18 and React 19 are covered by inspection and source-stamping fixtures. Re
 
 For production JSX/TSX, install the optional build-time `@lightback/source` package and add `lightbackSource()` from `@lightback/source/vite` before your React plugin. It stamps native tags with project-relative paths and original one-based line/column positions. `@lightback/source/babel` supports Babel pipelines, including Webpack's `babel-loader`; `transformSource` is available for other build adapters. All entries support `root`, `include` and `exclude`. Use identical settings on client and server for hydration. Source paths become visible in the DOM and bundle. Vue templates use `@lightback/source/vue` before the Vue Vite plugin; Svelte templates use `@lightback/source/svelte` first in the compiler preprocess list. Both preserve original template coordinates in client and SSR builds. See the [source-location guide](docs/guide/source-locations.md) for configuration and the support matrix.
 
+### Keyboard picking
+
+Tab to **Point at something** and press Enter. Focus moves to **Keyboard picker**: Down/Up visit the next/previous element in DOM order, Right enters a child, Left moves to a parent, and Enter or Space selects the highlighted element. Offscreen targets scroll into view. Tab/Shift+Tab cycle through picker controls and the comment box without entering host forms. Escape in a comment keeps it and returns to picking; Escape in the picker opens review. Cancel keeps the draft and returns to the editor or original trigger. Closing review or completing a send returns focus to the opener when it still exists.
+
+The picker announces target locators without page text or input values and skips hidden, inert, ARIA-hidden and ignored subtrees. **Hide area** also works with keyboard element selection. Arbitrary region drawing still requires a pointer; host shadow trees and iframe contents are not traversed. See [keyboard controls](docs/guide/getting-started.md#keyboard-controls).
+
 ## How element selection works
 
-The picker uses `elementFromPoint` and describes the element with a unique selector (preferring `data-testid`, then `id`, then a structural path), interesting attributes, trimmed text, and a component chain. The chain comes from React fiber internals (`__reactFiber$…`) or Vue instance internals (`__vueParentComponent`, `__vue__`), so a selection reads as `InvoiceRow ‹ InvoiceTable ‹ Dashboard ‹ App` rather than a CSS path.
+The pointer picker uses `elementFromPoint`; the keyboard picker traverses rendered page elements without focusing them. Both describe the element with a unique selector (preferring `data-testid`, then `id`, then a structural path), interesting attributes, trimmed text, and a component chain. The chain comes from React fiber internals (`__reactFiber$…`) or Vue instance internals (`__vueParentComponent`, `__vue__`), so a selection reads as `InvoiceRow ‹ InvoiceTable ‹ Dashboard ‹ App` rather than a CSS path.
 
 ## Redaction
 

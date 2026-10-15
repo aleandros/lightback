@@ -82,6 +82,24 @@ For a lazy script-tag install, serve `dist/lightback-lazy.iife.js` and `dist/lig
 
 A "Sending feedback…" card gives five seconds to cancel or edit. With a capturer configured, the report posts to `/api/feedback` as `multipart/form-data` with a `payload` JSON field and one PNG per screenshot and crop. Without images it sends JSON. See [Backend](./backend.md) for the contract.
 
+### Keyboard controls
+
+Tab to **Point at something** and activate it with Enter or Space. The same controls work with eager, lazy and framework integrations, including a custom trigger calling `startPicking()`.
+
+| Key in Keyboard picker | Action |
+| --- | --- |
+| Down / Up | Next / previous rendered element in DOM order |
+| Right / Left | First rendered child / rendered parent |
+| Enter / Space | Select the highlighted element and focus its comment |
+| Tab / Shift+Tab | Cycle through the picker, Hide area (when available), Cancel, Done and any open comment controls |
+| Escape | Open the review panel, keeping the draft |
+
+Navigation pauses during screenshots so scrolling cannot misalign masks. Navigation stops at the beginning/end; it does not wrap through page elements. Offscreen targets scroll into view. Target announcements contain a locator, never page text or input values. Hidden, inert, `aria-hidden="true"` and `data-lightback-ignore` subtrees are skipped. Page elements are not focused or activated, so selecting a button does not click it and selecting an input does not edit it.
+
+In the comment box, Enter queues sending, Shift+Enter inserts a newline, and Escape keeps the note and returns focus to the picker. **Add more** does the same after saving the note. **Done** opens review. **Cancel** keeps the draft and returns to the editor if picking began there, otherwise to the original trigger. Closing review (Close or Escape), cancelling a pending send, or successfully sending returns focus to the opener if it remains available; a visible built-in trigger is the fallback. If the reporter has already moved focus back into the host app, it is left there. `close()` also exits picking; `destroy()` restores an external opener when possible.
+
+To mask an element, Tab to **Hide area**, activate it, return to **Keyboard picker**, navigate and press Enter or Space. Freeform rectangle selection/masking still requires a pointer. The picker does not enter host shadow trees or iframe documents. Screen-reader navigation is scoped to the focused picker control; use Tab to reach ordinary buttons and text fields. Keyboard instructions and announcements are customizable through `strings`. To edit or remove earlier selections, open review with Done. Traversal follows rendered DOM order, including elements visually covered by other page content; it excludes ARIA-hidden decoration. Host modal focus traps must allow focus into the widget. Earlier window-level capture handlers can still intercept its keys.
+
 ## What arrived
 
 The payload for that single click looks like this, trimmed:
