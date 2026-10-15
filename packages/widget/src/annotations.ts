@@ -39,6 +39,7 @@ export function paintAnnotations(canvas: HTMLCanvasElement, source: Drawable, sh
 /** Owns bounded vector layers and derived PNGs. Sources are always already masked. */
 export class AnnotationEditor {
   private layers = new Map<string, Layer>();
+  private renderQueue: Promise<void> = Promise.resolve();
   private active: string | null = null;
   private bitmap: Drawable | null = null;
   private history: ImageAnnotation[][] = [];
@@ -49,7 +50,7 @@ export class AnnotationEditor {
   private load = 0;
   private canvas: HTMLCanvasElement;
   private box: HTMLElement;
-  constructor(private root: ShadowRoot, private strings: WidgetStrings, private changed: () => void, private closed: () => void) {
+  constructor(private root: ShadowRoot, private strings: WidgetStrings, private changed: () => void, private closed: (error?: unknown) => void) {
     this.box = this.q('annotationEditor');
     this.canvas = this.q('annotationCanvas');
     this.canvas.width = this.canvas.height = 1;
@@ -81,6 +82,7 @@ export class AnnotationEditor {
     this.canvas.addEventListener('pointercancel', () => this.cancelDrag());
     this.canvas.addEventListener('lostpointercapture', () => this.cancelDrag());
     this.box.addEventListener('keydown', (e) => {
+      if (e.isComposing) return;
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (this.drag) this.cancelDrag(); else void this.finish(); }
       if (e.key === 'Tab') {
         const controls = Array.from(this.box.querySelectorAll<HTMLElement>('button:not(:disabled),select:not(:disabled),input:not(:disabled)'));
@@ -95,6 +97,7 @@ export class AnnotationEditor {
   shapes(key: string): ImageAnnotation[] { return copy(this.layers.get(key)?.shapes ?? []); }
   blob(key: string, fallback: Blob): Blob { return this.layers.get(key)?.blob ?? fallback; }
   url(key: string, fallback: string): string { return this.layers.get(key)?.url ?? fallback; }
+  isOpen(key: string): boolean { return this.active === key; }
   hasSource(key: string): boolean { return this.layers.has(key); }
   setSource(key: string, source: Blob, shapes = this.shapes(key)): void {
     // Reserve a slot for the screenshot, plus at most 50 editable crops.
@@ -117,13 +120,14 @@ export class AnnotationEditor {
   }
   clear(): void { this.close(false); for (const key of this.layers.keys()) this.remove(key); }
   get hasJobs(): boolean { return [...this.layers.values()].some((l) => !!l.job); }
-  async flush(): Promise<void> {
+  async flush(key?: string): Promise<void> {
+    const layers = () => key ? [this.layers.get(key)].filter((l): l is Layer => !!l) : [...this.layers.values()];
     // New edits or replaced images may arrive while an encode is in progress.
     while (true) {
-      const jobs = [...this.layers.values()].map((l) => l.job);
+      const jobs = layers().map((l) => l.job);
       await Promise.all(jobs);
-      if ([...this.layers.values()].some((l) => l.job && !jobs.includes(l.job))) continue;
-      for (const l of this.layers.values()) if (l.error) throw l.error;
+      if (layers().some((l) => l.job && !jobs.includes(l.job))) continue;
+      for (const l of layers()) if (l.error) throw l.error;
       return;
     }
   }
@@ -134,6 +138,7 @@ export class AnnotationEditor {
     this.active = key; this.opener = opener; this.history = []; this.selected = layer.shapes.length - 1;
     this.box.hidden = false;
     for (const child of this.root.children) if (child instanceof HTMLElement && child !== this.box) child.inert = true;
+    this.controls();
     this.q('annotationStatus').textContent = this.strings.loading;
     this.q('annotationKind').focus();
     const load = ++this.load;
@@ -150,13 +155,14 @@ export class AnnotationEditor {
     const load = this.load;
     this.q('annotationStatus').textContent = this.strings.loading;
     try {
-      await this.flush();
+      await this.flush(this.active ?? undefined);
       if (load === this.load) this.close();
     } catch (error) {
-      if (load === this.load) this.q('annotationStatus').textContent = this.strings.screenshotFailed(String(error));
+      // Keep the failed layer in the draft, but always leave a way back to remove it or retry.
+      if (load === this.load) this.close(true, error);
     }
   }
-  close(notify = true): void {
+  close(notify = true, error?: unknown): void {
     if (this.active === null) return;
     const opener = this.opener;
     const action = opener?.dataset.action;
@@ -168,7 +174,7 @@ export class AnnotationEditor {
     this.bitmap = null; this.canvas.width = this.canvas.height = 1; this.history = [];
     this.opener = null;
     if (notify) {
-      this.closed();
+      this.closed(error);
       // Rendering a crop replaces its card; restore focus to the replacement control.
       const target = opener?.isConnected ? opener : Array.from(this.root.querySelectorAll<HTMLElement>('[data-action]'))
         .find((el) => el.dataset.action === action && el.closest<HTMLElement>('[data-id]')?.dataset.id === id);
@@ -217,8 +223,10 @@ export class AnnotationEditor {
     // One worker per image reads only the latest layer: rapid edits never queue bitmap copies or snapshots.
     if (layer.running) return;
     layer.running = true;
+    const previous = this.renderQueue;
     const job = (async () => {
-      await Promise.resolve();
+      // Recovery can restore 51 layers; decode/encode one at a time to bound canvas memory.
+      await previous;
       while (this.layers.get(key) === layer) {
         const version = layer.version;
         const shapes = copy(layer.shapes);
@@ -248,6 +256,7 @@ export class AnnotationEditor {
         return;
       }
     })();
+    this.renderQueue = job.catch(() => {});
     layer.job = job;
     void job.then(() => { layer.running = false; }, (error: unknown) => {
       layer.running = false;
@@ -260,22 +269,25 @@ export class AnnotationEditor {
     if (this.bitmap && this.current()) paintAnnotations(this.canvas, this.bitmap, [...this.current()!.shapes, ...(this.drag ? [this.drag] : [])]);
   }
   private controls(): void {
+    const focused = this.root.activeElement;
     const shapes = this.current()!.shapes;
     const list = this.q<HTMLSelectElement>('annotationList');
     list.replaceChildren(...shapes.map((s, i) => new Option(`${i + 1}. ${s.kind === 'arrow' ? this.strings.annotationArrow : this.strings.annotationRectangle}`, String(i))));
-    list.value = String(this.selected); list.disabled = !shapes.length;
-    for (const action of ['apply', 'delete']) this.root.querySelector<HTMLButtonElement>(`[data-action=annotation-${action}]`)!.disabled = this.selected < 0;
-    this.root.querySelector<HTMLButtonElement>('[data-action=annotation-add]')!.disabled = shapes.length >= 50;
-    this.root.querySelector<HTMLButtonElement>('[data-action=annotation-reset]')!.disabled = !shapes.length;
-    this.root.querySelector<HTMLButtonElement>('[data-action=annotation-undo]')!.disabled = !this.history.length;
+    list.value = String(this.selected); list.disabled = !this.bitmap || !shapes.length;
+    for (const action of ['apply', 'delete']) this.root.querySelector<HTMLButtonElement>(`[data-action=annotation-${action}]`)!.disabled = !this.bitmap || this.selected < 0;
+    this.root.querySelector<HTMLButtonElement>('[data-action=annotation-add]')!.disabled = !this.bitmap || shapes.length >= 50;
+    this.root.querySelector<HTMLButtonElement>('[data-action=annotation-reset]')!.disabled = !this.bitmap || !shapes.length;
+    this.root.querySelector<HTMLButtonElement>('[data-action=annotation-undo]')!.disabled = !this.bitmap || !this.history.length;
     this.q('annotationStatus').textContent = this.strings.annotationCount(shapes.length);
     this.fields();
+    // Disabling the activated button can move focus to the host page. Keep it on a stable editor control.
+    if (focused instanceof HTMLElement && this.box.contains(focused) && focused.matches(':disabled')) this.q('annotationKind').focus();
   }
   private fields(): void {
     const s = this.current()?.shapes[this.selected];
     ['X1', 'Y1', 'X2', 'Y2'].forEach((ref, i) => {
       const input = this.q<HTMLInputElement>('annotation' + ref);
-      input.disabled = !s;
+      input.disabled = !this.bitmap || !s;
       input.value = s ? String(Math.round([s.x1, s.y1, s.x2, s.y2][i]! * 1000) / 10) : '';
     });
   }

@@ -51,6 +51,6 @@ With the new core/widget versions, redacted collector buffers and unfinished rep
 
 ## Image annotations
 
-Choose **Annotate image** on a screenshot or crop in the review panel. Draw rectangles or arrows, or use Add shape and the labeled endpoint percentage inputs with the keyboard. Shapes can be edited, removed, undone or reset; existing masks and crop selection outlines remain. Each image is independent, and previews use the same flattened PNGs sent as attachments. A fresh capture clears its old marks; recutting a crop clears that crop's marks.
+Choose **Annotate image** on a screenshot or crop in the review panel. Draw rectangles or arrows, or use Add shape and the labeled endpoint percentage inputs with the keyboard. Shapes can be edited, removed, undone or reset; existing masks and crop selection outlines remain. Each image is independent, and previews use the same flattened PNGs sent as attachments. Adding selections preserves the annotated screenshot; explicit Retake clears its marks; recutting a crop clears that crop's marks.
 
 The editor supports 50 shapes per image, the screenshot plus up to 50 crops, and the last 20 undo steps while the editor is open. With core screenshot persistence enabled, masked originals and vector layers recover as editable images; undo history does not persist. No extra screenshot library or runtime dependency is needed. See the [annotation guide](https://aleandros.github.io/lightback/guide/customization#image-annotations).

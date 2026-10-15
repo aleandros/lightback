@@ -21,6 +21,7 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | <code>screenshotPreview</code> | <code>"Screenshot preview"</code> |
 | <code>screenshotSkipped</code> | <code>"Large page: no automatic screenshot. Add one from the panel if it helps."</code> |
 | <code>annotate</code> | <code>"Annotate image"</code> |
+| <code>annotateCrop</code> | <code>(n: number) =&gt; &#96;Annotate crop of selection ${n}&#96;</code> |
 | <code>annotationDone</code> | <code>"Done"</code> |
 | <code>annotationHint</code> | <code>"Drag to draw, or Add a shape and edit its endpoints below. Edits apply to this image only. Masks and selection outlines stay in place."</code> |
 | <code>annotationTool</code> | <code>"Shape to add"</code> |

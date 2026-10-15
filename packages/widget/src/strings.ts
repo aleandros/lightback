@@ -15,6 +15,7 @@ export const defaultStrings = {
   screenshotPreview: "Screenshot preview",
   screenshotSkipped: "Large page: no automatic screenshot. Add one from the panel if it helps.",
   annotate: "Annotate image",
+  annotateCrop: (n: number) => `Annotate crop of selection ${n}`,
   annotationDone: "Done",
   annotationHint: "Drag to draw, or Add a shape and edit its endpoints below. Edits apply to this image only. Masks and selection outlines stay in place.",
   annotationTool: "Shape to add",

@@ -55,7 +55,7 @@ const template = (s: WidgetStrings) => /* html */ `
       <button class="lb-btn" type="button" data-action="annotation-undo">${esc(s.annotationUndo)}</button>
       <button class="lb-btn" type="button" data-action="annotation-reset">${esc(s.annotationReset)}</button>
     </div>
-    <div class="lb-annotation-image"><canvas data-ref="annotationCanvas" aria-label="${esc(s.annotationCanvas)}"></canvas></div>
+    <div class="lb-annotation-image"><canvas role="img" data-ref="annotationCanvas" aria-label="${esc(s.annotationCanvas)}"></canvas></div>
     <label>${esc(s.annotationSelected)}<select data-ref="annotationList"></select></label>
     <div class="lb-annotation-fields">
       ${(['X1', 'Y1', 'X2', 'Y2'] as const).map((field) => `<label>${esc(s[`annotation${field}`])}<input type="number" min="0" max="100" step="0.1" data-ref="annotation${field}"></label>`).join('')}
@@ -198,9 +198,23 @@ class Widget implements WidgetHandle {
     this.annotations = new AnnotationEditor(this.root, this.strings, () => {
       if (this.destroyed) return;
       if (this.screenshotUrl) this.q<HTMLImageElement>('[data-ref=shotImg]').src = this.annotations.url('screenshot', this.screenshotUrl);
-      this.renderSelections();
+      // A completed encode only changes image URLs. Do not replace cards while their controls have focus.
+      for (const card of this.q('[data-ref=selections]').querySelectorAll<HTMLElement>('[data-id]')) {
+        const id = card.dataset.id!;
+        const crop = this.crops.get(id);
+        const img = card.querySelector<HTMLImageElement>('[data-ref=cropImg]');
+        if (img && crop) img.src = this.annotations.url(id, crop.url);
+      }
+      this.refreshReview();
       this.persistDraft();
-    }, () => { if (!this.destroyed) this.open(); });
+    }, (error) => {
+      if (this.destroyed) return;
+      this.open();
+      if (error) {
+        this.setStatus(this.strings.screenshotFailed(error instanceof Error ? error.message : String(error)), true);
+        this.opts.onError?.(error);
+      }
+    });
 
     this.root.addEventListener('click', (e) => this.onRootClick(e));
     // Widget shortcuts/text must not bubble into host form handlers.
@@ -1030,7 +1044,8 @@ class Widget implements WidgetHandle {
   }
 
   /**
-   * Capture for the current pick session; it becomes the attached screenshot. Automatic, so it is budgeted:
+   * Capture fresh crop pixels for this pick session; replace the attached screenshot only when it has no edits.
+   * Automatic, so it is budgeted:
    * DOM-cloning capturers block the page for time proportional to what they copy, seconds to minutes on large pages.
    */
   private async captureBase(): Promise<Shot | null> {
@@ -1046,8 +1061,12 @@ class Widget implements WidgetHandle {
         release(result.shot.bitmap);
         return null;
       }
-      this.annotations.remove('screenshot');
-      this.setScreenshot(result.shot.blob, result.shot.area, result.sensitive);
+      // Adding selections must not erase marks (or close an editor) on the attached screenshot.
+      // Fresh pixels remain the base for new crops; explicit Retake replaces the annotated screenshot.
+      if (!this.annotations.shapes('screenshot').length && !this.annotations.isOpen('screenshot')) {
+        this.annotations.remove('screenshot');
+        this.setScreenshot(result.shot.blob, result.shot.area, result.sensitive);
+      }
       this.baseMasks = result.sensitive;
       return result.shot;
     } catch (err) {
@@ -1395,7 +1414,7 @@ class Widget implements WidgetHandle {
         const crop = this.crops.get(s.id);
         // Natural proportions, never enlarged past the selected area's on-page size (+2 for the border-box border).
         const cap = Number.isFinite(crop?.width) ? ` style="max-width:min(100%, ${Math.max(1, Math.round(crop!.width)) + 2}px)"` : '';
-        const thumb = crop ? `<img class="lb-thumb" src="${this.annotations.url(s.id, crop.url)}"${cap} alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
+        const thumb = crop ? `<img data-ref="cropImg" class="lb-thumb" src="${this.annotations.url(s.id, crop.url)}"${cap} alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
         return `<div class="lb-sel" data-id="${esc(s.id)}">
   <div class="lb-sel-head"><span class="lb-badge${s.kind === 'region' ? ' region' : ''}">${i + 1}</span><span class="lb-chain" title="${esc(s.components.join(' < '))}">${chain} ${kind}</span><button class="lb-icon" type="button" data-action="sel-edit" aria-label="${esc(this.strings.editComment)}" title="${esc(this.strings.editComment)}">✎</button><button class="lb-icon" type="button" data-action="sel-remove" aria-label="${esc(this.strings.removeSelection)}">✕</button></div>
   <code class="lb-selector">${esc(s.selector)}</code>
@@ -1404,7 +1423,7 @@ class Widget implements WidgetHandle {
   ${hidden}
   ${children}
   ${thumb}
-  ${crop && this.annotations.hasSource(s.id) ? `<button class="lb-btn" type="button" data-action="annotate-crop">${esc(this.strings.annotate)}</button>` : ''}
+  ${crop && this.annotations.hasSource(s.id) ? `<button class="lb-btn" type="button" data-action="annotate-crop" aria-label="${esc(this.strings.annotateCrop(i + 1))}">${esc(this.strings.annotate)}</button>` : ''}
   ${note}
 </div>`;
       })

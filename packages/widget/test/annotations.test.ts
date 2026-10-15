@@ -9,7 +9,7 @@ vi.mock('../src/screenshot', async (original) => ({
 }));
 const cleanup: Array<() => void> = [];
 afterEach(() => { cleanup.splice(0).reverse().forEach((fn) => fn()); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-async function setup() {
+async function setup(withCrop = false) {
   const encodes: BlobCallback[] = [];
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage() {}, beginPath() {}, rect() {}, stroke() {}, moveTo() {}, lineTo() {} } as unknown as CanvasRenderingContext2D);
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => { encodes.push(callback); });
@@ -21,7 +21,11 @@ async function setup() {
   const deliver = vi.fn(async () => {});
   const client = createLightback({ persistence: false, send: deliver });
   const blob = new Blob(['masked'], { type: 'image/png' });
-  client.saveDraft({ text: 'edit', selections: [], attachments: [{ name: 'screenshot.png', blob, type: blob.type, size: blob.size, area: { x: 0, y: 0, width: 200, height: 100 } }] });
+  const selection = { ...client.describeElement(document.body), crop: 'selection-1.png' };
+  const image = { blob, type: blob.type, size: blob.size, area: { x: 0, y: 0, width: 200, height: 100 } };
+  client.saveDraft({ text: 'edit', selections: withCrop ? [selection] : [], attachments: [
+    { name: 'screenshot.png', ...image }, ...(withCrop ? [{ name: 'selection-1.png', ...image }] : []),
+  ] });
   const widget = mountWidget({ client, screenshot: async () => blob, autoScreenshot: false });
   cleanup.push(() => client.destroy(), () => widget.destroy());
   const click = (action: string) => widget.element.shadowRoot!.querySelector<HTMLButtonElement>(`[data-action=${action}]`)!.click();
@@ -88,4 +92,28 @@ it('keeps the annotated preview when a new mask does not intersect the screensho
   Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => target });
   widget.startPicking(); click('mask-mode'); target.click(); await settle();
   expect(img.src).toBe(annotated);
+});
+
+it('lets Done leave a failed crop and does not block another image editor on that error', async () => {
+  const { widget, client, encodes, click, deliver } = await setup(true);
+  widget.open(); click('annotate-crop'); await settle();
+  click('annotation-add'); await settle(); encodes[0]!(null); await settle();
+  click('annotation-close'); await settle();
+  const panel = widget.element.shadowRoot!.querySelector<HTMLElement>('[data-ref=panel]')!;
+  expect(panel.hidden).toBe(false);
+  click('annotate-shot'); await settle(); click('annotation-close'); await settle();
+  expect(panel.hidden).toBe(false);
+  click('send'); await settle(); expect(deliver).not.toHaveBeenCalled();
+  expect(client.getDraft()!.imageAnnotations).toHaveLength(1);
+});
+
+it('does not replace a focused crop control when its annotation render completes', async () => {
+  const { widget, encodes, click } = await setup(true);
+  widget.open(); click('annotate-crop'); await settle(); click('annotation-add'); await settle();
+  widget.open();
+  const button = widget.element.shadowRoot!.querySelector<HTMLButtonElement>('[data-action=annotate-crop]')!;
+  button.focus();
+  encodes[0]!(new Blob(['edited'], { type: 'image/png' })); await settle();
+  expect(button.isConnected).toBe(true);
+  expect(widget.element.shadowRoot!.activeElement).toBe(button);
 });

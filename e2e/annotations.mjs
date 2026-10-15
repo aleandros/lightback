@@ -65,7 +65,9 @@ await page.locator(W+'[data-action=annotation-apply]').focus();await page.keyboa
 assert((await shapes())[1].x1===.75,'keyboard applies editable endpoints');
 await action('annotation-undo');assert((await shapes())[1].x1>.79,'undo restores prior geometry');
 await action('annotation-delete');await count(1);await action('annotation-undo');await count(2);
-await action('annotation-reset');await count(0);await action('annotation-undo');await count(2);
+await page.locator(W+'[data-action=annotation-reset]').focus();await page.keyboard.press('Enter');await count(0);
+assert(await page.evaluate(()=>document.querySelector('lightback-widget').shadowRoot.activeElement.dataset.ref==='annotationKind'),'Reset keeps keyboard focus in the editor when it disables itself');
+await action('annotation-undo');await count(2);
 await page.screenshot({path:OUT+'editor.png'});
 await action('annotation-close');
 assert(await page.evaluate(()=>document.querySelector('lightback-widget').shadowRoot.activeElement.dataset.action==='annotate-shot'),'Done returns focus to the image editor button');
@@ -85,10 +87,17 @@ const mask=await page.evaluate(async()=>{
 await action('annotate-crop');await readyEditor();await action('annotation-add');await action('annotation-close');
 await ref('text').fill('Annotations survive reload');
 await page.evaluate(()=>client.flushPersistence());await load();await ref('pillOpen').click();
+// Adding selections after recovery must keep the annotated screenshot, even though crops use fresh pixels.
+await page.locator(W+'[data-ref=text]:enabled').waitFor();
+const preserved = await imageData('[data-ref=shotImg]');
+await page.click(W+'[data-ref=panel] [data-action=pick]');await action('done');
+await page.waitForFunction(()=>document.querySelector('lightback-widget').shadowRoot.querySelector('[data-ref=shotImg]').complete);
+assert((await shapes()).length===2,'adding selections preserves recovered screenshot marks');
 await action('annotate-shot');await readyEditor();await count(2);
 assert((await shapes('selection-1.png')).length===1,'crop layer recovers independently');
 await action('annotation-reset');await count(0);await action('annotation-undo');await count(2);await action('annotation-close');
 preview=await imageData('[data-ref=shotImg]');const cropPreview=await imageData('.lb-thumb');
+assert(JSON.stringify(preview.bytes)===JSON.stringify(preserved.bytes),'automatic pick capture does not replace the annotated screenshot');
 assert(preview.width===2560&&preview.height===1720&&cropPreview.width===664,'bitmap dimensions and crop geometry survive editing/recovery');
 await page.evaluate(()=>window.failSend=true);await action('send');
 await page.waitForFunction(()=>document.querySelector('lightback-widget').shadowRoot.querySelector('[data-ref=status]').textContent.includes('retry me'));
