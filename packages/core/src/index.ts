@@ -7,6 +7,7 @@ export { SENSITIVE_ATTR } from './sensitive';
 export { describeRegion, commonAncestor } from './region';
 export type { RegionOptions } from './region';
 export { toPromptContext } from './prompt';
+export type { PromptOptions } from './prompt';
 export { fetchTransport } from './transport';
 export { DEFAULT_REDACT, redactString, redactUrl, redactHeaders } from './redact';
 export { RingBuffer } from './ring';

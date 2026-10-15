@@ -17,6 +17,8 @@ if (payload) console.log(toPromptContext(payload));
 
 Collectors do nothing during SSR; DOM inspection requires a browser. Network bodies are opt-in. Input values are never recorded. Supply `send` for a custom transport or `beforeSend` to edit/veto a report.
 
+`toPromptContext(payload, options?: PromptOptions)` works in browsers and Node without changing the payload. It ranks failures and evidence near the latest captured interaction (or submission), collapses repeats with counts and first/last timestamps, and marks omitted context. Proximity is not a diagnosis; selections have no timestamps. Defaults are `maxLogLines: 40` distinct groups per collector section and `maxChars: 64_000` characters overall. See [ranking and limits](https://aleandros.github.io/lightback/guide/backend#prompt-ranking-and-limits).
+
 Supports evergreen browsers from the last two years, Safari 15.4+, and Node 18+ for imports. Built to ES2020.
 
 [Full documentation and examples](https://github.com/aleandros/lightback#readme). MIT licensed.
