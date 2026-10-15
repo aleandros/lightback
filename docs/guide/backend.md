@@ -139,6 +139,30 @@ Send the crops too when there are selections; a crop is small and shows exactly 
 
 A reference implementation of this handler, with a JSON Schema for the payload, is on the roadmap.
 
+### Prompt ranking and limits
+
+`toPromptContext(payload, options?: PromptOptions)` is a pure formatter usable in browsers and Node. The note and selections precede collector evidence; environment, app context, masks and attachments follow it. It leaves the raw payload and its event order unchanged.
+
+The time anchor is the latest captured `click`, `input` change or `navigation` breadcrumb at or before `createdAt`, chosen by timestamp. Custom and visibility breadcrumbs do not set the anchor. Without an eligible breadcrumb it uses submission time. Navigation can be programmatic; the anchor is a heuristic, not a verified report interaction. Selections have no timestamps, so the formatter does not claim selection-time correlation or causality.
+
+Errors appear first, then network, console and breadcrumbs. Within network, failures precede other requests (`error` present, `ok: false`, status 0 or status ≥400). Console errors precede warnings, then other levels. Within each priority, groups sort by their nearest actual occurrence to the anchor, before or after it; equal distances retain first appearance in the input array. Errors and breadcrumbs use proximity alone. Distant or unrelated failures can still appear, with their timestamps visible.
+
+Repeats are grouped within each collector using full evidence fields, before limits are applied. Error kind, message, source and stack must match; console level and message must match. Requests must match kind, method, URL, status, success/error and both bodies; duration can differ and is displayed as a min/max range. Breadcrumbs must match type, message and serialized data (including data key order). Groups retain counts, first/last times and the nearest occurrence time, in seconds relative to submission with millisecond precision. A range does not imply continuous activity; individual occurrence times remain in the raw JSON. Distinct errors with different stacks or requests with different bodies remain separate even if their shortened display looks the same.
+
+```ts
+const context = toPromptContext(payload, {
+  maxLogLines: 20, // distinct groups per collector section
+  maxChars: 32_000, // entire output, including truncation notice
+});
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `maxLogLines` | `40` | Maximum groups in each of errors, network, console and breadcrumbs. A group may occupy several lines. `0` omits entries while retaining section counts. |
+| `maxChars` | `64000` | Maximum JavaScript string characters in the whole prompt, including notes, selection details and context. `0` returns an empty string. |
+
+Finite limits are rounded down and clamped to zero; non-finite values use the default. Section summaries show displayed and omitted group counts. If the character budget is exhausted, the tail is replaced with a truncation notice (itself clipped for tiny budgets); later sections can be absent. Error stacks show their first four lines and failed response bodies their first 300 characters. Consult the raw payload for complete evidence, and attach images separately.
+
 ## Storage notes
 
 - Key reports by `payload.id`; it is a UUID generated in the browser and also returned to the widget's `onSent`.
