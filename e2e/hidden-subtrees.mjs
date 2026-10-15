@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 const { page, assert, received, reset, finish, OUT } = await launch('hidden-subtrees');
 page.setDefaultTimeout(15000);
 const capturePath = '/@fs' + new URL('../packages/widget/src/capture.ts', import.meta.url).pathname;
+const rendererPath = '/@fs' + new URL('../examples/playground/node_modules/modern-screenshot/dist/index.mjs', import.meta.url).pathname;
 const corePath = '/@fs' + new URL('../packages/core/src/index.ts', import.meta.url).pathname;
 const widgetPath = '/@fs' + new URL('../packages/widget/src/index.ts', import.meta.url).pathname;
 if (process.env.BENCHMARK) {
@@ -95,6 +96,7 @@ assert(pixels.every(p => p[0] === 20 && p[1] === 180 && p[2] === 90 && p[3] === 
 
 // Isolated real-browser geometry, SVG resources, and send confirmation with localized labels.
 await page.route('**/hidden-fixture.html', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><body>
+<select id="native-select" style="display:block;margin-top:50px;width:240px;height:60px;font:24px sans-serif;color:rgb(200,0,0);background:white;appearance:none"><optgroup id="native-group" label="Status"><option id="native-option" selected hidden>VISIBLE STATUS</option><option>Another status</option></optgroup></select>
 <div style="display:contents" id="contents"><span id="child">visible</span></div>
 <details><summary id="summary">Closed details</summary><div id="closed">Not shown</div></details>
 <div hidden id="hidden"><span>Hidden</span></div><span id="empty"></span><br id="br"><wbr id="wbr">
@@ -103,16 +105,31 @@ await page.route('**/hidden-fixture.html', route => route.fulfill({ contentType:
 </body></html>` }));
 for (const outcome of ['budget', 'failure', 'null']) {
   await page.goto(BASE_URL + '/hidden-fixture.html');
-  const geometry = await page.evaluate(async ({ capturePath, corePath, widgetPath, outcome }) => {
+  const geometry = await page.evaluate(async ({ capturePath, corePath, widgetPath, rendererPath, outcome }) => {
     const { domCapturer, captureCost } = await import(capturePath);
     const { createLightback } = await import(corePath), { mountWidget } = await import(widgetPath);
     const root = document.documentElement;
     const area = { x: 0, y: 0, width: root.clientWidth, height: root.clientHeight };
     const kept = {};
     await domCapturer(async (_, options) => {
-      for (const id of ['contents', 'child', 'summary', 'closed', 'hidden', 'empty', 'br', 'wbr', 'svg', 'defs', 'gradient', 'rect', 'offscreen', 'fixed']) kept[id] = options.filter(document.getElementById(id));
+      for (const id of ['native-select', 'native-group', 'native-option', 'contents', 'child', 'summary', 'closed', 'hidden', 'empty', 'br', 'wbr', 'svg', 'defs', 'gradient', 'rect', 'offscreen', 'fixed']) kept[id] = options.filter(document.getElementById(id));
       return null;
     })({ area });
+    const selectPixels = [];
+    if (outcome === 'budget') {
+      const { domToBlob } = await import(rendererPath);
+      for (const requested of [area, { x: 0, y: 0, width: root.scrollWidth, height: root.scrollHeight }]) {
+        const blob = await domCapturer((node, options) => domToBlob(node, { ...options, scale: 1 }))({ area: requested });
+        const image = new Image(); const url = URL.createObjectURL(blob); image.src = url; await image.decode();
+        const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); URL.revokeObjectURL(url);
+        const r = document.getElementById('native-select').getBoundingClientRect();
+        const pixels = ctx.getImageData(r.x, r.y, r.width, r.height).data;
+        let red = 0;
+        for (let i = 0; i < pixels.length; i += 4) if (pixels[i] > 120 && pixels[i + 1] < 90 && pixels[i + 2] < 90) red++;
+        selectPixels.push(red);
+      }
+    }
     window.deliveries = []; window.captureCalls = 0;
     const canvas = document.createElement('canvas'); canvas.width = 100; canvas.height = 100;
     canvas.getContext('2d').fillRect(0, 0, 100, 100);
@@ -122,9 +139,10 @@ for (const outcome of ['budget', 'failure', 'null']) {
       screenshot: async () => { window.captureCalls++; if (window.captureCalls === 1 && outcome === 'failure') throw Error('test failure'); if (window.captureCalls === 1 && outcome === 'null') return null; return blob; },
       strings: { missingScreenshot: 'Falta la imagen', addScreenshot: 'Añadir imagen', sendAnyway: 'Enviar sin imagen' },
     });
-    return { kept, cost: captureCost(area) };
-  }, { capturePath, corePath, widgetPath, outcome });
+    return { kept, cost: captureCost(area), selectPixels };
+  }, { capturePath, corePath, widgetPath, rendererPath, outcome });
   assert(Object.entries(geometry.kept).every(([id, kept]) => kept === !['hidden', 'closed'].includes(id)), `geometry retained (${JSON.stringify(geometry)})`);
+  if (outcome === 'budget') assert(geometry.selectPixels.length === 2 && geometry.selectPixels.every(n => n > 50), `native dropdown label appears in both modes (${geometry.selectPixels})`);
   await page.click(W + '[data-action=pick]');
   await page.locator(W + '[data-ref=shotBtn][data-attention=true]').waitFor({ state: 'attached' });
   await page.locator('#child').click();

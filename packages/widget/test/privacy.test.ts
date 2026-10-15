@@ -468,3 +468,66 @@ it('does not mark a new draft when a discarded automatic capture fails late', as
   expect(q('shotBtn').dataset.attention).toBeUndefined();
   expect(q('missingShot').hidden).toBe(true);
 });
+
+it('does not block a new draft on a manual capture from a discarded draft', async () => {
+  let complete!: (blob: Blob) => void;
+  const { widget, q, action, send, capturer, raw } = setup({ widget: { autoScreenshot: false } });
+  capturer.mockImplementation(() => new Promise(resolve => { complete = resolve; }));
+  await settle(); widget.open(); action('shot'); await settle();
+  action('discard'); widget.open();
+  const note = q('text') as HTMLTextAreaElement;
+  note.value = 'New draft'; note.dispatchEvent(new Event('input'));
+  action('send'); await settle();
+  expect(q('missingShot').hidden).toBe(false);
+  action('send-anyway');
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+  expect(send.mock.calls[0]![0].note.text).toBe('New draft');
+  expect(send.mock.calls[0]![1]).toEqual([]);
+  complete(raw); await settle();
+  expect(q('shot').hidden).toBe(true);
+});
+
+it('discard releases a waiting send and its late completion cannot unlock a newer send', async () => {
+  let completeCapture!: (blob: Blob) => void;
+  let completeSend!: () => void;
+  const { widget, q, action, send, capturer, raw } = setup({ widget: { autoScreenshot: false } });
+  capturer.mockImplementation(() => new Promise(resolve => { completeCapture = resolve; }));
+  send.mockImplementation(() => new Promise(resolve => { completeSend = resolve; }));
+  await settle(); widget.open();
+  const note = q('text') as HTMLTextAreaElement;
+  note.value = 'Old draft'; note.dispatchEvent(new Event('input'));
+  action('shot'); await settle(); action('send'); await settle();
+  action('discard'); widget.open();
+  note.value = 'New draft'; note.dispatchEvent(new Event('input'));
+  action('send'); await settle();
+  expect(q('missingShot').hidden).toBe(false);
+  action('send-anyway'); await settle();
+  expect(send).toHaveBeenCalledOnce();
+  const button = widget.element.shadowRoot!.querySelector<HTMLButtonElement>('[data-action=send]')!;
+  expect(button.disabled).toBe(true);
+  completeCapture(raw); await settle();
+  expect(button.disabled).toBe(true); // the older send's finally must not clear the new send's state
+  completeSend(); await settle();
+  expect(button.disabled).toBe(false);
+});
+
+it('keeps editor focus and capture controls owned by the new draft after Add screenshot', async () => {
+  const complete: Array<(blob: Blob) => void> = [];
+  const { widget, q, action, capturer, raw, attachment } = setup({ widget: { autoScreenshot: false } });
+  capturer.mockImplementation(() => new Promise(resolve => { complete.push(resolve); }));
+  await settle(); widget.open(); action('shot'); await settle();
+  action('discard'); widget.open();
+  const shotButton = q('shotBtn') as HTMLButtonElement;
+  expect(shotButton.disabled).toBe(false);
+  const note = q('text') as HTMLTextAreaElement;
+  note.value = 'New draft'; note.dispatchEvent(new Event('input'));
+  action('send'); await settle(); action('shot-add'); await settle();
+  expect(widget.element.shadowRoot!.activeElement).toBe(note);
+  expect(shotButton.disabled).toBe(true);
+  complete[0]!(raw); await settle();
+  expect(capturer).toHaveBeenCalledTimes(2);
+  expect(shotButton.disabled).toBe(true);
+  complete[1]!(raw); await settle();
+  expect(shotButton.disabled).toBe(false);
+  expect(attachment('screenshot.png')).toBeDefined();
+});

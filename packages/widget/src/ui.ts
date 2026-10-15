@@ -6,7 +6,7 @@ import { defaultStrings, type WidgetStrings } from './strings';
 export { defaultStrings, type WidgetStrings } from './strings';
 import { styles } from './styles';
 import { bitmapBounds, covers, decodeScreenshot, maskShot, release, type Shot } from './screenshot';
-import { captureCost, OMITS_WIDGET } from './capture';
+import { captureWithinBudget, OMITS_WIDGET } from './capture';
 
 import type { WidgetOptions, WidgetHandle } from './types';
 import { createHost } from './shell';
@@ -130,6 +130,8 @@ class Widget implements WidgetHandle {
   private crops = new Map<string, { blob: Blob; url: string; width: number; area?: Rect }>();
   /** Captures run one at a time: each hides the widget, and an overlapping one would restore it mid-capture. */
   private captureQueue: Promise<unknown> = Promise.resolve();
+  /** Manual image work for this draft only; serialization may still contain work from discarded drafts. */
+  private manualShot: Promise<void> | null = null;
   private capturing = false;
   /** Viewport (document coordinates) when each selection was made: what a viewport crop must show. */
   private seenFrom = new Map<string, Rect>();
@@ -331,11 +333,11 @@ class Widget implements WidgetHandle {
       case 'done': this.savePopover(); return this.open();
       case 'mask-mode': return this.setMaskMode(!this.maskMode);
       case 'cancel-pick': if (this.pickFromPanel) return this.open(); return this.close();
-      case 'shot': void this.takeScreenshot(); return;
+      case 'shot': this.manualShot = this.takeScreenshot(); return;
       case 'shot-add':
         this.q('[data-ref=missingShot]').hidden = true;
-        this.q('[data-ref=shotBtn]').focus();
-        void this.takeScreenshot();
+        this.q('[data-ref=text]').focus();
+        this.manualShot = this.takeScreenshot();
         return;
       case 'send-anyway':
         this.sendWithoutImages = true;
@@ -974,7 +976,8 @@ class Widget implements WidgetHandle {
     let blob: Blob | null;
     let sensitive: Rect[];
     const area = requested ?? this.captureArea();
-    if (budget && captureCost(area) > (this.opts.screenshotMaxElements ?? DEFAULT_MAX_ELEMENTS)) {
+    const take = budget ? captureWithinBudget(capturer, area, this.opts.screenshotMaxElements ?? DEFAULT_MAX_ELEMENTS) : () => capturer({ area });
+    if (!take) {
       restore();
       return OVER_BUDGET;
     }
@@ -982,7 +985,7 @@ class Widget implements WidgetHandle {
       // Measure on both sides: content can appear, move or become sensitive while the capturer runs.
       const before = this.sensitiveRects();
       // Screenshot libraries fetch fonts, images and blob URLs; none of that belongs in the report.
-      blob = await this.client.mute(() => capturer({ area }));
+      blob = await this.client.mute(take);
       sensitive = uniqueRects([...before, ...this.sensitiveRects()]);
     } finally {
       restore();
@@ -1130,10 +1133,10 @@ class Widget implements WidgetHandle {
       if (result) release(result.shot.bitmap);
       if (!this.destroyed && generation === this.captureGeneration) this.setScreenshot(result?.shot.blob ?? null, result?.shot.area, result?.sensitive);
     } catch (err) {
-      this.setStatus(this.strings.screenshotFailed(err instanceof Error ? err.message : String(err)), true);
+      if (!this.destroyed && generation === this.captureGeneration) this.setStatus(this.strings.screenshotFailed(err instanceof Error ? err.message : String(err)), true);
       this.opts.onError?.(err);
     } finally {
-      btn.disabled = false;
+      if (!this.destroyed && generation === this.captureGeneration) btn.disabled = false;
     }
   }
 
@@ -1288,7 +1291,7 @@ class Widget implements WidgetHandle {
       // Masks, crops and the base screenshot may still be rendering if the user sent quickly.
       await this.maskJob;
       await this.base;
-      await this.captureQueue;
+      await this.manualShot;
       await Promise.all(this.cropJobs.values());
       if (this.destroyed || generation !== this.captureGeneration) return;
       const draft = this.draft();
@@ -1317,12 +1320,17 @@ class Widget implements WidgetHandle {
       this.opts.onError?.(err);
       this.open(); // surface the error with the draft intact
     } finally {
-      this.sending = false;
-      btn.disabled = false;
+      if (!this.destroyed && generation === this.captureGeneration) {
+        this.sending = false;
+        btn.disabled = false;
+      }
     }
   }
 
   private reset(): void {
+    this.sending = false;
+    this.q<HTMLButtonElement>('[data-action=send]').disabled = false;
+    this.q<HTMLButtonElement>('[data-ref=shotBtn]').disabled = false;
     this.sendWithoutImages = false;
     this.q('[data-ref=missingShot]').hidden = true;
     const shotBtn = this.q('[data-ref=shotBtn]');
@@ -1344,6 +1352,7 @@ class Widget implements WidgetHandle {
     this.seenFrom.clear();
     this.extra = null;
     this.base = null;
+    this.manualShot = null;
     this.masks = [];
     this.shotMasks = [];
     this.baseMasks = [];
