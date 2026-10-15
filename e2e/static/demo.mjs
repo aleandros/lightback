@@ -134,6 +134,8 @@ try {
   await page.click(W + '[data-action=open]');
   await page.fill(W + '[data-ref=text]', 'Newest report');
   await page.click(W + '[data-action=send]');
+  await page.locator(W + '[data-ref=missingShot]').waitFor();
+  await page.click(W + '[data-action=send-anyway]');
   await page.waitForFunction(() => document.querySelectorAll('[data-ref=submission]').length === 20);
   await page.reload();
   await page.locator('[data-ref=submission]').first().waitFor();
@@ -166,6 +168,8 @@ try {
   await page.click(W + '[data-action=open]');
   await page.fill(W + '[data-ref=text]', 'Keep this draft on failure');
   await page.click(W + '[data-action=send]');
+  await page.locator(W + '[data-ref=missingShot]').waitFor();
+  await page.click(W + '[data-action=send-anyway]');
   await page.waitForFunction(() => document.querySelector('lightback-widget').shadowRoot.querySelector('[data-ref=status]').textContent.includes('storage'));
   assert(await page.inputValue(W + '[data-ref=text]') === 'Keep this draft on failure', 'failed storage keeps the draft available for retry');
   await finish();

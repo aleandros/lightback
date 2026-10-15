@@ -153,7 +153,11 @@ Give the picker its own focused application control instead of adding tabindex o
 
 Keep a visually hidden live region mounted independently of the visual help. Make the widget transparent during custom captures to preserve text focus, and pause picker navigation so it cannot move the screenshot area before masking. Announce unique locators rather than DOM text or values, revalidate dynamic targets before selection, and scroll offscreen targets into view. Preserve the existing Escape-to-review behavior; Cancel returns to the entry surface and close/send restores the opener, resolving a lazy shell trigger after replacement. Arbitrary drawn regions, host shadow trees and iframe contents remain outside this keyboard implementation.
 
-## 30. Independent image annotation layers over masked originals
+## 30. Hidden-subtree pruning and explicit image-free sends
+
+Share the budget and renderer filter so hidden responsive layouts cannot inflate the element budget or clone cost. Use cached client rects, consulting display only for boxless elements; preserve display:contents, native select options, SVG paint resources, word-break opportunities, off-screen layout placeholders and paths to fixed descendants. Share fixed-element discovery between budget and renderer filters, refresh geometry for cloning, and stop counting above the limit. Bind preparation metadata to its original capturer so wrappers retain their behavior. Keep the 8,000-element default. A failed or skipped automatic capture highlights the editor screenshot action. After pending image jobs settle, an image-free draft with a configured capturer requires an explicit Add screenshot or Send anyway choice; the latter is remembered through transport retries until that draft ends. Localization adds three string keys without changing the payload or core package.
+
+## 31. Independent image annotation layers over masked originals
 
 Keep editable rectangles, arrows, ellipses and text labels in a bounded, draft-only vector layer for each screenshot or crop. Normalized image endpoints preserve alignment across viewport/page captures, scroll, DPR and preview scaling without changing document-space selection geometry. A crop is its own image: annotating the screenshot does not implicitly alter crops, and explicitly retaking an image clears its old layer. Adding more selections preserves an annotated screenshot while new crops use a fresh capture. Existing crop outlines remain pixels; privacy masks are already baked into every retained source, so reset and undo can never uncover content.
 

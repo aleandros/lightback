@@ -64,6 +64,9 @@ assert(Date.now() - t0 < 10000, `pick and select stay responsive (${Date.now() -
 assert(!(await shotAttached()), 'no screenshot attached automatically');
 assert(await page.locator(W + '[data-ref=shotBtn]').isVisible(), 'Screenshot button still offered');
 await page.click(W + '[data-action=send]');
+await page.locator(W + '[data-ref=missingShot]').waitFor();
+assert(await page.locator(W + '[data-ref=shotBtn]').getAttribute('data-attention') === 'true', 'skipped screenshot button stays highlighted');
+await page.click(W + '[data-action=send-anyway]');
 await page.waitForSelector(W + '[data-ref=toast]:not([hidden])');
 let [sub] = await received();
 assert(sub.payload.attachments.length === 0 && !sub.payload.selections[0].crop, 'report sent without images');

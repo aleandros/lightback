@@ -15,7 +15,7 @@ const widget = mountWidget({ client }); // Run after the browser DOM is ready.
 // On teardown: widget.destroy(); client.destroy();
 ```
 
-Provide `screenshot: () => Promise<Blob>` to enable screenshots and selection crops. The package includes no screenshot library. `sendDelay` controls the inline send cancel window (default 5000 ms).
+Provide `screenshot: ({ area }) => Promise<Blob | null>` to enable screenshots and selection crops. Use `domCapturer` with a DOM renderer and `screenshotArea: 'viewport'` to keep long-page captures small. Hidden subtrees are excluded from both DOM cloning and the automatic 8,000-element budget in either capture mode. After an automatic skip or failure, Screenshot stays highlighted until an image is attached. Sending without a screenshot or crops offers Add screenshot (capture and keep editing) or Send anyway (remembered for retries of that draft). Localize these with `strings.missingScreenshot`, `strings.addScreenshot`, and `strings.sendAnyway`. The package includes no screenshot library. `sendDelay` controls the inline send cancel window (default 5000 ms).
 
 For script tags, serve `dist/lightback.iife.js` and call `Lightback.createLightback()` and `Lightback.mountWidget()`. This standalone bundle includes core. ESM and CommonJS imports are safe during SSR; mounting requires a browser.
 
