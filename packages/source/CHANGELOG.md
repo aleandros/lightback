@@ -1,5 +1,11 @@
 # @lightback/source
 
+## 0.3.0
+
+### Minor Changes
+
+- 7dd97a8: Add `withLightbackSource` from `@lightback/source/next` and a reusable `@lightback/source/loader` for original JSX/TSX source stamping in Next.js 16 with Turbopack and webpack. Preserve existing config hooks and rules, apply the same options to server/client builds, and exclude dependencies.
+
 ## 0.2.0
 
 ### Minor Changes

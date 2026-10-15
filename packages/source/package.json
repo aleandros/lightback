@@ -1,6 +1,6 @@
 {
   "name": "@lightback/source",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Build-time JSX, Vue and Svelte source locations for Lightback.",
   "license": "MIT",
   "type": "module",
