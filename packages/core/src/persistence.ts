@@ -136,6 +136,7 @@ export function createPersistence(
           return true;
         });
         const names = new Set(state.draft.attachments.map((attachment) => attachment.name));
+        if (state.draft.imageAnnotations) state.draft.imageAnnotations = state.draft.imageAnnotations.filter((layer) => names.has(layer.attachment));
         state.draft.selections.forEach((selection) => { if (!names.has(selection.crop ?? '')) delete selection.crop; });
       }
       // Binary buffers avoid native Blob persistence failures in some WebKit environments.

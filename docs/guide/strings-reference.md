@@ -23,6 +23,35 @@ Every key in the exported `defaultStrings` table. See [Texts and i18n](./texts-a
 | <code>sendAnyway</code> | <code>"Send anyway"</code> |
 | <code>screenshotPreview</code> | <code>"Screenshot preview"</code> |
 | <code>screenshotSkipped</code> | <code>"Large page: no automatic screenshot. Add one from the panel if it helps."</code> |
+| <code>annotate</code> | <code>"Annotate image"</code> |
+| <code>annotateCrop</code> | <code>(n: number) =&gt; &#96;Annotate crop of selection ${n}&#96;</code> |
+| <code>annotationDone</code> | <code>"Done"</code> |
+| <code>annotationHint</code> | <code>"Choose a shape and drag to draw. Select a mark to move, resize or remove it."</code> |
+| <code>annotationTool</code> | <code>"Drawing tools"</code> |
+| <code>annotationSelect</code> | <code>"Select"</code> |
+| <code>annotationSelectHint</code> | <code>"Click a mark to select it. Drag to move it, or drag a handle to resize."</code> |
+| <code>annotationEdits</code> | <code>"Edit marks"</code> |
+| <code>annotationPrecise</code> | <code>"Keyboard & precise editing"</code> |
+| <code>annotationRectangle</code> | <code>"Rectangle"</code> |
+| <code>annotationArrow</code> | <code>"Arrow"</code> |
+| <code>annotationEllipse</code> | <code>"Ellipse"</code> |
+| <code>annotationText</code> | <code>"Text"</code> |
+| <code>annotationTextValue</code> | <code>"Text label"</code> |
+| <code>annotationTextPlaceholder</code> | <code>"Type your label…"</code> |
+| <code>annotationTextHint</code> | <code>"Click to place text, or drag a text box. Select a label to edit it."</code> |
+| <code>annotationEllipseHint</code> | <code>"Drag an ellipse. Hold Shift while drawing for a circle."</code> |
+| <code>annotationAdd</code> | <code>"Add shape"</code> |
+| <code>annotationUndo</code> | <code>"Undo"</code> |
+| <code>annotationReset</code> | <code>"Reset marks"</code> |
+| <code>annotationCanvas</code> | <code>"Image preview. Use Keyboard & precise editing to add shapes and edit endpoints."</code> |
+| <code>annotationSelected</code> | <code>"Shape to edit"</code> |
+| <code>annotationX1</code> | <code>"Start X (%)"</code> |
+| <code>annotationY1</code> | <code>"Start Y (%)"</code> |
+| <code>annotationX2</code> | <code>"End X (%)"</code> |
+| <code>annotationY2</code> | <code>"End Y (%)"</code> |
+| <code>annotationApply</code> | <code>"Apply endpoints"</code> |
+| <code>annotationInvalid</code> | <code>"Enter endpoints between 0 and 100 percent."</code> |
+| <code>annotationCount</code> | <code>(n: number) =&gt; &#96;${n} of 50 shapes. Edits are saved to the draft.&#96;</code> |
 | <code>reviewSummary</code> | <code>"Review what will be sent"</code> |
 | <code>tabPrompt</code> | <code>"Prompt"</code> |
 | <code>tabJson</code> | <code>"JSON"</code> |

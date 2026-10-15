@@ -1,6 +1,6 @@
 export * from './types';
 export { createLightback, IGNORE_ATTR } from './client';
-export type { LightbackClient, Draft } from './client';
+export type { LightbackClient, Draft, ImageAnnotation, ImageAnnotations } from './client';
 export { describeElement, summarizeElement, uniqueSelector, shortSelector, componentChain, frameworkInfo, snapshotProps } from './inspect';
 export type { InspectOptions } from './inspect';
 export { SENSITIVE_ATTR } from './sensitive';

@@ -1,5 +1,17 @@
 # @lightback/core
 
+## 0.2.4
+
+### Patch Changes
+
+- f7e2c1f: Add editable rectangle, arrow, ellipse/circle and text annotations to screenshots and crops, with a visual toolbar, drag-to-move and resize handles, keyboard controls, undo/reset, exact PNG previews, and editable recovery over masked originals.
+
+## 0.2.3
+
+### Patch Changes
+
+- b7fbe95: Rank prompt evidence by failure priority and proximity to the latest captured interaction, with submission time as fallback. Collapse repeated evidence with counts and first/last timestamps without changing the payload. Add an exported PromptOptions type and a configurable overall character budget alongside the existing per-collector group limit, with explicit omission notices and no claims of causality.
+
 ## 0.2.2
 
 ### Patch Changes

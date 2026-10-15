@@ -238,3 +238,55 @@ it('sorts recovered request timestamps before applying a smaller buffer limit', 
   const next = client({ capture: { network: true }, limits: { network: 1 } }); await next.ready;
   expect(next.buildPayload({}).network.map((e) => e.url)).toEqual(['https://test/newer']);
 });
+
+it('validates and bounds draft-only annotation layers without truncating geometry with string limits', async () => {
+  const instance = client({ persistence: false, limits: { string: 1 } });
+  const blob = new Blob(['masked pixels'], { type: 'image/png' });
+  const shape = { kind: 'arrow' as const, x1: .9, y1: .1, x2: .1, y2: .9 };
+  instance.saveDraft({ ...draft(), attachments: [{ name: 'x', type: blob.type, size: blob.size, blob }], imageAnnotations: [
+    { attachment: 'x', shapes: [shape, { ...shape, x1: NaN }, { ...shape, x2: 2 }, { ...shape, kind: 'script' as 'arrow' }] },
+    { attachment: 'missing', shapes: [shape] },
+  ] });
+  const saved = instance.getDraft()!;
+  expect(saved.imageAnnotations).toEqual([{ attachment: 'x', shapes: [shape] }]);
+  saved.imageAnnotations![0]!.shapes[0]!.x1 = 0;
+  expect(instance.getDraft()!.imageAnnotations![0]!.shapes[0]!.x1).toBe(.9);
+  expect(instance.buildPayload(saved)).not.toHaveProperty('imageAnnotations');
+  instance.saveDraft({ ...saved, imageAnnotations: Array.from({ length: 100 }, () => ({ attachment: 'x', shapes: Array(100).fill(shape) })) });
+  expect(instance.getDraft()!.imageAnnotations).toHaveLength(51);
+  expect(instance.getDraft()!.imageAnnotations![0]!.shapes).toHaveLength(50);
+});
+
+it.each([false, true])('recovers editable annotation layers only with retained image bytes (attachments=%s)', async (attachments) => {
+  vi.stubGlobal('Blob', NodeBlob);
+  vi.stubGlobal('ArrayBuffer', (await new NodeBlob([]).arrayBuffer()).constructor);
+  const first = client({ persistence: { attachments } }); await first.ready;
+  const blob = new Blob(['masked original'], { type: 'image/png' });
+  const imageAnnotations = [{ attachment: 'screenshot.png', shapes: [{ kind: 'ellipse' as const, x1: .1, y1: .2, x2: .7, y2: .8 }, { kind: 'text' as const, text: 'Fix this label', x1: .2, y1: .4, x2: .8, y2: .5 }] }];
+  first.saveDraft({ ...draft(), attachments: [{ name: 'screenshot.png', type: blob.type, size: blob.size, blob }], imageAnnotations });
+  await first.flushPersistence(); first.destroy(); await first.flushPersistence();
+  expect((await record()).state.draft.imageAnnotations).toEqual(attachments ? imageAnnotations : []);
+  const second = client({ persistence: { attachments } }); await second.ready;
+  expect(second.getDraft()!.imageAnnotations).toEqual(attachments ? imageAnnotations : []);
+  if (attachments) expect(await second.getDraft()!.attachments[0]!.blob.text()).toBe('masked original');
+});
+
+it('validates text annotation content, scrubs before truncation, and drops extra text on other marks', () => {
+  const instance = client({ persistence: false, redact: { patterns: [/private-.+/g] } });
+  const blob = new Blob(['masked'], { type: 'image/png' });
+  const geometry = { x1: .1, y1: .2, x2: .7, y2: .8 };
+  instance.saveDraft({ ...draft(), attachments: [{ name: 'x', type: blob.type, size: blob.size, blob }], imageAnnotations: [{ attachment: 'x', shapes: [
+    { kind: 'text', ...geometry, text: 'private-' + 'x'.repeat(400) },
+    { kind: 'text', ...geometry, text: 'a'.repeat(300) },
+    { kind: 'text', ...geometry, text: 'one\ntwo' },
+    { kind: 'text', ...geometry },
+    { kind: 'text', ...geometry, text: 42 as unknown as string },
+    { kind: 'ellipse', ...geometry, text: 'discard this' },
+  ] }] });
+  const shapes = instance.getDraft()!.imageAnnotations![0]!.shapes;
+  expect(shapes).toHaveLength(4);
+  expect(shapes[0]!.text).not.toContain('private-');
+  expect(shapes[1]!.text).toHaveLength(200);
+  expect(shapes[2]!.text).toBe('one two');
+  expect(shapes[3]).not.toHaveProperty('text');
+});

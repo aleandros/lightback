@@ -153,18 +153,23 @@ Give the picker its own focused application control instead of adding tabindex o
 
 Keep a visually hidden live region mounted independently of the visual help. Make the widget transparent during custom captures to preserve text focus, and pause picker navigation so it cannot move the screenshot area before masking. Announce unique locators rather than DOM text or values, revalidate dynamic targets before selection, and scroll offscreen targets into view. Preserve the existing Escape-to-review behavior; Cancel returns to the entry surface and close/send restores the opener, resolving a lazy shell trigger after replacement. Arbitrary drawn regions, host shadow trees and iframe contents remain outside this keyboard implementation.
 
-
-## 29. Hidden-subtree pruning and explicit image-free sends
+## 30. Hidden-subtree pruning and explicit image-free sends
 
 Share the budget and renderer filter so hidden responsive layouts cannot inflate the element budget or clone cost. Use cached client rects, consulting display only for boxless elements; preserve display:contents, native select options, SVG paint resources, word-break opportunities, off-screen layout placeholders and paths to fixed descendants. Share fixed-element discovery between budget and renderer filters, refresh geometry for cloning, and stop counting above the limit. Bind preparation metadata to its original capturer so wrappers retain their behavior. Keep the 8,000-element default. A failed or skipped automatic capture highlights the editor screenshot action. After pending image jobs settle, an image-free draft with a configured capturer requires an explicit Add screenshot or Send anyway choice; the latter is remembered through transport retries until that draft ends. Localization adds three string keys without changing the payload or core package.
 
-## 30. Deterministic evidence ranking in the prompt formatter
+## 31. Deterministic evidence ranking in the prompt formatter
 
 Group collector evidence before applying display limits, so repeated polling cannot crowd out distinct failures. Keep groups within their collector section, prioritize failed requests and console severity, then sort by distance from the latest captured click, input change or navigation at or before submission. Use submission time when none exists. Selections have no timestamps; adding a field would not recover historical interaction time. Navigation may be programmatic and the latest action may be unrelated, so the prompt names its heuristic anchor and explicitly disclaims causality.
 
 Use complete evidence fields as identity, not truncated display text or fuzzy URL/message normalization. Request durations may vary within a group and render as a range. Rank by the nearest actual occurrence, not a spanning interval that could contain no event. Retain first/last times, repetition counts and nearest time; equal ranks preserve first input appearance. Keep raw arrays untouched. The existing maxLogLines option now counts distinct groups per collector (default 40), with zero omitting entries; maxChars bounds the entire prompt (default 64,000), including a truncation notice. This remains a dependency-free formatter in browser and Node, with no payload-version change or backend requirement.
 
-## 31. Next.js stamping before SWC through a shared packaged loader
+## 32. Independent image annotation layers over masked originals
+
+Keep editable rectangles, arrows, ellipses and text labels in a bounded, draft-only vector layer for each screenshot or crop. Normalized image endpoints preserve alignment across viewport/page captures, scroll, DPR and preview scaling without changing document-space selection geometry. A crop is its own image: annotating the screenshot does not implicitly alter crops, and explicitly retaking an image clears its old layer. Adding more selections preserves an annotated screenshot while new crops use a fresh capture. Existing crop outlines remain pixels; privacy masks are already baked into every retained source, so reset and undo can never uncover content.
+
+Render the same PNG for preview and delivery. Store only masked originals plus vector layers for opt-in image recovery, avoiding duplicate full-resolution blobs and allowing post-reload editing. Text fits its normalized box using canvas font measurements, with no external fonts; the same box controls selection and resizing. Core validates and persists layer metadata but remains independent of canvas rendering; the widget flattens before send and payload version 1 stays unchanged. Cap layers at the screenshot plus 50 crops, shapes at 50 per image, and active-editor undo at 20 states. Put labeled icon tools and direct manipulation first, with exact coordinates under a native details disclosure. Active tools use aria-pressed, and editor-only endpoint handles never enter exported pixels. Native buttons, a shape selector and endpoint inputs keep every operation available without pointer drawing.
+
+## 33. Next.js stamping before SWC through a shared packaged loader
 
 Keep SWC as Next's compiler and use the shared JSX transformer in a packaged loader. A config wrapper supplies identical options to server/client builds and both bundlers, accepting object and sync/async factory configs. Resolve the CommonJS loader absolutely for both ESM and CJS consumers. Snapshot and validate JSON-safe options once because Turbopack serializes them; cache transform setup per options object and root.
 
