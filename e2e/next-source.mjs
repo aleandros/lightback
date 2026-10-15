@@ -144,7 +144,8 @@ async function verify(url, label) {
   assert(await page.locator('[data-action=increment]').textContent() === '1', `${label}: client remains interactive`);
   await page.click('[data-action=probe]');
   await page.click('[data-action=jsx-probe]');
-  assert(await page.evaluate(() => window.probeStack?.includes('lightback-map-probe') && window.jsxProbeStack?.includes('lightback-jsx-map-probe')), `${label}: probes ran after hydration`);
+  // Error.stack omits the message in Firefox/WebKit; check the caught error directly.
+  assert(await page.evaluate(() => window.probeMessage === 'lightback-map-probe' && window.jsxProbeMessage === 'lightback-jsx-map-probe'), `${label}: probes ran after hydration`);
   await page.click(W + '[data-ref=pillPick]');
   await page.click('[data-action=increment]');
   await page.fill(W + '[data-ref=popText]', 'Next source fixture');

@@ -14,7 +14,7 @@ export default function Counter() {
     (window as any).fixture = { client, widget, hydrated: true };
     return () => { widget.destroy(); client.destroy(); };
   }, []);
-  const probe = () => { try { throw new Error('lightback-map-probe'); } catch (error) { (window as any).probeStack = (error as Error).stack; } };
+  const probe = () => { try { throw new Error('lightback-map-probe'); } catch (error) { (window as any).probeMessage = (error as Error).message; } };
   return (
     <section data-testid="client">
       <button data-action="increment" onClick={() => setCount(count + 1)}>{count}</button>
