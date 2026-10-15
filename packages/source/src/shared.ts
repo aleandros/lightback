@@ -4,13 +4,13 @@ import type { ParserOptions, Visitor } from '@babel/core';
 import * as t from '@babel/types';
 
 export interface SourceOptions {
-  /** Project root; cwd for the transform/Babel, resolved Vite root for Vite. */
+  /** Project root; cwd for transform/Babel, resolved Vite root, or the loader's rootContext. */
   root?: string;
   /** Globs matched against slash-separated project-relative paths. Defaults to the adapter’s source extensions. */
   include?: string | string[];
   /** Additional globs to skip. Dependencies, outside-root and virtual modules always skip. */
   exclude?: string | string[];
-  /** Additional Babel parser syntax for transformSource/Vite, e.g. ['decorators-legacy']. */
+  /** Additional Babel parser syntax for transformSource/Vite/Next/loader, e.g. ['decorators-legacy']. */
   parserPlugins?: ParserOptions['plugins'];
 }
 

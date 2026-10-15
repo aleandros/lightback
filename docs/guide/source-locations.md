@@ -20,6 +20,29 @@ export default defineConfig({
 
 Place the adapter before framework plugins. It runs before JSX compilation in development, production and SSR. `root` defaults to Vite's resolved project root; set it explicitly to a shared repository root when server and client builds have different roots. The production playground uses this adapter.
 
+## Next.js
+
+For Next.js 16, wrap your config once. This applies the same stamping settings to server and client components in development and production, with Turbopack or `--webpack`, while keeping Next's SWC compiler:
+
+```js
+// next.config.mjs
+import { withLightbackSource } from '@lightback/source/next';
+
+export default withLightbackSource({ /* existing Next config */ }, {
+  exclude: ['**/*.test.*', '**/generated/**'],
+});
+```
+
+Config functions, including async `(phase, context) => config` functions, are supported. Apply this wrapper last around other config wrappers so it can order stamping before their loaders. Existing Turbopack rules (including loader-list shorthand) and webpack hooks are preserved. The wrapper adds a leading Turbopack rule without reordering overlapping host rules and adds a webpack `enforce: 'pre'` loader that executes before other pre loaders. Next 15 uses an older rule format and is not supported by this wrapper.
+
+The loader defaults `root` to the compiler's `rootContext`. In a monorepo, set `root` explicitly to the repository root so both bundlers produce the same repository-relative paths, and configure `turbopack.root` to include linked workspace sources if necessary. The two options have different purposes: the former defines stamp paths, the latter controls Turbopack's file resolution. Files in `node_modules`, including packages in `transpilePackages`, remain unstamped. Linked workspace source outside `node_modules` can be stamped when it lies within `root` and matches `include`.
+
+`root`, `include`, `exclude` and `parserPlugins` must contain only JSON values; functions, regexes, `undefined`, cycles and non-finite numbers are rejected. The default includes `.jsx` and `.tsx`. Custom `include` globs can opt into other supported JavaScript/TypeScript extensions; the shared filter still decides which files are stamped. As with all adapters, project paths become public in the DOM and bundle.
+
+`@lightback/source/loader` is also available for custom webpack pipelines. Resolve it to an absolute path with `require.resolve('@lightback/source/loader')`, run it as a pre loader before JSX compilation, and supply the same options on client and server. It returns code and a source map through the loader callback; excluded files retain their input code and map. No Babel config is needed.
+
+Source maps remain controlled by Next; use `productionBrowserSourceMaps: true` if you want published browser maps. When maps are requested, the loader also embeds its map inline because Turbopack does not forward callback maps between separate rule items. Subsequent custom loaders that rewrite source must consume that inline map and return a composed map; for additional rule items, preserve it inline too (for Babel transforms, `sourceMaps: 'both'`). The last map must identify its generated module in `map.file` (for example `Counter.tsx`), which Turbopack uses when combining production modules. The fixture checks this with a loader that shifts lines after stamping. webpack chains callback maps normally.
+
 ## Babel and Webpack
 
 The Babel adapter uses the same stamping visitor and path rules. Register it before plugins that lower JSX, alongside your existing React/TypeScript presets:
@@ -35,7 +58,7 @@ module.exports = {
 };
 ```
 
-In Webpack, apply `babel-loader` to the original JSX/TSX files. An earlier loader that has already removed JSX leaves nothing to stamp. No Webpack-specific loader is needed; configure both client and server compilation with the same Babel plugin/options. The Babel adapter uses the host parser and preserves the host's source-map chain.
+In Webpack, apply `babel-loader` to the original JSX/TSX files. An earlier loader that has already removed JSX leaves nothing to stamp. Existing Babel pipelines can keep this plugin; pipelines without Babel can use `@lightback/source/loader` as described above. Configure both client and server compilation identically. The Babel adapter uses the host parser and preserves the host's source-map chain.
 
 For a custom build pipeline, call `transformSource(code, filename, options)` from `@lightback/source` **before** JSX lowering. It returns `{ code, map }`, or `null` for excluded files. Chain the returned source map into the next compiler; map filenames resolve relative to the transformed module. This API and the Vite adapter parse JSX and TypeScript. Configure additional syntax explicitly, for example `lightbackSource({ parserPlugins: ['decorators-legacy'] })` for legacy decorators. This only enables parsing; the host compiler must also support that syntax. The Babel adapter uses the host's parser configuration instead.
 
@@ -72,7 +95,7 @@ With plain Vite, configure `svelte({ preprocess: [lightbackSvelteSource({ root }
 
 | Input | Initial support |
 | --- | --- |
-| React `.jsx` / `.tsx` | Vite and Babel; tested with minified React 18 and React 19 client/SSR output and hydration |
+| React `.jsx` / `.tsx` | Vite, Babel and Next.js 16; tested with minified client/SSR output and hydration, including Next server/client components with Turbopack and webpack |
 | Non-DOM React renderers (for example React Three Fiber) | Exclude these files, e.g. `exclude: ['src/scene/**']`; lowercase renderer elements may reject DOM attributes |
 | JSX in `.js`, `.mjs`, `.cjs` | Opt in with `include`; host compiler must also accept JSX there |
 | Other JSX runtimes | Native-tag syntax is stamped; framework/compiler behavior is not covered by the initial fixtures |

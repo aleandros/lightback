@@ -1,10 +1,10 @@
-import { transformSync } from '@babel/core';
+import { transformSync, type TransformOptions } from '@babel/core';
 import { sourceFilter, sourceVisitor, type SourceOptions } from './shared';
 
 /** Cache path/glob setup for adapters that process a module graph. */
 export function createTransformer(options: SourceOptions = {}) {
   const filter = sourceFilter(options);
-  return (code: string, id: string) => {
+  return (code: string, id: string, inputSourceMap?: TransformOptions['inputSourceMap']) => {
     const file = filter(id);
     if (!file) return null;
     const typescript = /\.[cm]?tsx?$/.test(file);
@@ -16,6 +16,7 @@ export function createTransformer(options: SourceOptions = {}) {
       configFile: false,
       browserslistConfigFile: false,
       sourceMaps: true,
+      inputSourceMap,
       sourceType: 'unambiguous',
       parserOpts: { plugins: [
         ...(!typescript || file.endsWith('x') ? ['jsx' as const] : []),

@@ -40,6 +40,15 @@ try {
     assert.ok(source.transformSource('const x = <div/>', '/app/src/App.tsx', { root: '/app' }).code.includes('src/App.tsx:1:11'));
     assert.equal(typeof sourceVite.default, 'function');
     assert.equal(typeof sourceBabel.default, 'function');
+    const nextConfig = sourceNext.withLightbackSource({ reactStrictMode: true });
+    assert.equal(nextConfig.reactStrictMode, true);
+    assert.ok(nextConfig.turbopack.rules['*.{tsx,jsx}'].loaders[0].loader.endsWith('loader.cjs'));
+    assert.equal(typeof sourceLoader.default, 'function');
+    sourceLoader.default.call({ rootContext: '/app', resourcePath: '/app/View.tsx', getOptions: () => ({}), callback(error, code, map) {
+      assert.equal(error, null);
+      assert.ok(code.includes('View.tsx:1:11'));
+      assert.ok(map.mappings);
+    } }, 'const x = <div/>');
     assert.equal(typeof vue.provideLightback, 'function');
     assert.equal(typeof svelte.provideLightback, 'function');
     assert.ok(sourceVue.transformVueSource('<template><button/></template>', '/app/App.vue', {root:'/app'}).code.includes('App.vue:1:11'));
@@ -53,9 +62,12 @@ try {
     const imports = mode === 'esm'
       ? `import assert from 'node:assert/strict'; import * as core from '@lightback/core'; import * as widget from '@lightback/widget'; import * as react from '@lightback/react'; import * as lazy from '@lightback/widget/lazy'; import * as vue from '@lightback/vue'; import * as svelte from '@lightback/svelte';`
       : `const assert = require('node:assert/strict'); const core = require('@lightback/core'); const widget = require('@lightback/widget'); const react = require('@lightback/react'); const lazy = require('@lightback/widget/lazy'); const vue = require('@lightback/vue'); const svelte = await import('@lightback/svelte');`;
-    const sourceImports = mode === 'esm'
+    const nextImports = mode === 'esm'
+      ? `import * as sourceNext from '@lightback/source/next'; import * as sourceLoader from '@lightback/source/loader';`
+      : `const sourceNext = require('@lightback/source/next'); const sourceLoader = require('@lightback/source/loader');`;
+    const sourceImports = nextImports + (mode === 'esm'
       ? `import * as source from '@lightback/source'; import * as sourceVite from '@lightback/source/vite'; import * as sourceBabel from '@lightback/source/babel'; import * as sourceVue from '@lightback/source/vue'; import * as sourceSvelte from '@lightback/source/svelte'; import * as mcp from '@lightback/mcp'; import * as bridge from '@lightback/mcp/browser';`
-      : `const source = require('@lightback/source'); const sourceVite = require('@lightback/source/vite'); const sourceBabel = require('@lightback/source/babel'); const sourceVue = require('@lightback/source/vue'); const sourceSvelte = require('@lightback/source/svelte'); const mcp = require('@lightback/mcp'); const bridge = require('@lightback/mcp/browser');`;
+      : `const source = require('@lightback/source'); const sourceVite = require('@lightback/source/vite'); const sourceBabel = require('@lightback/source/babel'); const sourceVue = require('@lightback/source/vue'); const sourceSvelte = require('@lightback/source/svelte'); const mcp = require('@lightback/mcp'); const bridge = require('@lightback/mcp/browser');`);
     writeFileSync(file, mode === 'esm' ? imports + sourceImports + assertions : '(async () => {' + imports + sourceImports + assertions + '})().catch(error => { console.error(error); process.exitCode = 1; });');
     run(process.execPath, [file], scratch);
   }
