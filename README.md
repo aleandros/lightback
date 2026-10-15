@@ -255,7 +255,7 @@ interface FeedbackPayload {
 }
 ```
 
-`toPromptContext(payload)` renders the payload as bounded markdown for a model prompt. Pair it with the screenshot for a vision-capable model.
+`toPromptContext(payload, { maxLogLines: 40, maxChars: 64_000 })` renders bounded markdown for a model prompt. It groups repeated evidence with counts and first/last timestamps, prioritizes errors and failed requests, and orders equal-priority entries by proximity to the latest captured click, input change or navigation before submission (falling back to submission time). Selections have no timestamps, and proximity does not establish causality. Limits apply to distinct groups per collector section and characters in the whole prompt; omissions are marked and the raw payload stays unchanged. See [prompt ranking and limits](docs/guide/backend.md#prompt-ranking-and-limits). Pair it with the screenshot for a vision-capable model.
 
 ## Selecting elements and areas
 
