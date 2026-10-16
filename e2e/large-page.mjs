@@ -100,8 +100,8 @@ const shot = att['screenshot.png'];
 const vp = await page.evaluate(() => ({ w: document.documentElement.clientWidth, h: document.documentElement.clientHeight }));
 assert(shot?.area && shot.area.y > 0 && shot.area.width === vp.w && shot.area.height === vp.h, `screenshot shows the viewport (${JSON.stringify(shot?.area)})`);
 const inside = (outer, r) => r.x >= outer.x && r.y >= outer.y && r.x + r.width <= outer.x + outer.width && r.y + r.height <= outer.y + outer.height;
-assert(inside(shot.area, p.selections[0].docRect), 'first selection lies in the screenshot area');
-assert(!inside(shot.area, p.selections[1].docRect), 'second selection lies outside it');
+assert(!inside(shot.area, p.selections[0].docRect), 'historical selection lies outside the refreshed screenshot area');
+assert(inside(shot.area, p.selections[1].docRect), 'latest selection lies in the refreshed screenshot area');
 for (const [i, sel] of p.selections.entries()) {
   const crop = att[sel.crop];
   assert(crop?.area && inside(crop.area, sel.docRect), `crop ${i + 1} records an area around its selection`);

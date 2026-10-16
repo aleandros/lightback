@@ -10,7 +10,7 @@ import { propertyParameters } from '../../../test/property';
 const RAW = { width: 200, height: 100, close: vi.fn() };
 vi.mock('../src/screenshot', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/screenshot')>(),
-  decodeScreenshot: async () => RAW,
+  decodeScreenshot: async (blob: Blob) => canvasOf.get(blob) ?? RAW,
 }));
 
 interface Call { canvas: HTMLCanvasElement; op: string; args: unknown[] }
@@ -140,7 +140,7 @@ it('reuses the base for selections it shows, even at its edge, and one recapture
   expect(area('selection-2.png')).toEqual({ x: 34, y: 304, width: 42, height: 42 });
 });
 
-it('re-cuts a recaptured crop when the reporter hides an area over it', async () => {
+it('repaints a historical crop without recapturing when the reporter hides an area over it', async () => {
   viewport(0);
   place('target', 50, 20);
   const { widget, q, action, attachment, fills, capturer } = setup({ widget: { screenshotArea: 'viewport' } });
@@ -158,8 +158,8 @@ it('re-cuts a recaptured crop when the reporter hides an area over it', async ()
   pick('target'); // hides the selected element's area; the base (at y=0) does not show it
   await vi.waitFor(() => expect(attachment('selection-1.png')).not.toBe(crop));
   expect(attachment('selection-1.png')).toBeDefined();
-  // Recaptured with the new mask painted in: {50,320,10,10} at 2x on an image of y=300, with bleed.
-  expect(capturer).toHaveBeenCalledTimes(3);
+  // The current base and the retained crop are repainted without a third capture.
+  expect(capturer).toHaveBeenCalledTimes(2);
   expect(fills()).toContainEqual([96, 36, 28, 28]);
 });
 
@@ -351,12 +351,12 @@ it('regression: a failed mask also discards a crop that was still being cut', as
   expect(attachment('selection-1.png')).toBeUndefined();
 });
 
-it('regression: an overlapping crop is dropped before re-cutting, so a failed re-cut leaves no stale crop', async () => {
+it('regression: an overlapping crop is dropped before repainting, so failure leaves no stale crop', async () => {
   const { widget, action, attachment } = setup();
   await settle(); widget.startPicking();
   document.getElementById('target')!.click();
   await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
-  nullFrom = encoded.length + 1; // the repaint encodes; the re-cut fails
+  nullFrom = encoded.length + 1; // the base repaint encodes; the crop repaint fails
   action('pop-more'); action('mask-mode');
   area(40, 15, 70, 35);
   await vi.waitFor(() => expect(encoded.length).toBe(nullFrom + 1));
@@ -530,4 +530,49 @@ it('keeps editor focus and capture controls owned by the new draft after Add scr
   complete[1]!(raw); await settle();
   expect(shotButton.disabled).toBe(false);
   expect(attachment('screenshot.png')).toBeDefined();
+});
+
+it('coalesces synchronous page changes and never gives a failed refresh a stale crop', async () => {
+  const { widget, attachment, capturer, raw, action } = setup();
+  await settle(); widget.startPicking();
+  await vi.waitFor(() => expect(attachment('screenshot.png')).toBeDefined());
+  pick('target');
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  const first = attachment('selection-1.png');
+  const screenshot = attachment('screenshot.png');
+  capturer.mockRejectedValueOnce(new Error('refresh failed'));
+  document.getElementById('target')!.textContent = 'new content';
+  document.getElementById('target')!.setAttribute('class', 'new-state');
+  pick('target'); pick('target');
+  await vi.waitFor(() => expect(capturer).toHaveBeenCalledTimes(2));
+  await settle();
+  expect(attachment('selection-1.png')).toBe(first);
+  expect(attachment('screenshot.png')).toBe(screenshot);
+  expect(attachment('selection-2.png')).toBeUndefined();
+  expect(attachment('selection-3.png')).toBeUndefined();
+  capturer.mockResolvedValue(raw);
+  action('pop-more');
+  document.getElementById('target')!.dispatchEvent(new Event('input', { bubbles: true }));
+  pick('target');
+  await vi.waitFor(() => expect(attachment('selection-4.png')).toBeDefined());
+  expect(capturer).toHaveBeenCalledTimes(3);
+});
+
+it('changes during an in-flight capture request another capture, and send waits for both', async () => {
+  const { widget, attachment, capturer, raw, send, action } = setup();
+  const complete: Array<(blob: Blob) => void> = [];
+  capturer.mockImplementation(() => new Promise(resolve => complete.push(resolve)));
+  await settle(); widget.startPicking();
+  await vi.waitFor(() => expect(complete).toHaveLength(1));
+  pick('target'); // holds the initial capture
+  document.getElementById('target')!.textContent = 'changed during capture';
+  pick('target'); // holds a fresh queued capture
+  action('done'); action('send');
+  complete[0]!(raw);
+  await vi.waitFor(() => expect(complete).toHaveLength(2));
+  expect(send).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(attachment('selection-1.png')).toBeDefined());
+  complete[1]!(raw);
+  await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+  expect(send.mock.calls[0]![1].map(a => a.name)).toEqual(['screenshot.png', 'selection-1.png', 'selection-2.png']);
 });

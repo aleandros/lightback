@@ -64,7 +64,7 @@ If masking cannot run (no 2D canvas, or encoding fails), the image is dropped an
 
 ## Hidden areas (reporter masks)
 
-When a capturer is configured, the pick bar shows **▨ Hide area** (`data-action="mask-mode"`). While it is on, clicking an element (its box plus any overflowing content) or dragging a rectangle hides that area instead of selecting it. Hidden areas show as hatched boxes while picking. They are painted into the current screenshot at once. Crops that overlap the area are discarded and re-cut, so a failed re-cut leaves no crop rather than a stale one. Every later capture of the same draft uses them too.
+When a capturer is configured, the pick bar shows **▨ Hide area** (`data-action="mask-mode"`). While it is on, clicking an element (its box plus any overflowing content) or dragging a rectangle hides that area instead of selecting it. Hidden areas show as hatched boxes while picking. They are painted into the current screenshot at once. Crops that overlap the area are repainted from their own retained pixels, preserving the content captured for each selection. A failed repaint drops that crop. Every later capture of the same draft uses them too.
 
 Masks only add pixels: a hidden area cannot be un-hidden in an image already captured. Discard clears them. Reporter masks are saved with the draft and restored after reload. A restored screenshot, or a restored crop, whose geometry is unknown is dropped when a new hidden area overlaps it, rather than kept with the area visible.
 

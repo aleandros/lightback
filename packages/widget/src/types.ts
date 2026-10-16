@@ -23,7 +23,8 @@ export interface WidgetOptions {
    */
   screenshotArea?: 'page' | 'viewport';
   /**
-   * Capture a screenshot automatically when pick mode starts and attach a padded crop of every selection.
+   * Capture at pick start and refresh on the next selection after observable page changes.
+   * Attach a padded crop of every selection; existing crops retain their original pixels.
    * Defaults to true when `screenshot` is provided.
    */
   autoScreenshot?: boolean;
