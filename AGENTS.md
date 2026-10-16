@@ -79,8 +79,8 @@ A change is done when all of these hold. Report results plainly; if something fa
 
 ## Known limitations (do not rediscover)
 
-- Keyboard picking traverses rendered light-DOM elements; arbitrary region drawing remains pointer-only.
-- No shadow-root or iframe piercing into the host app's own shadow trees.
+- Keyboard picking traverses rendered light DOM, open shadow roots and same-origin frames; arbitrary region drawing remains pointer-only.
+- Closed shadow roots and inaccessible frames remain opaque; open roots and same-origin frames support nested inspection.
 - Eager and lazy widget entries are available; React defaults to lazy. ESM lazy builds need URL asset support; CommonJS splitting depends on the host bundler.
 - Drafts and buffers recover through session-scoped IndexedDB (default maximum age 30 minutes); screenshot persistence requires an explicit opt-in; stored images are masked, but only for marked content. Browser session restore or tab duplication can preserve/copy the session key.
 - React 19 `_debugStack` parsing is best effort and may point into transformed modules. React 18/19 fixtures cover inspection and production stamp fallback; use `@lightback/source` for original JSX/TSX coordinates.

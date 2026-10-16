@@ -1,6 +1,6 @@
 {
   "name": "@lightback/mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Local feedback bridge and MCP tools for Claude Code and Codex.",
   "license": "MIT",
   "type": "module",
@@ -44,7 +44,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@lightback/core": "workspace:>=0.2.2 <0.3.0",
+    "@lightback/core": "workspace:>=0.2.5 <0.3.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "zod": "^4.6.7"
   },
