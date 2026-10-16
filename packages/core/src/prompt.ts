@@ -134,6 +134,7 @@ export function toPromptContext(p: FeedbackPayload, opts: PromptOptions = {}): s
     p.selections.forEach((s, i) => {
       const label = s.kind === 'region' ? 'Region inside' : 'Element';
       lines.push(`${i + 1}. ${label} <${s.tag}> \`${s.selector}\``);
+      if (s.context?.length) lines.push(`   Context: ${s.context.map(c => `${c.kind} \`${c.selector}\``).join(' → ')}`);
       if (s.note) lines.push(`   Reporter note: ${s.note}`);
       if (s.crop) lines.push(`   Crop: ${s.crop} (see attachments)`);
       if (s.chain.length) {
@@ -151,6 +152,7 @@ export function toPromptContext(p: FeedbackPayload, opts: PromptOptions = {}): s
         lines.push(`   Contains ${s.region.children.length} visible elements:`);
         for (const c of s.region.children) {
           const bits = [`<${c.tag}>`];
+          if (c.context?.length) bits.push(`context: ${c.context.map(root => `${root.kind} \`${root.selector}\``).join(' → ')}; selector: \`${c.selector}\``);
           if (c.sensitive) bits.push('(sensitive)');
           if (c.role) bits.push(`role=${c.role}`);
           if (c.text) bits.push(`"${c.text}"`);

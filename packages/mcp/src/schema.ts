@@ -10,6 +10,7 @@ const point = z.object({ x: num, y: num });
 const rect = point.extend(size.shape);
 const source = z.object({ file: text, line: num.optional(), column: num.optional() });
 const summary = z.object({
+  context: z.array(z.object({ kind: z.enum(['shadow', 'frame']), selector: text })).max(200).optional(),
   selector: text, tag: text, text, role: text.optional(), components: z.array(text).max(100),
   rect, docRect: rect, source: source.optional(), sensitive: z.boolean().optional(),
 });

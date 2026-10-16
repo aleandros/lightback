@@ -1,5 +1,11 @@
 # @lightback/core
 
+## 0.2.5
+
+### Patch Changes
+
+- Inspect elements in open shadow roots and same-origin frames with context paths, reporting-document coordinates, and privacy masking across nested boundaries. Add pointer and keyboard picking, frame-aware pins/crops, and guarded breadcrumb collection in accessible contexts.
+
 ## 0.2.4
 
 ### Patch Changes

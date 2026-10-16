@@ -1,5 +1,13 @@
 # @lightback/mcp
 
+## 0.3.1
+
+### Patch Changes
+
+- Validate optional shadow/frame context paths on selections and region children before formatting reports, and use the updated core prompt formatter.
+- Updated dependencies
+  - @lightback/core@0.2.5
+
 ## 0.3.0
 
 ### Minor Changes

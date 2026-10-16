@@ -1,4 +1,5 @@
 import type { ComponentInfo, ElementSelection, ElementSummary, Rect, SourceLocation } from './types';
+import { composedClosest, domRoots, elementRect, ownerFrame } from './dom';
 import { uid } from './format';
 import { containsSensitive, DEFAULT_SENSITIVE, isSensitive, SENSITIVE_ATTR } from './sensitive';
 
@@ -10,7 +11,7 @@ const PROPS_KEYS = 40;
 const PROPS_STRING = 200;
 
 export function viewportRect(el: Element): Rect {
-  const r = el.getBoundingClientRect();
+  const r = elementRect(el);
   return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
 }
 
@@ -37,6 +38,7 @@ export function describeElement(el: Element, opts: InspectOptions = {}): Element
     id: uid(),
     kind: 'element',
     selector: uniqueSelector(el),
+    ...(elementContext(el).length ? { context: elementContext(el) } : {}),
     tag: el.tagName.toLowerCase(),
     elementId: el.id || undefined,
     classes: hidden ? [] : Array.from(el.classList),
@@ -62,6 +64,7 @@ export function summarizeElement(el: Element, opts: InspectOptions = {}): Elemen
   const hidden = isSensitive(el, sensitive);
   return {
     selector: uniqueSelector(el),
+    ...(elementContext(el).length ? { context: elementContext(el) } : {}),
     tag: el.tagName.toLowerCase(),
     text: elementText(el, 80, sensitive),
     role: hidden ? undefined : el.getAttribute('role') ?? undefined,
@@ -76,13 +79,13 @@ export function summarizeElement(el: Element, opts: InspectOptions = {}): Elemen
 export function elementText(el: Element, max = MAX_TEXT, sensitive = DEFAULT_SENSITIVE): string {
   if (isSensitive(el, sensitive)) return '';
   // Descendants of editors inherit their editable contents, even without their own attribute.
-  if (el.closest('[contenteditable]')) return '';
+  if (composedClosest(el, '[contenteditable]')) return '';
   const input = el as HTMLInputElement;
   // Never read values out of form controls.
-  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+  if (el.matches('input, textarea, select')) {
     return (input.placeholder || input.getAttribute('aria-label') || '').slice(0, max);
   }
-  if (el.closest('textarea, select')) return '';
+  if (composedClosest(el, 'textarea, select')) return '';
   const clone = safeClone(el, sensitive);
   clone.querySelectorAll('input, textarea, select, [contenteditable]').forEach((control) => control.remove());
   return (clone.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
@@ -106,13 +109,20 @@ function interestingAttrs(el: Element): Record<string, string> {
  */
 function safeClone(el: Element, sensitive: string): Element {
   const clone = el.cloneNode(true) as Element;
-  if (!containsSensitive(el, sensitive)) return clone;
+  // Text assigned directly to a sensitive slot has no descendant Element to replace.
+  const liveText = el.ownerDocument.createTreeWalker(el, 4);
+  const copyText = el.ownerDocument.createTreeWalker(clone, 4);
+  for (let node = liveText.nextNode(), copy = copyText.nextNode(); node && copy; node = liveText.nextNode(), copy = copyText.nextNode()) {
+    const slot = (node as Text).assignedSlot;
+    if (slot && isSensitive(slot, sensitive)) copy.textContent = '';
+  }
+  // srcdoc contains an entire embedded document, including form values and private markup.
+  for (const frame of [clone, ...Array.from(clone.querySelectorAll('iframe'))]) frame.removeAttribute('srcdoc');
   const live = Array.from(el.querySelectorAll('*'));
   const copy = Array.from(clone.querySelectorAll('*'));
-  const hits = new Set(Array.from(el.querySelectorAll(sensitive)));
   live.forEach((node, i) => {
     const target = copy[i];
-    if (!hits.has(node) || !target?.parentNode) return;
+    if (!isSensitive(node, sensitive) || !target?.parentNode) return;
     const placeholder = el.ownerDocument.createElement(node.tagName.toLowerCase());
     placeholder.setAttribute(SENSITIVE_ATTR, '');
     target.replaceWith(placeholder);
@@ -121,7 +131,7 @@ function safeClone(el: Element, sensitive: string): Element {
 }
 
 function trimmedHtml(el: Element, sensitive: string): string {
-  if (el.closest('[contenteditable], textarea, select')) return '';
+  if (composedClosest(el, '[contenteditable], textarea, select')) return '';
   const safe = safeClone(el, sensitive);
   for (const control of [safe, ...Array.from(safe.querySelectorAll('input, textarea, select, [contenteditable]'))]) {
     control.removeAttribute('value');
@@ -146,9 +156,10 @@ export function shortSelector(el: Element): string {
 /** Build a selector that uniquely matches `el` in its document, preferring stable attributes. */
 export function uniqueSelector(el: Element): string {
   const doc = el.ownerDocument;
+  const root = el.getRootNode() as Document | ShadowRoot;
   const isUnique = (sel: string) => {
     try {
-      return doc.querySelectorAll(sel).length === 1;
+      return root.querySelectorAll(sel).length === 1;
     } catch {
       return false;
     }
@@ -177,8 +188,9 @@ export function uniqueSelector(el: Element): string {
       break;
     }
     const parent: Element | null = cur.parentElement;
-    if (parent) {
-      const sameTag = Array.from(parent.children).filter((c) => c.tagName === cur!.tagName);
+    const siblings = parent ?? (cur.getRootNode() as ShadowRoot);
+    if (siblings.children) {
+      const sameTag = Array.from(siblings.children).filter((c) => c.tagName === cur!.tagName);
       if (sameTag.length > 1) part += `:nth-of-type(${sameTag.indexOf(cur) + 1})`;
     }
     parts.unshift(part);
@@ -187,6 +199,20 @@ export function uniqueSelector(el: Element): string {
     cur = parent;
   }
   return parts.join(' > ');
+}
+
+/** Outer-to-inner context path; selectors remain ordinary CSS within each root. */
+export function elementContext(el: Element): import('./types').ElementContext[] {
+  const path: import('./types').ElementContext[] = [];
+  let current: Element | null = el;
+  while (current) {
+    const root = current.getRootNode() as Document | ShadowRoot;
+    const host: Element | null = (root as ShadowRoot).host ?? ownerFrame(current.ownerDocument);
+    if (!host || (root === document)) break;
+    path.unshift({ kind: (root as ShadowRoot).host ? 'shadow' : 'frame', selector: uniqueSelector(host) });
+    current = host;
+  }
+  return path;
 }
 
 function cssEscape(s: string): string {
@@ -213,7 +239,8 @@ export function frameworkInfo(el: Element, sensitive = DEFAULT_SENSITIVE, withPr
   const stamped = parseSourceAttr(el.getAttribute('data-source') ?? el.getAttribute('data-lb-source'));
   // Cheap global check first: most pages have nothing sensitive and skip the subtree walks.
   let anySensitive = true;
-  try { anySensitive = el.ownerDocument.querySelector(sensitive) !== null; } catch { /* fail closed */ }
+  if (!withProps) anySensitive = false;
+  else try { anySensitive = isSensitive(el, sensitive) || domRoots(document).some(root => root.querySelector(sensitive) !== null); } catch { /* fail closed */ }
   const guard = anySensitive ? sensitive : null;
   const react = reactInfo(el, guard, withProps);
   if (react.chain.length || react.source) return { framework: 'react', ...react, source: stamped ?? react.source };
@@ -355,7 +382,7 @@ function snapshotValue(v: unknown, depth: number): unknown {
   if (typeof v === 'object') {
     const o = v as Record<string, unknown>;
     if ('$$typeof' in o) return '[element]';
-    if (typeof Node !== 'undefined' && v instanceof Node) return `[${(v as Element).tagName ?? v.nodeName}]`;
+    if (typeof o.nodeType === 'number' && typeof o.nodeName === 'string') return `[${o.tagName ?? o.nodeName}]`;
     if (v instanceof Date) return v.toISOString();
     if (Array.isArray(v)) {
       if (depth <= 0) return `[array ${v.length}]`;

@@ -1,5 +1,6 @@
 import {
   componentChain, shortSelector, uniqueSelector, toPromptContext,
+  composedParent, deepElementFromPoint, elementRect, toTopRect, observeDomRoots,
   type Attachment, type ImageAnnotations, type ElementSelection, type LightbackClient, type Rect, type ScreenshotMask,
 } from '@lightback/core';
 import { defaultStrings, type WidgetStrings } from './strings';
@@ -306,6 +307,29 @@ class Widget implements WidgetHandle {
     window.addEventListener('resize', this.relayout);
 
     if (!host.isConnected) document.body.appendChild(host);
+    this.stopContextListeners = observeDomRoots((root) => {
+      const handlers: Array<[string, EventListener]> = [
+        ['mousemove', this.moveHandler as EventListener], ['mousedown', this.downHandler as EventListener],
+        ['mouseup', this.upHandler as EventListener], ['click', this.clickHandler as EventListener],
+        ['pointerdown', this.stopOnly], ['pointerup', this.stopOnly],
+        ['dblclick', this.swallow], ['contextmenu', this.swallow], ['selectstart', this.swallow],
+        ['scroll', this.relayout],
+      ];
+      const guarded = handlers.map(([type, handler]): [string, EventListener] => [type, event => {
+        if (type === 'scroll' || this.picking) handler(event);
+      }]);
+      for (const [type, handler] of guarded) root.addEventListener(type, handler, true);
+      const view = root.nodeType === 9 ? (root as Document).defaultView : null;
+      const key = (event: KeyboardEvent) => { if (this.picking) this.keyHandler(event); };
+      view?.addEventListener('keydown', key, true);
+      view?.addEventListener('resize', this.relayout);
+      return () => {
+        for (const [type, handler] of guarded) root.removeEventListener(type, handler, true);
+        view?.removeEventListener('keydown', key, true);
+        view?.removeEventListener('resize', this.relayout);
+      };
+    }, el => this.client.isIgnored(el));
+
     const recoveryControls = this.root.querySelectorAll<HTMLTextAreaElement>('textarea');
     recoveryControls.forEach((control) => { control.disabled = true; });
     const revision = this.revision;
@@ -376,6 +400,8 @@ class Widget implements WidgetHandle {
     this.revision++;
     this.cancelPending();
     this.stopPicking();
+    this.stopContextListeners?.();
+    this.stopContextListeners = null;
     for (const c of this.crops.values()) URL.revokeObjectURL(c.url);
     if (this.screenshotUrl) URL.revokeObjectURL(this.screenshotUrl);
     window.removeEventListener('scroll', this.relayout, true);
@@ -452,6 +478,12 @@ class Widget implements WidgetHandle {
 
   /* ---------- picking ---------- */
 
+  private stopContextListeners: (() => void) | null = null;
+  private eventPoint(e: MouseEvent): { x: number; y: number } {
+    const doc = (e.target as Node | null)?.ownerDocument ?? document;
+    return toTopRect({ x: e.clientX, y: e.clientY, width: 0, height: 0 }, doc);
+  }
+
   private moveHandler = (e: MouseEvent) => {
     this.keyboardNavigation = false;
     this.q('[data-ref=keyboardHelp]').hidden = true;
@@ -461,19 +493,19 @@ class Widget implements WidgetHandle {
       return;
     }
     if (this.dragStart) {
-      const dx = e.clientX - this.dragStart.x;
-      const dy = e.clientY - this.dragStart.y;
+      const dx = this.eventPoint(e).x - this.dragStart.x;
+      const dy = this.eventPoint(e).y - this.dragStart.y;
       if (!this.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
         this.dragging = true;
         this.hideHighlight();
         this.closePopover();
       }
       if (this.dragging) {
-        this.drawDrag(this.normalizeRect(this.dragStart, { x: e.clientX, y: e.clientY }));
+        this.drawDrag(this.normalizeRect(this.dragStart, { x: this.eventPoint(e).x, y: this.eventPoint(e).y }));
         return;
       }
     }
-    const el = this.targetAt(e.clientX, e.clientY);
+    const el = this.targetAt(this.eventPoint(e).x, this.eventPoint(e).y);
     this.keyboardElement = this.keyboardAncestor(el);
     if (el) this.drawHighlight(el);
     else this.hideHighlight();
@@ -483,7 +515,7 @@ class Widget implements WidgetHandle {
     e.preventDefault();
     e.stopImmediatePropagation();
     if (e.button !== 0) return;
-    this.dragStart = { x: e.clientX, y: e.clientY };
+    this.dragStart = { x: this.eventPoint(e).x, y: this.eventPoint(e).y };
     this.dragging = false;
   };
   private upHandler = (e: MouseEvent) => {
@@ -491,7 +523,7 @@ class Widget implements WidgetHandle {
     e.preventDefault();
     e.stopImmediatePropagation();
     if (this.dragging && this.dragStart) {
-      const rect = this.normalizeRect(this.dragStart, { x: e.clientX, y: e.clientY });
+      const rect = this.normalizeRect(this.dragStart, { x: this.eventPoint(e).x, y: this.eventPoint(e).y });
       this.dragStart = null;
       this.dragging = false;
       this.suppressClick = true;
@@ -514,7 +546,7 @@ class Widget implements WidgetHandle {
     }
     // Clicking the page while a popover is open commits the comment and continues picking.
     if (this.popoverFor) this.savePopover();
-    const el = this.targetAt(e.clientX, e.clientY);
+    const el = this.targetAt(this.eventPoint(e).x, this.eventPoint(e).y);
     this.keyboardElement = this.keyboardAncestor(el);
     if (el && this.maskMode) this.addMask(renderedBounds(el));
     else if (el) this.addSelection(el);
@@ -588,7 +620,7 @@ class Widget implements WidgetHandle {
   }
 
   private keyboardAncestor(el: Element | null): Element | null {
-    while (el && !this.canPick(el)) el = el.parentElement;
+    while (el && !this.canPick(el)) el = composedParent(el);
     return el;
   }
 
@@ -601,10 +633,10 @@ class Widget implements WidgetHandle {
     this.keyboardElement = el;
     if (el) {
       el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
-      const rect = el.getBoundingClientRect();
+      const rect = elementRect(el);
       const top = this.q('[data-ref=keyboardHelp]').getBoundingClientRect().bottom + 12;
-      if (rect.top < top && rect.height < window.innerHeight - top && window.scrollY > 0) {
-        window.scrollBy({ top: rect.top - top, behavior: 'instant' });
+      if (rect.y < top && rect.height < window.innerHeight - top && window.scrollY > 0) {
+        window.scrollBy({ top: rect.y - top, behavior: 'instant' });
       }
       this.drawHighlight(el);
     } else this.hideHighlight();
@@ -629,13 +661,6 @@ class Widget implements WidgetHandle {
     this.renderMasks();
     if (this.autoShot) this.base = this.captureBase();
     document.documentElement.style.cursor = 'crosshair';
-    document.addEventListener('mousemove', this.moveHandler, true);
-    document.addEventListener('mousedown', this.downHandler, true);
-    document.addEventListener('mouseup', this.upHandler, true);
-    document.addEventListener('click', this.clickHandler, true);
-    for (const t of ['pointerdown', 'pointerup']) document.addEventListener(t, this.stopOnly, true);
-    for (const t of ['dblclick', 'contextmenu', 'selectstart']) document.addEventListener(t, this.swallow, true);
-    window.addEventListener('keydown', this.keyHandler, true);
     this.q('[data-ref=keyboardPicker]').focus({ preventScroll: true });
   }
 
@@ -654,17 +679,11 @@ class Widget implements WidgetHandle {
     this.dragStart = null;
     this.dragging = false;
     document.documentElement.style.cursor = '';
-    document.removeEventListener('mousemove', this.moveHandler, true);
-    document.removeEventListener('mousedown', this.downHandler, true);
-    document.removeEventListener('mouseup', this.upHandler, true);
-    document.removeEventListener('click', this.clickHandler, true);
-    for (const t of ['pointerdown', 'pointerup']) document.removeEventListener(t, this.stopOnly, true);
-    for (const t of ['dblclick', 'contextmenu', 'selectstart']) document.removeEventListener(t, this.swallow, true);
-    window.removeEventListener('keydown', this.keyHandler, true);
+
   }
 
   private targetAt(x: number, y: number): Element | null {
-    const el = document.elementFromPoint(x, y);
+    const el = deepElementFromPoint(x, y);
     if (!el || el === document.documentElement || el === document.body) return null;
     if (this.client.isIgnored(el)) return null;
     return el;
@@ -694,8 +713,6 @@ class Widget implements WidgetHandle {
     }
     if (!desc) return;
     this.selections.push(desc);
-    const container = document.querySelector(desc.selector);
-    if (container) this.liveEls.set(desc.id, container);
     this.client.addBreadcrumb(`lightback: selected region in ${desc.selector} (${desc.region?.children.length ?? 0} elements)`);
     this.afterSelectionAdded(desc);
   }
@@ -743,8 +760,7 @@ class Widget implements WidgetHandle {
     }
     const el = this.liveEls.get(sel.id);
     if (el && el.isConnected) {
-      const r = el.getBoundingClientRect();
-      return { x: r.x, y: r.y, width: r.width, height: r.height };
+      return elementRect(el);
     }
     return { x: sel.docRect.x - window.scrollX, y: sel.docRect.y - window.scrollY, width: sel.docRect.width, height: sel.docRect.height };
   }
@@ -761,8 +777,8 @@ class Widget implements WidgetHandle {
   };
 
   private drawHighlight(el: Element): void {
-    const r = el.getBoundingClientRect();
-    this.drawHighlightRect({ x: r.left, y: r.top, width: r.width, height: r.height }, true, el);
+    const r = elementRect(el);
+    this.drawHighlightRect(r, true, el);
   }
 
   private drawHighlightRect(r: Rect, withTip: boolean, el?: Element): void {
@@ -1506,7 +1522,7 @@ class Widget implements WidgetHandle {
         const thumb = crop ? `<img data-ref="cropImg" class="lb-thumb" src="${this.annotations.url(s.id, crop.url)}"${cap} alt="${esc(this.strings.cropPreview(i + 1))}">` : '';
         return `<div class="lb-sel" data-id="${esc(s.id)}">
   <div class="lb-sel-head"><span class="lb-badge${s.kind === 'region' ? ' region' : ''}">${i + 1}</span><span class="lb-chain" title="${esc(s.components.join(' < '))}">${chain} ${kind}</span><button class="lb-icon" type="button" data-action="sel-edit" aria-label="${esc(this.strings.editComment)}" title="${esc(this.strings.editComment)}">✎</button><button class="lb-icon" type="button" data-action="sel-remove" aria-label="${esc(this.strings.removeSelection)}">✕</button></div>
-  <code class="lb-selector">${esc(s.selector)}</code>
+  <code class="lb-selector">${esc([...(s.context ?? []).map(c => `${c.kind}: ${c.selector}`), s.selector].join(' → '))}</code>
   ${source}
   ${s.kind === 'element' && s.text ? `<div class="lb-text">“${esc(s.text.slice(0, 80))}”</div>` : ''}
   ${hidden}
@@ -1563,7 +1579,7 @@ function esc(s: string): string {
 function renderedBounds(el: Element): Rect {
   const boxes: Array<{ left: number; top: number; right: number; bottom: number; width: number; height: number }> = [el.getBoundingClientRect()];
   try {
-    const range = document.createRange();
+    const range = el.ownerDocument.createRange();
     range.selectNodeContents(el);
     if (typeof range.getBoundingClientRect === 'function') boxes.push(range.getBoundingClientRect());
   } catch { /* unsupported */ }
@@ -1571,7 +1587,7 @@ function renderedBounds(el: Element): Rect {
   if (!visible.length) return { x: 0, y: 0, width: 0, height: 0 };
   const left = Math.min(...visible.map((b) => b.left));
   const top = Math.min(...visible.map((b) => b.top));
-  return { x: left, y: top, width: Math.max(...visible.map((b) => b.right)) - left, height: Math.max(...visible.map((b) => b.bottom)) - top };
+  return toTopRect({ x: left, y: top, width: Math.max(...visible.map((b) => b.right)) - left, height: Math.max(...visible.map((b) => b.bottom)) - top }, el.ownerDocument, true);
 }
 
 function overlaps(a: Rect, b: Rect, pad: number): boolean {

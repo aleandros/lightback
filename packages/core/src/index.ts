@@ -1,7 +1,7 @@
 export * from './types';
 export { createLightback, IGNORE_ATTR } from './client';
 export type { LightbackClient, Draft, ImageAnnotation, ImageAnnotations } from './client';
-export { describeElement, summarizeElement, uniqueSelector, shortSelector, componentChain, frameworkInfo, snapshotProps } from './inspect';
+export { describeElement, summarizeElement, elementContext, uniqueSelector, shortSelector, componentChain, frameworkInfo, snapshotProps } from './inspect';
 export type { InspectOptions } from './inspect';
 export { SENSITIVE_ATTR } from './sensitive';
 export { describeRegion, commonAncestor } from './region';
@@ -11,3 +11,5 @@ export type { PromptOptions } from './prompt';
 export { fetchTransport } from './transport';
 export { DEFAULT_REDACT, redactString, redactUrl, redactHeaders } from './redact';
 export { RingBuffer } from './ring';
+
+export { composedParent, composedContains, composedClosest, frameDocument, frameGeometry, elementRect, toTopRect, deepElementFromPoint, domRoots, observeDomRoots } from './dom';

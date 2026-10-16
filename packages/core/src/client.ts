@@ -1,3 +1,4 @@
+import { composedClosest } from './dom';
 import type {
   Attachment, Breadcrumb, ConsoleEntry, ElementSelection, ErrorEntry, FeedbackPayload,
   LightbackOptions, Limits, NetworkEntry, Rect, RedactOptions, ScreenshotMask,
@@ -126,7 +127,7 @@ export function createLightback(options: LightbackOptions = {}): LightbackClient
   const breadcrumbBuf = new RingBuffer<Breadcrumb>(limits.breadcrumbs, changed);
   let context: Record<string, unknown> = { ...options.context };
 
-  const isIgnored = (el: Element) => el.closest(`[${IGNORE_ATTR}]`) !== null;
+  const isIgnored = (el: Element) => composedClosest(el, `[${IGNORE_ATTR}]`) !== null;
   const isOwnEndpoint = (url: string) => {
     if (!options.endpoint) return false;
     try {
