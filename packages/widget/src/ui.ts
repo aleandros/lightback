@@ -13,6 +13,7 @@ import { captureWithinBudget, OMITS_WIDGET } from './capture';
 import type { WidgetOptions, WidgetHandle } from './types';
 import { createHost } from './shell';
 import { keyboardTarget, pickable } from './keyboard-picker';
+import { PageChanges } from './page-changes';
 
 const DRAG_THRESHOLD = 5;
 /** Default `screenshotMaxElements`: roughly 2 s of a DOM-cloning capturer on an ordinary laptop. */
@@ -165,9 +166,11 @@ class Widget implements WidgetHandle {
   private screenshotUrl: string | null = null;
   /** Document area the current screenshot shows; null when restored without one (its geometry is unknown). */
   private screenshotArea: Rect | null = null;
-  /** Capture taken when pick mode starts; crops are cut from it. Masks repaint it in place. */
+  /** Latest demanded capture; each crop job holds the promise current when it was selected. */
   private base: Promise<Shot | null> | null = null;
-  /** Bumped whenever base pixels change, so an in-flight crop of older pixels is dropped. */
+  private pageChanges = new PageChanges();
+  private baseKey = '';
+  /** Bumped after a masking failure, so pending crops cannot restore invalidated images. */
   private baseVersion = 0;
   /** Areas the reporter hid, in document coordinates. Applied to every later capture too. */
   private masks: Rect[] = [];
@@ -659,14 +662,18 @@ class Widget implements WidgetHandle {
     this.updateCount();
     this.q('[data-ref=masks]').hidden = false;
     this.renderMasks();
-    if (this.autoShot) this.base = this.captureBase();
     document.documentElement.style.cursor = 'crosshair';
+    if (this.autoShot) {
+      this.pageChanges.start();
+      this.refreshBase();
+    }
     this.q('[data-ref=keyboardPicker]').focus({ preventScroll: true });
   }
 
   private stopPicking(): void {
     if (!this.picking) return;
     this.picking = false;
+    this.pageChanges.stop();
     this.keyboardElement = null;
     this.closePopover();
     this.setMaskMode(false);
@@ -718,6 +725,7 @@ class Widget implements WidgetHandle {
   }
 
   private afterSelectionAdded(desc: ElementSelection): void {
+    if (this.autoShot) this.refreshBase();
     this.hideHighlight();
     this.renderPins();
     this.renderSelections();
@@ -879,7 +887,6 @@ class Widget implements WidgetHandle {
     this.maskJob = this.maskJob.then(async () => {
       const shot = await this.base;
       if (!live()) return;
-      let repainted = false;
       if (shot) {
         const previous = shot.blob;
         const old = shot.bitmap;
@@ -888,8 +895,6 @@ class Widget implements WidgetHandle {
           // Repaint in place: crop jobs and sends awaiting this base see the masked pixels.
           shot.blob = next.blob;
           shot.bitmap = next.bitmap;
-          this.baseVersion++;
-          repainted = true;
           release(old);
           if (live() && this.screenshot === previous) this.setScreenshot(next.blob, shot.area, this.shotMasks);
         }
@@ -909,25 +914,31 @@ class Widget implements WidgetHandle {
         }
       }
       if (!live()) return;
-      const pad = this.opts.cropPadding ?? 16;
-      let dropped = false;
-      for (const sel of this.selections) {
-        const job = this.cropJobs.get(sel.id);
-        const hit = overlaps(sel.region ? sel.region.docRect : sel.docRect, rect, pad);
-        // Drop an affected crop first: if re-cutting fails, nothing showing the hidden area remains.
-        if (hit && this.crops.has(sel.id)) {
-          URL.revokeObjectURL(this.crops.get(sel.id)!.url);
-          this.crops.delete(sel.id);
-          this.annotations.remove(sel.id);
-          dropped = true;
-        }
-        // Re-cut affected crops (the base may not show them: viewport crops can come from another capture), and
-        // in-flight ones discarded by the repaint. Restored crops have no job.
-        if (job && (hit || (repainted && !this.crops.has(sel.id)))) {
-          this.cropJobs.set(sel.id, job.then(() => this.cropSelection(sel)).catch(() => {}));
+      // Finish the crops already in flight, then paint their own historical pixels. Re-cutting
+      // an old selection from the latest base could silently substitute unrelated page content.
+      await Promise.all(this.cropJobs.values());
+      for (const [id, crop] of [...this.crops]) {
+        if (!live()) return;
+        if (crop.area && !overlaps(crop.area, rect, 2)) continue;
+        URL.revokeObjectURL(crop.url);
+        this.crops.delete(id);
+        this.annotations.remove(id);
+        if (!crop.area) continue; // Unknown recovered geometry: fail closed.
+        try {
+          const bitmap = await decodeScreenshot(crop.blob);
+          try {
+            const next = await maskShot({ blob: crop.blob, bitmap, area: crop.area }, this.masks);
+            if (live() && this.selections.some((sel) => sel.id === id)) {
+              this.annotations.setSource(id, next.blob);
+              this.crops.set(id, { ...crop, blob: next.blob, url: URL.createObjectURL(next.blob) });
+            }
+            if (next.bitmap !== bitmap) release(next.bitmap);
+          } finally { release(bitmap); }
+        } catch (err) {
+          if (live()) this.opts.onError?.(err); // This crop is already dropped; other masked images remain usable.
         }
       }
-      if (dropped) {
+      if (live()) {
         this.renderSelections();
         this.persistDraft();
       }
@@ -1031,7 +1042,8 @@ class Widget implements WidgetHandle {
    * OVER_BUDGET when it would clone too much; that is checked when it runs, since the page can change while it waits.
    */
   private capture(area?: Rect, budget = false): Promise<Captured | typeof OVER_BUDGET | null> {
-    const run = this.captureQueue.then(() => this.captureNow(area, budget));
+    const generation = this.captureGeneration;
+    const run = this.captureQueue.then(() => generation === this.captureGeneration ? this.captureNow(area, budget) : null);
     this.captureQueue = run.catch(() => {});
     return run;
   }
@@ -1137,13 +1149,23 @@ class Widget implements WidgetHandle {
         this.annotations.remove('screenshot');
         this.setScreenshot(result.shot.blob, result.shot.area, result.sensitive);
       }
-      this.baseMasks = result.sensitive;
+      // Earlier crops retain their pixels and the masks painted into those captures.
+      this.baseMasks = uniqueRects([...this.baseMasks, ...result.sensitive]);
       return result.shot;
     } catch (err) {
       if (!this.destroyed && generation === this.captureGeneration) this.markMissingScreenshot();
       this.opts.onError?.(err);
       return null;
     }
+  }
+
+  /** Coalesce changes until a selection needs pixels; never run a background capture loop. */
+  private refreshBase(): void {
+    const key = this.pageChanges.key();
+    if (this.base && this.baseKey === key) return;
+    this.baseKey = key;
+    this.extra = null;
+    this.base = this.captureBase();
   }
 
   /**
@@ -1155,7 +1177,6 @@ class Widget implements WidgetHandle {
     const base = await this.base;
     if (this.destroyed || !base || !this.selections.includes(sel)) return;
     const version = this.baseVersion;
-    const maskCount = this.masks.length;
     const r = sel.region ? sel.region.docRect : sel.docRect;
     let shot: Shot | null = base;
     if (this.opts.screenshotArea === 'viewport') {
@@ -1181,14 +1202,21 @@ class Widget implements WidgetHandle {
       ctx.lineWidth = Math.max(2, 2 * sx);
       if (sel.kind === 'region') ctx.setLineDash([6 * sx, 4 * sx]);
       ctx.strokeRect((r.x - shot.area.x) * sx - x0, (r.y - shot.area.y) * sy - y0, r.width * sx, r.height * sy);
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-      // A mask landed meanwhile: the mask job re-cuts this crop from repainted or recaptured pixels.
+      let blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (this.destroyed || !blob || !this.selections.includes(sel) || version !== this.baseVersion) return;
-      const pad = this.opts.cropPadding ?? 16;
-      if (this.masks.slice(maskCount).some((m) => overlaps(r, m, pad))) return;
+      const cut = { x: shot.area.x + x0 / sx, y: shot.area.y + y0 / sy, width: w / sx, height: h / sy };
+      // A mask may arrive during encoding, or this job may hold an older base. Apply all
+      // current reporter masks to the crop itself, repeating only if another mask arrived.
+      let maskedCount = -1;
+      while (maskedCount !== this.masks.length) {
+        maskedCount = this.masks.length;
+        const masked = await maskShot({ blob, bitmap: canvas, area: cut }, this.masks);
+        blob = masked.blob;
+        if (masked.bitmap !== canvas) release(masked.bitmap);
+      }
+      if (this.destroyed || !this.selections.includes(sel) || version !== this.baseVersion) return;
       const prev = this.crops.get(sel.id);
       if (prev) URL.revokeObjectURL(prev.url);
-      const cut = { x: shot.area.x + x0 / sx, y: shot.area.y + y0 / sy, width: w / sx, height: h / sy };
       this.annotations.setSource(sel.id, blob);
       this.crops.set(sel.id, { blob, url: URL.createObjectURL(blob), width: w / sx, area: roundRect(cut) });
       this.renderSelections();
