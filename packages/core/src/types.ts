@@ -64,9 +64,18 @@ export interface ComponentInfo {
   source?: SourceLocation;
 }
 
+/** One boundary in an outer-to-inner path from the reporting document to an element's root. */
+export interface ElementContext {
+  kind: 'shadow' | 'frame';
+  /** CSS selector of the shadow host or iframe in the preceding root. */
+  selector: string;
+}
+
 /** Compact description of an element inside a region selection. */
 export interface ElementSummary {
   selector: string;
+  /** Root boundaries to traverse before resolving selector; omitted for the reporting document. */
+  context?: ElementContext[];
   tag: string;
   text: string;
   role?: string;
@@ -83,12 +92,14 @@ export interface ElementSelection {
   /** `element` for a single click, `region` for a dragged rectangle. */
   kind: 'element' | 'region';
   selector: string;
+  /** Root boundaries to traverse before resolving selector; omitted for the reporting document. */
+  context?: ElementContext[];
   tag: string;
   elementId?: string;
   classes: string[];
   text: string;
   attrs: Record<string, string>;
-  /** Viewport-relative rect at selection time. */
+  /** Reporting document viewport-relative rect at selection time, clipped to containing frames. */
   rect: Rect;
   /** Document-relative rect (rect + scroll offset), for overlaying on full-page screenshots. */
   docRect: Rect;

@@ -36,6 +36,7 @@ export function isRecoveredSelection(value: unknown): boolean {
   const source = (v: unknown) => v === undefined || (object(v) && typeof v.file === 'string' &&
     (v.line === undefined || Number.isFinite(v.line)) && (v.column === undefined || Number.isFinite(v.column)));
   const summary = (v: unknown) => object(v) && typeof v.selector === 'string' && typeof v.tag === 'string' &&
+    (v.context === undefined || (Array.isArray(v.context) && v.context.every((c: unknown) => object(c) && ['shadow', 'frame'].includes(c.kind) && typeof c.selector === 'string'))) &&
     typeof v.text === 'string' && strings(v.components) && isRect(v.rect) && isRect(v.docRect) && source(v.source);
   return object(value) && summary(value) && typeof value.id === 'string' && ['element', 'region'].includes(value.kind) &&
     strings(value.classes) && object(value.attrs) && Object.values(value.attrs).every((v) => typeof v === 'string') &&

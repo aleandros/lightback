@@ -38,12 +38,13 @@ Default ring-buffer limits are 200 console entries, 50 errors, 100 network entri
 | <code>id</code> | <code>string</code> |  |
 | <code>kind</code> | <code>'element' &#124; 'region'</code> | &#96;element&#96; for a single click, &#96;region&#96; for a dragged rectangle. |
 | <code>selector</code> | <code>string</code> |  |
+| <code>context?</code> | <code>ElementContext[]</code> | Root boundaries to traverse before resolving selector; omitted for the reporting document. |
 | <code>tag</code> | <code>string</code> |  |
 | <code>elementId?</code> | <code>string</code> |  |
 | <code>classes</code> | <code>string[]</code> |  |
 | <code>text</code> | <code>string</code> |  |
 | <code>attrs</code> | <code>Record&lt;string, string&gt;</code> |  |
-| <code>rect</code> | <code>Rect</code> | Viewport-relative rect at selection time. |
+| <code>rect</code> | <code>Rect</code> | Reporting document viewport-relative rect at selection time, clipped to containing frames. |
 | <code>docRect</code> | <code>Rect</code> | Document-relative rect (rect + scroll offset), for overlaying on full-page screenshots. |
 | <code>framework</code> | <code>'react' &#124; 'vue' &#124; null</code> |  |
 | <code>components</code> | <code>string[]</code> | Component chain from the element outward, e.g. ["InvoiceRow", "InvoiceTable", "Dashboard", "App"]. |
@@ -61,6 +62,7 @@ Default ring-buffer limits are 200 console entries, 50 errors, 100 network entri
 | Field | Type | Description |
 | --- | --- | --- |
 | <code>selector</code> | <code>string</code> |  |
+| <code>context?</code> | <code>ElementContext[]</code> | Root boundaries to traverse before resolving selector; omitted for the reporting document. |
 | <code>tag</code> | <code>string</code> |  |
 | <code>text</code> | <code>string</code> |  |
 | <code>role?</code> | <code>string</code> |  |
@@ -69,6 +71,13 @@ Default ring-buffer limits are 200 console entries, 50 errors, 100 network entri
 | <code>docRect</code> | <code>Rect</code> |  |
 | <code>source?</code> | <code>SourceLocation</code> |  |
 | <code>sensitive?</code> | <code>boolean</code> | Inside a sensitive subtree: text and role are withheld. |
+
+## ElementContext
+
+| Field | Type | Description |
+| --- | --- | --- |
+| <code>kind</code> | <code>'shadow' &#124; 'frame'</code> |  |
+| <code>selector</code> | <code>string</code> | CSS selector of the shadow host or iframe in the preceding root. |
 
 ## ComponentInfo
 

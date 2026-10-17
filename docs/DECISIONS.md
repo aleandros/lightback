@@ -177,8 +177,13 @@ Preserve existing rules and hooks while running stamping first: add an independe
 
 Set the map’s generated filename so Turbopack production scope hoisting can associate it with the module. When maps are requested, return the callback map and carry it inline. Turbopack invokes matching rule items as separate pipelines without forwarding callback maps between them; an inline map allows following map-aware loaders to retain original locations. The fixture deliberately reformats code and shifts lines after stamping, then resolves a generated browser expression back to its original TSX line/column and checks original sourcesContent. This tests composition through SWC, beyond merely asserting that a map exists.
 
+## 34. Local selectors with explicit root paths and shared geometry
 
-## 34. Demand-driven screenshot refresh with historical crops
+Keep existing CSS selectors valid in their own root and add optional ordered shadow/frame boundaries, instead of inventing a selector syntax. Share composed ancestry across ignore/sensitive checks, region ancestry and keyboard traversal. Map every frame-local rect into reporting-document coordinates before highlighting, masking or cropping; clip element bounds to containing frame viewports and support positive axis-aligned scaling. Frame scroll is already present in local client rects and must not be added again.
+
+Bind picking and click/change breadcrumbs to accessible roots, with composed-event deduplication and disposal on navigation/removal. Observe frame loads and DOM mutations; poll once per second for shadow roots attached without a mutation. Do not patch host attachShadow or frame APIs. Closed roots and cross-origin/sandboxed frames require host cooperation. Mask inaccessible or geometrically unsupported frames in full, since their internal privacy markers cannot be safely mapped. Inspectable text does not imply screenshot support: injected capturers still own rendering fidelity. Console/network/error/navigation capture remains in the reporting window.
+
+## 35. Demand-driven screenshot refresh with historical crops
 
 Invalidate automatic capture reuse on light-DOM mutations and host scroll, resize, input/change, load and toggle events. Read the invalidation key at selection time, including pending observer records and viewport/page geometry; only then request fresh pixels. This coalesces mutation bursts and avoids expensive background captures on animated or polling pages. Observers run only while picking and ignore Lightback UI. A capture requested before a later change cannot mark that change clean. The existing per-capture element budget, serialization, mute and privacy boundaries apply to every refresh.
 

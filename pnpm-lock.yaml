@@ -93,7 +93,7 @@ importers:
   packages/mcp:
     dependencies:
       '@lightback/core':
-        specifier: workspace:>=0.2.2 <0.3.0
+        specifier: workspace:>=0.2.5 <0.3.0
         version: link:../core
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1

@@ -1,3 +1,4 @@
+import { composedContains, composedParent, deepElementFromPoint } from './dom';
 import type { ElementSelection, Rect } from './types';
 import { describeElement, summarizeElement, toDocRect, viewportRect } from './inspect';
 
@@ -24,7 +25,7 @@ const CONTAIN_TOLERANCE = 2;
  */
 export function describeRegion(rect: Rect, opts: RegionOptions = {}): ElementSelection | null {
   if (typeof window === 'undefined' || typeof document === 'undefined') throw new Error('Lightback: describeRegion requires a browser DOM');
-  const hitTest = opts.hitTest ?? ((x, y) => document.elementFromPoint(x, y));
+  const hitTest = opts.hitTest ?? deepElementFromPoint;
   const isIgnored = opts.isIgnored ?? (() => false);
   const maxChildren = opts.maxChildren ?? 25;
 
@@ -33,7 +34,7 @@ export function describeRegion(rect: Rect, opts: RegionOptions = {}): ElementSel
 
   // A hit that contains other hits is a surface the drag spilled onto (a modal backdrop, a card's
   // padding). Drop those so the container is the thing the user framed, not what sits around it.
-  const leaves = allHits.filter((h) => !allHits.some((o) => o !== h && h.contains(o)));
+  const leaves = allHits.filter((h) => !allHits.some((o) => o !== h && composedContains(h, o)));
   const hits = leaves.length ? leaves : allHits;
 
   const container = commonAncestor(hits) ?? document.body;
@@ -72,7 +73,7 @@ export function commonAncestor(els: Element[]): Element | null {
   if (els.length === 0) return null;
   let candidate: Element | null = els[0]!;
   for (const el of els.slice(1)) {
-    while (candidate && !candidate.contains(el)) candidate = candidate.parentElement;
+    while (candidate && !composedContains(candidate, el)) candidate = composedParent(candidate);
     if (!candidate) return null;
   }
   return candidate;
@@ -99,13 +100,16 @@ function containedChildren(hits: Element[], rect: Rect, container: Element): Ele
   const picked = new Set<Element>();
   for (const hit of hits) {
     let cur: Element = hit;
-    while (cur.parentElement && cur.parentElement !== container && isContained(viewportRect(cur.parentElement), rect)) {
-      cur = cur.parentElement;
+    while (composedParent(cur) && composedParent(cur) !== container && isContained(viewportRect(composedParent(cur)!), rect)) {
+      cur = composedParent(cur)!;
     }
     picked.add(cur);
   }
   const list = Array.from(picked).filter((el) => el !== container);
-  const collapsed = list.filter((el) => !list.some((other) => other !== el && other.contains(el)));
+  const collapsed = list.filter((el) => !list.some((other) => other !== el && composedContains(other, el)));
   // Document order, so the list reads top to bottom.
-  return collapsed.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  return collapsed.sort((a, b) => {
+    const order = a.compareDocumentPosition(b);
+    return order & Node.DOCUMENT_POSITION_DISCONNECTED ? 0 : order & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  });
 }

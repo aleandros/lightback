@@ -115,7 +115,7 @@ function Summary({ s }: { s: Submission }) {
               {sel.framework && <span className="pill">{sel.framework}</span>}
               {sel.sensitive && <span className="pill" data-ref="sensitive-pill">sensitive</span>}
             </div>
-            <code className="small">{sel.selector}</code>
+            <code className="small">{[...(sel.context ?? []).map(c => `${c.kind}: ${c.selector}`), sel.selector].join(' → ')}</code>
             {sel.source && <span className="src">{sel.source.file.replace(/^.*?\/src\//, 'src/')}:{sel.source.line}:{sel.source.column}</span>}
             {sel.kind === 'element' && sel.text && <div className="muted small">“{sel.text}”</div>}
             {sel.region && (

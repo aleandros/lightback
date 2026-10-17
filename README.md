@@ -296,11 +296,19 @@ This stamps server and client components with Turbopack and `--webpack` in devel
 
 Tab to **Point at something** and press Enter. Focus moves to **Keyboard picker**: Down/Up visit the next/previous element in DOM order, Right enters a child, Left moves to a parent, and Enter or Space selects the highlighted element. Offscreen targets scroll into view. Tab/Shift+Tab cycle through picker controls and the comment box without entering host forms. Escape in a comment keeps it and returns to picking; Escape in the picker opens review. Cancel keeps the draft and returns to the editor or original trigger. Closing review or completing a send returns focus to the opener when it still exists.
 
-The picker announces target locators without page text or input values and skips hidden, inert, ARIA-hidden and ignored subtrees. **Hide area** also works with keyboard element selection. Arbitrary region drawing still requires a pointer; host shadow trees and iframe contents are not traversed. See [keyboard controls](docs/guide/getting-started.md#keyboard-controls).
+The picker announces target locators without page text or input values and skips hidden, inert, ARIA-hidden and ignored subtrees. **Hide area** also works with keyboard element selection. Arbitrary region drawing still requires a pointer; open shadow roots and accessible same-origin iframe documents are traversed. See [keyboard controls](docs/guide/getting-started.md#keyboard-controls).
 
 ## How element selection works
 
 The pointer picker uses `elementFromPoint`; the keyboard picker traverses rendered page elements without focusing them. Both describe the element with a unique selector (preferring `data-testid`, then `id`, then a structural path), interesting attributes, trimmed text, and a component chain. The chain comes from React fiber internals (`__reactFiber$…`) or Vue instance internals (`__vueParentComponent`, `__vue__`), so a selection reads as `InvoiceRow ‹ InvoiceTable ‹ Dashboard ‹ App` rather than a CSS path.
+
+### Shadow roots and frames
+
+Pointer and keyboard picking enter open shadow roots and same-origin frames, including nested combinations and assigned slots. Each selection keeps a CSS `selector` local to its root and an optional `context` array of `{ kind: 'shadow' | 'frame', selector }` boundaries, ordered from the reporting document inward. Resolve each boundary, enter its `shadowRoot` or `contentDocument`, then resolve the selection selector. Region children have the same optional path. Payload version remains 1.
+
+Rectangles, highlights, pins, masks and crop areas use the reporting document's coordinates, accounting for frame borders, scroll and positive axis-aligned CSS scaling. Privacy/ignore markers on hosts, slots and frames apply to their contents; configured privacy selectors run separately in each accessible root. Breadcrumb clicks/changes are captured in those roots without input values. Console, error, network and navigation collectors remain scoped to the reporting window.
+
+Closed roots, cross-origin/sandboxed frames, and frames with rotated, skewed or perspective transforms are opaque boundaries. Closed roots need host cooperation (mark the host sensitive); inaccessible or unsupported frames are masked in full. Keyboard picking can select their hosts; pointer events inside inaccessible frames cannot be intercepted. Frame documents must allow same-origin DOM access. Newly created/navigated contexts are discovered automatically; an `attachShadow()` on an existing host is discovered within one second. Capturers must render the same nested content at the requested area and current scroll position; inspection support does not add frame rendering to a capturer. See [privacy boundaries](docs/guide/privacy.md#limitations).
 
 ## Redaction
 
