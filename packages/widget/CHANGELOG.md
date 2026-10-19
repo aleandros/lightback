@@ -1,5 +1,11 @@
 # @lightback/widget
 
+## 0.2.7
+
+### Patch Changes
+
+- bfa737f: Refresh automatic screenshots on the next selection after page changes, while preserving historical crop pixels and annotations. Coalesce unchanged selections, keep refreshed captures muted and masked, and cancel queued captures after discard.
+
 ## 0.2.6
 
 ### Patch Changes
